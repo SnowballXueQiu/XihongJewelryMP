@@ -2,12 +2,15 @@ import { useEffect, useMemo, useState } from 'react'
 import Taro from '@tarojs/taro'
 import { Button, Text, View } from '@tarojs/components'
 import { fetchPet, fetchUser, petAction } from '@/services/api'
+import { useContentRefreshAnimation, usePageEntranceAnimation } from '@/hooks/useSubtleAnimation'
 import { Pet, User } from '@/types/domain'
 import './index.scss'
 
 export default function ProfilePage() {
   const [user, setUser] = useState<User | null>(null)
   const [pet, setPet] = useState<Pet | null>(null)
+  const pageAnimation = usePageEntranceAnimation()
+  const petAnimation = useContentRefreshAnimation([pet?.exp, pet?.mood, pet?.hunger, pet?.level])
   const progress = useMemo(() => {
     if (!pet) return 0
     return Math.min(100, Math.round((pet.exp / pet.next_level_exp) * 100))
@@ -25,7 +28,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <View className='page profile-page'>
+    <View className='page profile-page' animation={pageAnimation}>
       <View className='member card'>
         <View className='avatar' style={{ background: user?.avatar_color || '#913F5F' }} />
         <View className='member-info'>
@@ -35,7 +38,7 @@ export default function ProfilePage() {
       </View>
 
       <Text className='section-title'>会员成长宠物</Text>
-      <View className='pet-card card'>
+      <View className='pet-card card' animation={petAnimation}>
         <View className='pet-stage'>
           <View className='pet-body'>
             <View className='pet-gem' />
@@ -50,18 +53,18 @@ export default function ProfilePage() {
           <Text className='reward'>当前权益：{pet?.reward || '新人清洁布'}</Text>
         </View>
         <View className='pet-actions'>
-          <Button className='ghost-btn pet-action' onClick={() => interact('feed')}>喂养</Button>
-          <Button className='ghost-btn pet-action' onClick={() => interact('pet')}>抚摸</Button>
-          <Button className='primary-btn pet-action' onClick={() => interact('checkin')}>签到</Button>
+          <Button className='ghost-btn pet-action' hoverClass='button-press' onClick={() => interact('feed')}>喂养</Button>
+          <Button className='ghost-btn pet-action' hoverClass='button-press' onClick={() => interact('pet')}>抚摸</Button>
+          <Button className='primary-btn pet-action' hoverClass='button-press' onClick={() => interact('checkin')}>签到</Button>
         </View>
       </View>
 
       <Text className='section-title'>个人管理</Text>
       <View className='menu card'>
-        <Button className='menu-item'>资料管理</Button>
-        <Button className='menu-item'>收货地址</Button>
-        <Button className='menu-item' onClick={() => Taro.navigateTo({ url: '/pages/cart/index' })}>购物车</Button>
-        <Button className='menu-item'>订单记录</Button>
+        <Button className='menu-item' hoverClass='menu-item-press'>资料管理</Button>
+        <Button className='menu-item' hoverClass='menu-item-press'>收货地址</Button>
+        <Button className='menu-item' hoverClass='menu-item-press' onClick={() => Taro.navigateTo({ url: '/pages/cart/index' })}>购物车</Button>
+        <Button className='menu-item' hoverClass='menu-item-press'>订单记录</Button>
       </View>
     </View>
   )

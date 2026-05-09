@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react'
 import Taro, { useRouter } from '@tarojs/taro'
 import { Text, View } from '@tarojs/components'
 import { fetchProduct } from '@/services/api'
+import { usePageEntranceAnimation } from '@/hooks/useSubtleAnimation'
 import { Product } from '@/types/domain'
 import './index.scss'
 
 export default function ArTryOnPage() {
   const router = useRouter()
   const [product, setProduct] = useState<Product | null>(null)
+  const pageAnimation = usePageEntranceAnimation()
 
   useEffect(() => {
     const id = Number(router.params.id)
@@ -25,12 +27,12 @@ export default function ArTryOnPage() {
   }, [])
 
   if (!product) {
-    return <View className='page'><Text>加载 AR 商品...</Text></View>
+    return <View className='page' animation={pageAnimation}><Text>加载 AR 商品...</Text></View>
   }
 
   if (!product.supports_ar || !product.ar_model_url) {
     return (
-      <View className='page ar-page'>
+      <View className='page ar-page' animation={pageAnimation}>
         <View className='ar-empty card'>
           <Text>该商品还没有配置 AR 模型。</Text>
         </View>
@@ -39,7 +41,7 @@ export default function ArTryOnPage() {
   }
 
   return (
-    <View className='ar-page'>
+    <View className='ar-page' animation={pageAnimation}>
       <View className='ar-stage'>
         <xr-try-on
           model-url={product.ar_model_url}

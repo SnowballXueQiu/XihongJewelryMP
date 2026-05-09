@@ -21,6 +21,10 @@ export interface Product {
   ar_rotation: string
   ar_position: string
   ar_auto_sync: number
+  status?: 'draft' | 'active' | 'inactive'
+  cover_url?: string
+  gallery_urls?: string[]
+  sort_order?: number
 }
 
 export interface CartItem {
@@ -73,4 +77,17 @@ export interface Pet {
   next_level_exp: number
   reward: string
   asset_key: string
+}
+
+export interface Banner {
+  id: number
+  title: string
+  subtitle: string
+  image_url: string
+  image_color: string
+  placement: string
+  link_type: string
+  link_value: string
+  sort_order: number
+  is_active: boolean
 }

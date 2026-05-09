@@ -5,6 +5,8 @@ node_modules/
 dist/
 src/miniprogram/dist/
 src/miniprogram/.temp/
+src/backstage/.next/
+src/backstage/out/
 
 # local env and secrets
 .env
@@ -13,6 +15,7 @@ src/miniprogram/.temp/
 
 # backend runtime data
 src/backend/data/
+src/backend/uploads/
 *.sqlite
 *.sqlite3
 
@@ -29,9 +32,11 @@ __pycache__/
 .swc/
 .taro/
 .turbo/
+*.tsbuildinfo
 src/miniprogram/.cache/
 src/miniprogram/.swc/
 src/miniprogram/.taro/
+src/backstage/.cache/
 
 # test and coverage output
 coverage/

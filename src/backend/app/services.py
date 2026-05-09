@@ -1,9 +1,12 @@
 from secrets import token_hex
 from time import time
+import json
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.models import (
+    AdminUser,
+    AuditLog,
     CartItem,
     Order,
     OrderItem,
@@ -15,7 +18,7 @@ from app.models import (
     Product,
     User,
 )
-from app.schemas import PaymentParams
+from app.schemas import PaymentParams, ProductRead
 from app.settings import settings
 
 
@@ -36,6 +39,55 @@ def get_mock_user(session: Session) -> User:
         session.commit()
         session.refresh(user)
     return user
+
+
+def serialize_product(product: Product) -> ProductRead:
+    try:
+        gallery_urls = json.loads(product.gallery_urls or "[]")
+    except json.JSONDecodeError:
+        gallery_urls = []
+    return ProductRead(
+        id=product.id or 0,
+        name=product.name,
+        subtitle=product.subtitle,
+        description=product.description,
+        category_slug=product.category_slug,
+        material=product.material,
+        price_cents=product.price_cents,
+        stock=product.stock,
+        image_color=product.image_color,
+        supports_ar=product.supports_ar,
+        ar_model_url=product.ar_model_url,
+        ar_scale=product.ar_scale,
+        ar_rotation=product.ar_rotation,
+        ar_position=product.ar_position,
+        ar_auto_sync=product.ar_auto_sync,
+        status=product.status,
+        cover_url=product.cover_url,
+        gallery_urls=gallery_urls if isinstance(gallery_urls, list) else [],
+        sort_order=product.sort_order,
+    )
+
+
+def apply_product_payload(product: Product, payload) -> Product:
+    data = payload.model_dump()
+    gallery_urls = data.pop("gallery_urls", [])
+    for field, value in data.items():
+        setattr(product, field, value)
+    product.gallery_urls = json.dumps(gallery_urls, ensure_ascii=False)
+    return product
+
+
+def write_audit_log(session: Session, admin: AdminUser | None, action: str, entity: str, entity_id: str = "", detail: str = "") -> None:
+    session.add(
+        AuditLog(
+            admin_id=admin.id if admin else None,
+            action=action,
+            entity=entity,
+            entity_id=entity_id,
+            detail=detail,
+        )
+    )
 
 
 def resolve_pet_level(exp: int) -> tuple[int, int, str]:
@@ -98,7 +150,8 @@ def build_payment_params(order: Order, session: Session) -> PaymentParams:
 
 
 def create_order_from_items(session: Session, user_id: int, item_quantities: list[tuple[int, int]], receiver: dict) -> Order:
-    products = {product.id: product for product in session.exec(select(Product).where(Product.id.in_([i[0] for i in item_quantities]))).all()}
+    product_ids = [item[0] for item in item_quantities]
+    products = {product.id: product for product in session.exec(select(Product).where(col(Product.id).in_(product_ids))).all()}
     total = 0
     order = Order(user_id=user_id, **receiver)
     session.add(order)

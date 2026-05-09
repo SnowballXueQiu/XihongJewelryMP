@@ -26,10 +26,5 @@ export default defineAppConfig({
       { pagePath: 'pages/profile/index', text: '个人' }
     ]
   },
-  permission: {
-    'scope.camera': {
-      desc: '用于珠宝 AR 试戴展示'
-    }
-  },
   lazyCodeLoading: 'requiredComponents'
 })

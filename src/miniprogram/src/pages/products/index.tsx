@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Taro from '@tarojs/taro'
 import { Button, Input, Picker, ScrollView, Switch, Text, View } from '@tarojs/components'
 import { fetchCategories, fetchProducts, formatMoney } from '@/services/api'
+import { useContentRefreshAnimation, usePageEntranceAnimation } from '@/hooks/useSubtleAnimation'
 import { Category, Product } from '@/types/domain'
 import './index.scss'
 
@@ -23,6 +24,8 @@ export default function ProductsPage() {
 
   const material = useMemo(() => materials[materialIndex], [materialIndex])
   const sort = useMemo(() => sortOptions[sortIndex], [sortIndex])
+  const pageAnimation = usePageEntranceAnimation()
+  const productGridAnimation = useContentRefreshAnimation([category, q, material, arOnly, minPrice, maxPrice, sort, products.length])
 
   useEffect(() => {
     fetchCategories().then(setCategories)
@@ -38,17 +41,17 @@ export default function ProductsPage() {
   }
 
   return (
-    <View className='page products-page'>
+    <View className='page products-page' animation={pageAnimation}>
       <View className='search-bar'>
         <Input className='search-input' value={q} placeholder='搜索戒指、手链、材质' confirmType='search' onInput={(event) => setQ(String(event.detail.value))} />
-        <Button className='cart-link' onClick={() => Taro.navigateTo({ url: '/pages/cart/index' })}>
+        <Button className='cart-link' hoverClass='button-press' onClick={() => Taro.navigateTo({ url: '/pages/cart/index' })}>
           <Text className='cart-link-text'>购物车</Text>
         </Button>
       </View>
 
       <ScrollView className='category-scroll' scrollX>
         {categories.map((item) => (
-          <Button key={item.slug} className={`category-chip ${category === item.slug ? 'active' : ''}`} onClick={() => setCategory(item.slug)}>
+          <Button key={item.slug} className={`category-chip ${category === item.slug ? 'active' : ''}`} hoverClass='category-chip-press' onClick={() => setCategory(item.slug)}>
             {item.name}
           </Button>
         ))}
@@ -76,13 +79,13 @@ export default function ProductsPage() {
           <Switch color='#B89A63' checked={arOnly} onChange={(event) => setArOnly(event.detail.value)} />
         </View>
         {(minPrice || maxPrice) && (
-          <Button className='reset-price' onClick={resetPrice}>清除价格区间</Button>
+          <Button className='reset-price' hoverClass='button-press' onClick={resetPrice}>清除价格区间</Button>
         )}
       </View>
 
-      <View className='product-grid'>
+      <View className='product-grid' animation={productGridAnimation}>
         {products.map((product) => (
-          <View key={product.id} className='product-card card' onClick={() => Taro.navigateTo({ url: `/pages/product-detail/index?id=${product.id}` })}>
+          <View key={product.id} className='product-card card pressable' hoverClass='card-press' onClick={() => Taro.navigateTo({ url: `/pages/product-detail/index?id=${product.id}` })}>
             <View className='product-image' style={{ background: product.image_color }}>
               {product.supports_ar && <Text className='ar-badge'>AR</Text>}
             </View>

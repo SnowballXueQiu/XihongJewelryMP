@@ -18,16 +18,23 @@
 
 .cart-item {
   display: flex;
-  min-height: 220px;
+  min-height: 236px;
   margin-bottom: 26px;
   padding: 0 0 26px;
+  align-items: center;
   border: 0;
   border-bottom: 1px solid #e8e2d8;
   background: transparent;
 }
 
+.cart-check {
+  width: 56px;
+  flex: 0 0 56px;
+}
+
 .cart-image {
   width: 176px;
+  height: 176px;
   border: 1px solid #e8e2d8;
 }
 
@@ -67,24 +74,78 @@
   font-weight: 500;
 }
 
+.quantity-row {
+  display: flex;
+  height: 58px;
+  margin-top: 18px;
+  align-items: center;
+  gap: 12px;
+  font-family: "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+}
+
+.qty-btn,
+.remove-btn,
+.clear-btn {
+  display: flex;
+  height: 52px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #d8d2c6;
+  color: #111111;
+  font-family: "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+  font-size: 22px;
+}
+
+.qty-btn {
+  width: 52px;
+}
+
+.qty-value {
+  min-width: 44px;
+  color: #111111;
+  text-align: center;
+  font-size: 24px;
+}
+
+.remove-btn {
+  width: 92px;
+  color: #77716a;
+}
+
 .cart-footer {
   position: sticky;
   bottom: 24px;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto auto 1fr 170px;
+  gap: 14px;
   min-height: 108px;
   align-items: center;
-  justify-content: space-between;
   padding: 18px 0;
   border-top: 1px solid #111111;
   background: #fbfaf7;
 }
 
+.footer-select {
+  display: flex;
+  align-items: center;
+  color: #4b4740;
+  font-family: "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+  font-size: 23px;
+}
+
+.clear-btn {
+  width: 86px;
+  border-color: transparent;
+  color: #77716a;
+}
+
 .total {
   color: #111111;
-  font-size: 30px;
+  font-size: 27px;
   font-weight: 400;
+  text-align: right;
 }
 
 .checkout {
-  width: 220px;
+  width: 170px;
 }

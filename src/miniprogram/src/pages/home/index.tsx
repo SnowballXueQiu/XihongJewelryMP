@@ -1,23 +1,27 @@
 import { useEffect, useState } from 'react'
 import Taro from '@tarojs/taro'
 import { View, Text, Button } from '@tarojs/components'
-import { fetchProducts, formatMoney } from '@/services/api'
-import { Product } from '@/types/domain'
+import { fetchBanners, fetchProducts, formatMoney } from '@/services/api'
+import { usePageEntranceAnimation } from '@/hooks/useSubtleAnimation'
+import { Banner, Product } from '@/types/domain'
 import './index.scss'
 
 export default function HomePage() {
   const [featured, setFeatured] = useState<Product[]>([])
+  const [hero, setHero] = useState<Banner | null>(null)
+  const pageAnimation = usePageEntranceAnimation()
 
   useEffect(() => {
     fetchProducts({ arOnly: true }).then((items) => setFeatured(items.slice(0, 2)))
+    fetchBanners('home_hero').then((items) => setHero(items[0] || null))
   }, [])
 
   return (
-    <View className='page home-page'>
-      <View className='hero'>
+    <View className='page home-page' animation={pageAnimation}>
+      <View className='hero' style={{ background: hero?.image_color || '#111111' }}>
         <View className='hero-copy'>
-          <Text className='hero-title'>玺鸿珠宝</Text>
-          <Text className='hero-subtitle'>为戒指、手链与日常轻珠宝打造可试戴的线上门店。</Text>
+          <Text className='hero-title'>{hero?.title || '玺鸿珠宝'}</Text>
+          <Text className='hero-subtitle'>{hero?.subtitle || '为戒指、手链与日常轻珠宝打造可试戴的线上门店。'}</Text>
           <Button className='primary-btn hero-btn' onClick={() => Taro.switchTab({ url: '/pages/products/index' })}>选购珠宝</Button>
         </View>
         <View className='hero-gem'>
@@ -47,6 +51,7 @@ export default function HomePage() {
           <Button
             key={slug}
             className='category-tile'
+            hoverClass='button-press'
             onClick={() => Taro.switchTab({ url: '/pages/products/index' })}
           >
             {name}
@@ -57,7 +62,7 @@ export default function HomePage() {
       <Text className='section-title'>推荐试戴</Text>
       <View className='featured-list'>
         {featured.map((product) => (
-          <View key={product.id} className='featured-card card' onClick={() => Taro.navigateTo({ url: `/pages/product-detail/index?id=${product.id}` })}>
+          <View key={product.id} className='featured-card card pressable' hoverClass='button-press' onClick={() => Taro.navigateTo({ url: `/pages/product-detail/index?id=${product.id}` })}>
             <View className='product-swatch' style={{ background: product.image_color }} />
             <View className='featured-info'>
               <Text className='featured-name'>{product.name}</Text>

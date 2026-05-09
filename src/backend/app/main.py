@@ -1,12 +1,18 @@
+from pathlib import Path
+
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from sqlmodel import Session, select
+from fastapi.staticfiles import StaticFiles
+from sqlmodel import Session, col, select
 
+from app.admin import router as admin_router
 from app.database import create_db_and_seed, get_session
-from app.models import CartItem, Category, Order, OrderItem, OrderStatus, PetProfile, Product
+from app.models import Banner, CartItem, Category, Order, OrderItem, OrderStatus, PetProfile, Product, ProductStatus
 from app.schemas import (
+    BannerRead,
     CartAddRequest,
     CartItemRead,
+    CartUpdateRequest,
     CreateOrderRequest,
     OrderItemRead,
     OrderRead,
@@ -22,8 +28,10 @@ from app.services import (
     create_order_from_items,
     get_mock_user,
     resolve_pet_level,
+    serialize_product,
     update_order_status,
 )
+from app.settings import settings
 
 app = FastAPI(title="玺鸿珠宝 API", version="0.1.0")
 app.add_middleware(
@@ -32,6 +40,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+Path(settings.uploads_dir).mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=settings.uploads_dir), name="uploads")
+app.include_router(admin_router)
 
 
 @app.on_event("startup")
@@ -46,7 +57,15 @@ def health() -> dict[str, str]:
 
 @app.get("/api/categories")
 def list_categories(session: Session = Depends(get_session)) -> list[Category]:
-    return session.exec(select(Category).order_by(Category.sort_order)).all()
+    return list(session.exec(select(Category).where(Category.is_active == True).order_by(col(Category.sort_order))))  # noqa: E712
+
+
+@app.get("/api/banners", response_model=list[BannerRead])
+def list_banners(placement: str | None = None, session: Session = Depends(get_session)) -> list[Banner]:
+    statement = select(Banner).where(Banner.is_active == True)  # noqa: E712
+    if placement:
+        statement = statement.where(Banner.placement == placement)
+    return list(session.exec(statement.order_by(col(Banner.sort_order))))
 
 
 @app.get("/api/products", response_model=list[ProductRead])
@@ -59,12 +78,12 @@ def list_products(
     max_price: int | None = Query(default=None, ge=0),
     sort: str = "recommended",
     session: Session = Depends(get_session),
-) -> list[Product]:
-    statement = select(Product)
+) -> list[ProductRead]:
+    statement = select(Product).where(Product.status == ProductStatus.active)
     if category and category != "all":
         statement = statement.where(Product.category_slug == category)
     if q:
-        statement = statement.where(Product.name.contains(q))
+        statement = statement.where(col(Product.name).contains(q))
     if material and material != "all":
         statement = statement.where(Product.material == material)
     if ar_only:
@@ -74,20 +93,20 @@ def list_products(
     if max_price is not None:
         statement = statement.where(Product.price_cents <= max_price)
     if sort == "price_asc":
-        statement = statement.order_by(Product.price_cents)
+        statement = statement.order_by(col(Product.price_cents))
     elif sort == "price_desc":
-        statement = statement.order_by(Product.price_cents.desc())
+        statement = statement.order_by(col(Product.price_cents).desc())
     else:
-        statement = statement.order_by(Product.created_at.desc())
-    return session.exec(statement).all()
+        statement = statement.order_by(col(Product.created_at).desc())
+    return [serialize_product(product) for product in session.exec(statement).all()]
 
 
 @app.get("/api/products/{product_id}", response_model=ProductRead)
-def get_product(product_id: int, session: Session = Depends(get_session)) -> Product:
+def get_product(product_id: int, session: Session = Depends(get_session)) -> ProductRead:
     product = session.get(Product, product_id)
-    if not product:
+    if not product or product.status != ProductStatus.active:
         raise HTTPException(status_code=404, detail="Product not found")
-    return product
+    return serialize_product(product)
 
 
 @app.get("/api/me", response_model=UserRead)
@@ -103,7 +122,7 @@ def get_cart(session: Session = Depends(get_session)):
     for item in rows:
         product = session.get(Product, item.product_id)
         if product:
-            result.append(CartItemRead(id=item.id or 0, product=product, quantity=item.quantity, subtotal_cents=product.price_cents * item.quantity))
+            result.append(CartItemRead(id=item.id or 0, product=serialize_product(product), quantity=item.quantity, subtotal_cents=product.price_cents * item.quantity))
     return result
 
 
@@ -123,6 +142,34 @@ def add_to_cart(payload: CartAddRequest, session: Session = Depends(get_session)
     return get_cart(session)
 
 
+@app.put("/api/cart/{item_id}", response_model=list[CartItemRead])
+def update_cart_item(item_id: int, payload: CartUpdateRequest, session: Session = Depends(get_session)):
+    user = get_mock_user(session)
+    item = session.get(CartItem, item_id)
+    if not item or item.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Cart item not found")
+    product = session.get(Product, item.product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    if payload.quantity > product.stock:
+        raise HTTPException(status_code=400, detail="Stock is insufficient")
+    item.quantity = payload.quantity
+    session.add(item)
+    session.commit()
+    return get_cart(session)
+
+
+@app.delete("/api/cart/{item_id}", response_model=list[CartItemRead])
+def delete_cart_item(item_id: int, session: Session = Depends(get_session)):
+    user = get_mock_user(session)
+    item = session.get(CartItem, item_id)
+    if not item or item.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Cart item not found")
+    session.delete(item)
+    session.commit()
+    return get_cart(session)
+
+
 @app.delete("/api/cart")
 def clear_cart(session: Session = Depends(get_session)) -> dict[str, bool]:
     user = get_mock_user(session)
@@ -137,6 +184,10 @@ def serialize_order(order: Order, session: Session, include_payment: bool = Fals
         id=order.id or 0,
         status=order.status,
         total_cents=order.total_cents,
+        receiver_name=order.receiver_name,
+        receiver_phone=order.receiver_phone,
+        receiver_address=order.receiver_address,
+        created_at=order.created_at,
         items=[
             OrderItemRead(
                 product_id=item.product_id,
@@ -172,7 +223,7 @@ def create_order(payload: CreateOrderRequest, session: Session = Depends(get_ses
 @app.get("/api/orders", response_model=list[OrderRead])
 def list_orders(session: Session = Depends(get_session)):
     user = get_mock_user(session)
-    orders = session.exec(select(Order).where(Order.user_id == user.id).order_by(Order.created_at.desc())).all()
+    orders = session.exec(select(Order).where(Order.user_id == user.id).order_by(col(Order.created_at).desc())).all()
     return [serialize_order(order, session, include_payment=False) for order in orders]
 
 

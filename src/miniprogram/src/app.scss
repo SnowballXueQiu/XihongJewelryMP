@@ -81,3 +81,28 @@ button::after {
   background: #fffdf8;
   box-shadow: none;
 }
+
+.pressable,
+.primary-btn,
+.secondary-btn,
+.ghost-btn,
+.category-tile,
+.cart-link,
+.menu-item {
+  transition: opacity 160ms ease-out, transform 160ms ease-out, background-color 160ms ease-out;
+}
+
+.button-press,
+.card-press {
+  opacity: 0.82;
+  transform: scale(0.985);
+}
+
+.category-chip-press {
+  opacity: 0.7;
+}
+
+.menu-item-press {
+  background: rgba(184, 154, 99, 0.08);
+  opacity: 0.86;
+}

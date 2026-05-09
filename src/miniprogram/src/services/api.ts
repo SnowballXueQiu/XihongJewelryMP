@@ -1,5 +1,5 @@
 import Taro from '@tarojs/taro'
-import { CartItem, Category, Order, Pet, Product, User } from '@/types/domain'
+import { Banner, CartItem, Category, Order, Pet, Product, User } from '@/types/domain'
 import { mockCategories, mockPet, mockProducts, mockUser } from './mock'
 
 const API_BASE = 'http://127.0.0.1:8000'
@@ -49,7 +49,8 @@ async function request<T>(url: string, options: RequestOptions = {}): Promise<T>
     url: `${API_BASE}${url}`
   })
   if (response.statusCode >= 400) {
-    throw new Error(typeof response.data === 'string' ? response.data : '请求失败')
+    const data = response.data as { detail?: string } | string
+    throw new Error(typeof data === 'string' ? data : data.detail || '请求失败')
   }
   return response.data
 }
@@ -99,24 +100,42 @@ export async function fetchProduct(id: number): Promise<Product> {
   }
 }
 
-export async function addToCart(productId: number, quantity = 1): Promise<CartItem[]> {
+export async function fetchBanners(placement = 'home_hero'): Promise<Banner[]> {
   try {
-    return await request<CartItem[]>('/api/cart', {
-      method: 'POST',
-      data: { product_id: productId, quantity }
-    })
-  } catch {
-    const product = mockProducts.find((item) => item.id === productId) || mockProducts[0]
-    return [{ id: productId, product, quantity, subtotal_cents: product.price_cents * quantity }]
-  }
-}
-
-export async function fetchCart(): Promise<CartItem[]> {
-  try {
-    return await request<CartItem[]>('/api/cart')
+    return await request<Banner[]>(`/api/banners?placement=${encodeURIComponent(placement)}`)
   } catch {
     return []
   }
+}
+
+export async function addToCart(productId: number, quantity = 1): Promise<CartItem[]> {
+  return await request<CartItem[]>('/api/cart', {
+    method: 'POST',
+    data: { product_id: productId, quantity }
+  })
+}
+
+export async function fetchCart(): Promise<CartItem[]> {
+  return await request<CartItem[]>('/api/cart')
+}
+
+export async function updateCartItem(itemId: number, quantity: number): Promise<CartItem[]> {
+  return await request<CartItem[]>(`/api/cart/${itemId}`, {
+    method: 'PUT',
+    data: { quantity }
+  })
+}
+
+export async function deleteCartItem(itemId: number): Promise<CartItem[]> {
+  return await request<CartItem[]>(`/api/cart/${itemId}`, {
+    method: 'DELETE'
+  })
+}
+
+export async function clearCart(): Promise<{ ok: boolean }> {
+  return await request<{ ok: boolean }>('/api/cart', {
+    method: 'DELETE'
+  })
 }
 
 export async function createOrder(items: Array<{ product_id: number; quantity: number }>): Promise<Order> {

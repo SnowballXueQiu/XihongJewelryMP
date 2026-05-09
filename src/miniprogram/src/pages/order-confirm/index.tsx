@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import Taro, { useRouter } from '@tarojs/taro'
 import { Button, Text, View } from '@tarojs/components'
 import { createOrder, formatMoney } from '@/services/api'
+import { useContentRefreshAnimation, usePageEntranceAnimation } from '@/hooks/useSubtleAnimation'
 import { Order } from '@/types/domain'
 import './index.scss'
 
@@ -9,6 +10,8 @@ export default function OrderConfirmPage() {
   const router = useRouter()
   const [order, setOrder] = useState<Order | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const pageAnimation = usePageEntranceAnimation()
+  const paymentAnimation = useContentRefreshAnimation([order?.id])
   const items = useMemo(() => {
     try {
       return JSON.parse(decodeURIComponent(String(router.params.items || '[]'))) as Array<{ product_id: number; quantity: number }>
@@ -46,7 +49,7 @@ export default function OrderConfirmPage() {
   }
 
   return (
-    <View className='page order-page'>
+    <View className='page order-page' animation={pageAnimation}>
       <View className='address card'>
         <Text className='block-title'>收货信息</Text>
         <Text className='address-line'>测试用户 13800000000</Text>
@@ -64,7 +67,7 @@ export default function OrderConfirmPage() {
       </View>
 
       {order && (
-        <View className='payment card'>
+        <View className='payment card' animation={paymentAnimation}>
           <Text className='block-title'>支付预留</Text>
           <Text className='payment-line'>订单号：{order.id}</Text>
           <Text className='payment-line'>状态：{order.status}</Text>
@@ -73,7 +76,7 @@ export default function OrderConfirmPage() {
         </View>
       )}
 
-      <Button className='primary-btn submit' loading={submitting} onClick={submitOrder}>
+      <Button className='primary-btn submit' loading={submitting} hoverClass='button-press' onClick={submitOrder}>
         创建订单并预支付
       </Button>
     </View>

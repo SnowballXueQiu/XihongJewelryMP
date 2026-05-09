@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react'
 import Taro, { useRouter } from '@tarojs/taro'
 import { Button, Text, View } from '@tarojs/components'
 import { addToCart, fetchProduct, formatMoney } from '@/services/api'
+import { usePageEntranceAnimation } from '@/hooks/useSubtleAnimation'
 import { Product } from '@/types/domain'
 import './index.scss'
 
 export default function ProductDetailPage() {
   const router = useRouter()
   const [product, setProduct] = useState<Product | null>(null)
+  const pageAnimation = usePageEntranceAnimation()
 
   useEffect(() => {
     const id = Number(router.params.id)
@@ -16,8 +18,12 @@ export default function ProductDetailPage() {
 
   async function handleAddCart() {
     if (!product) return
-    await addToCart(product.id, 1)
-    Taro.showToast({ title: '已加入购物车', icon: 'success' })
+    try {
+      await addToCart(product.id, 1)
+      Taro.showToast({ title: '已加入购物车', icon: 'success' })
+    } catch (error) {
+      Taro.showToast({ title: error instanceof Error ? error.message : '加入失败', icon: 'none' })
+    }
   }
 
   function buyNow() {
@@ -27,11 +33,11 @@ export default function ProductDetailPage() {
   }
 
   if (!product) {
-    return <View className='page'><Text>加载中...</Text></View>
+    return <View className='page' animation={pageAnimation}><Text>加载中...</Text></View>
   }
 
   return (
-    <View className='page detail-page'>
+    <View className='page detail-page' animation={pageAnimation}>
       <View className='detail-image' style={{ background: product.image_color }}>
         {product.supports_ar && <Text className='ar-tag'>支持 AR 试戴</Text>}
       </View>
@@ -47,13 +53,13 @@ export default function ProductDetailPage() {
       </View>
 
       {product.supports_ar && (
-        <Button className='secondary-btn wide' onClick={() => Taro.navigateTo({ url: `/pages/ar-try-on/index?id=${product.id}` })}>
+        <Button className='secondary-btn wide' hoverClass='button-press' onClick={() => Taro.navigateTo({ url: `/pages/ar-try-on/index?id=${product.id}` })}>
           AR 试戴
         </Button>
       )}
       <View className='action-row'>
-        <Button className='ghost-btn action' onClick={handleAddCart}>加入购物车</Button>
-        <Button className='primary-btn action' onClick={buyNow}>立即购买</Button>
+        <Button className='ghost-btn action' hoverClass='button-press' onClick={handleAddCart}>加入购物车</Button>
+        <Button className='primary-btn action' hoverClass='button-press' onClick={buyNow}>立即购买</Button>
       </View>
     </View>
   )

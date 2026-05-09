@@ -6,11 +6,14 @@
   "scripts": {
     "postinstall": "pnpm install:backend",
     "install:backend": "cd src/backend && uv sync",
-    "dev": "concurrently -n backend,miniprogram -c gray,yellow \"pnpm --dir src/backend dev\" \"pnpm --dir src/miniprogram dev:weapp\"",
+    "predev": "node scripts/kill-dev-ports.mjs",
+    "dev": "concurrently -n backend,miniprogram,backstage -c gray,yellow,white \"pnpm --dir src/backend dev\" \"pnpm --dir src/miniprogram dev:weapp\" \"pnpm --dir src/backstage dev\"",
     "dev:backend": "pnpm --dir src/backend dev",
     "dev:miniprogram": "pnpm --dir src/miniprogram dev:weapp",
-    "build": "pnpm --dir src/miniprogram build:weapp",
+    "dev:backstage": "pnpm --dir src/backstage dev",
+    "build": "pnpm --dir src/miniprogram build:weapp && pnpm --dir src/backstage build",
     "build:miniprogram": "pnpm --dir src/miniprogram build:weapp",
+    "build:backstage": "pnpm --dir src/backstage build",
     "test:backend": "pnpm --dir src/backend test"
   },
   "devDependencies": {

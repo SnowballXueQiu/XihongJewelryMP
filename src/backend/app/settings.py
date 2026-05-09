@@ -17,6 +17,11 @@ class Settings(BaseSettings):
     wx_pay_serial_no: str = ""
     wx_pay_private_key_path: str = ""
     wx_pay_notify_url: str = "http://127.0.0.1:8000/api/payments/wechat/notify"
+    admin_jwt_secret: str = "dev-change-this-admin-secret"
+    admin_bootstrap_email: str = "admin@xihong.local"
+    admin_bootstrap_password: str = "XihongAdmin123!"
+    uploads_dir: str = "./uploads"
+    public_base_url: str = "http://127.0.0.1:8000"
 
 
 settings = Settings()

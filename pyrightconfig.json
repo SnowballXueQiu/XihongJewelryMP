@@ -1,0 +1,9 @@
+{
+  "include": ["src/backend/app", "src/backend/tests"],
+  "exclude": ["**/__pycache__", "src/backend/data", "src/backend/uploads", "**/node_modules", "**/.*"],
+  "venvPath": "src/backend",
+  "venv": ".venv",
+  "extraPaths": ["src/backend"],
+  "pythonVersion": "3.13",
+  "typeCheckingMode": "basic"
+}

@@ -1,6 +1,7 @@
 packages:
   - src/miniprogram
   - src/backend
+  - src/backstage
 
 onlyBuiltDependencies:
   - '@parcel/watcher'
@@ -10,3 +11,4 @@ onlyBuiltDependencies:
   - core-js
   - core-js-pure
   - esbuild
+  - sharp
