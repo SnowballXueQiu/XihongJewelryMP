@@ -1,0 +1,43 @@
+.ar-page {
+  min-height: 100vh;
+  background: #111111;
+}
+
+.ar-stage {
+  width: 100vw;
+  height: 78vh;
+}
+
+.ar-panel {
+  min-height: 22vh;
+  padding: 32px 28px;
+  border-top: 1px solid rgba(251, 250, 247, 0.18);
+  background: #111111;
+}
+
+.ar-title,
+.ar-tip {
+  display: block;
+}
+
+.ar-title {
+  color: #fbfaf7;
+  font-size: 36px;
+  font-weight: 400;
+}
+
+.ar-tip {
+  margin-top: 14px;
+  color: #d8d2c6;
+  font-family: "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+  font-size: 24px;
+  line-height: 1.62;
+}
+
+.ar-empty {
+  padding: 42px;
+  border: 1px solid #e8e2d8;
+  background: transparent;
+  color: #4b4740;
+  font-size: 28px;
+}

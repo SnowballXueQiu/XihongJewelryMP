@@ -1,0 +1,33 @@
+<xr-scene
+  ar-system="modes:Hand"
+  bind:ready="handleReady"
+  bind:ar-ready="handleARReady"
+  bind:ar-error="handleARError"
+>
+  <xr-assets bind:progress="handleAssetsProgress" bind:loaded="handleAssetsLoaded">
+    <xr-asset-load wx:if="{{modelUrl}}" type="gltf" asset-id="jewelry-model" src="{{modelUrl}}" />
+  </xr-assets>
+  <xr-node wx:if="{{arReady}}">
+    <xr-ar-tracker id="tracker" mode="Hand" auto-sync="{{autoSync}}">
+      <xr-gltf
+        wx:if="{{assetsLoaded}}"
+        model="jewelry-model"
+        position="{{modelPosition}}"
+        rotation="{{modelRotation}}"
+        scale="{{modelScale}}"
+      />
+    </xr-ar-tracker>
+    <xr-camera
+      id="camera"
+      node-id="camera"
+      clear-color="0.925 0.925 0.925 1"
+      background="ar"
+      is-ar-camera
+      near="0.01"
+    />
+  </xr-node>
+  <xr-node node-id="lights">
+    <xr-light type="ambient" color="1 1 1" intensity="3" />
+    <xr-light type="directional" rotation="45 180 0" color="1 1 1" intensity="6" />
+  </xr-node>
+</xr-scene>

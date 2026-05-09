@@ -1,0 +1,42 @@
+.address,
+.summary,
+.payment {
+  margin-bottom: 28px;
+  padding: 0 0 28px;
+  border: 0;
+  border-bottom: 1px solid #e8e2d8;
+  background: transparent;
+}
+
+.block-title {
+  display: block;
+  margin-bottom: 22px;
+  color: #111111;
+  font-size: 34px;
+  font-weight: 400;
+}
+
+.address-line,
+.payment-line {
+  display: block;
+  margin-top: 11px;
+  color: #4b4740;
+  font-family: "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+  font-size: 24px;
+  line-height: 1.62;
+}
+
+.summary-row {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  color: #4b4740;
+  font-family: "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+  font-size: 24px;
+}
+
+.submit {
+  width: 100%;
+  margin-top: 42px;
+}

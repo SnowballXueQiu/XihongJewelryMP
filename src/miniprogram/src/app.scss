@@ -1,0 +1,83 @@
+page {
+  min-height: 100%;
+  background: #fbfaf7;
+  color: #111111;
+  font-family: "Times New Roman", "Songti SC", "STSong", "PingFang SC", serif;
+}
+
+view,
+text,
+button,
+input {
+  box-sizing: border-box;
+}
+
+button {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 1;
+}
+
+button::after {
+  border: 0;
+}
+
+.page {
+  min-height: 100vh;
+  padding: 44px 28px 72px;
+}
+
+.section-title {
+  display: block;
+  margin: 64px 0 28px;
+  color: #111111;
+  font-size: 36px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.15;
+}
+
+.primary-btn,
+.secondary-btn,
+.ghost-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 78px;
+  padding: 0 34px;
+  border-radius: 0;
+  font-family: "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+  font-size: 24px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.primary-btn {
+  border: 1px solid #111111;
+  background: #111111;
+  color: #fff;
+}
+
+.secondary-btn {
+  border: 1px solid #b89a63;
+  background: #b89a63;
+  color: #111111;
+}
+
+.ghost-btn {
+  border: 1px solid #d8d2c6;
+  background: transparent;
+  color: #111111;
+}
+
+.card {
+  border: 1px solid #e8e2d8;
+  border-radius: 0;
+  background: #fffdf8;
+  box-shadow: none;
+}

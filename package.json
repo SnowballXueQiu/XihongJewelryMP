@@ -1,0 +1,19 @@
+{
+  "name": "xihong-jewelry-mp",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.29.2",
+  "scripts": {
+    "postinstall": "pnpm install:backend",
+    "install:backend": "cd src/backend && uv sync",
+    "dev": "concurrently -n backend,miniprogram -c gray,yellow \"pnpm --dir src/backend dev\" \"pnpm --dir src/miniprogram dev:weapp\"",
+    "dev:backend": "pnpm --dir src/backend dev",
+    "dev:miniprogram": "pnpm --dir src/miniprogram dev:weapp",
+    "build": "pnpm --dir src/miniprogram build:weapp",
+    "build:miniprogram": "pnpm --dir src/miniprogram build:weapp",
+    "test:backend": "pnpm --dir src/backend test"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
