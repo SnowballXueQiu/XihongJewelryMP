@@ -26,6 +26,10 @@ def create_db_and_seed() -> None:
         if not user:
             user = User(id=1, nickname="玺鸿会员", phone="13800000000", points=120)
             session.add(user)
+        else:
+            user.nickname = "玺鸿会员"
+            user.avatar_color = "#B89A63"
+            session.add(user)
         if not session.exec(select(PetProfile).where(PetProfile.user_id == 1)).first():
             session.add(PetProfile(user_id=1, exp=120, level=2, mood=78, hunger=28))
 
