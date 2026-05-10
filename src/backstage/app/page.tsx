@@ -113,18 +113,18 @@ type AuditLog = {
 
 type ModuleKey = 'dashboard' | 'products' | 'categories' | 'banners' | 'orders' | 'users' | 'pets' | 'assets' | 'settings' | 'admins' | 'audit'
 
-const modules: Array<{ key: ModuleKey; label: string }> = [
-  { key: 'dashboard', label: '总览' },
-  { key: 'products', label: '商品' },
-  { key: 'categories', label: '分类' },
-  { key: 'banners', label: '轮播' },
-  { key: 'orders', label: '订单' },
-  { key: 'users', label: '用户' },
-  { key: 'pets', label: '宠物积分' },
-  { key: 'assets', label: '素材' },
-  { key: 'settings', label: '配置' },
-  { key: 'admins', label: '管理员' },
-  { key: 'audit', label: '审计' }
+const modules: Array<{ key: ModuleKey; label: string; description: string }> = [
+  { key: 'dashboard', label: '总览', description: '店铺运营、订单与内容配置概览' },
+  { key: 'products', label: '商品', description: '维护商品资料、库存、价格与 AR 参数' },
+  { key: 'categories', label: '分类', description: '维护小程序商品分类与排序' },
+  { key: 'banners', label: '轮播', description: '配置首页主视觉、宣传位与跳转' },
+  { key: 'orders', label: '订单', description: '查看订单并调整支付状态' },
+  { key: 'users', label: '用户', description: '查看会员资料、积分和微信绑定状态' },
+  { key: 'pets', label: '宠物积分', description: '查看会员宠物等级、经验与权益' },
+  { key: 'assets', label: '素材', description: '上传商品图、轮播图和 AR 模型文件' },
+  { key: 'settings', label: '配置', description: '维护门店、微信和支付基础配置' },
+  { key: 'admins', label: '管理员', description: '超级管理员可维护后台账号' },
+  { key: 'audit', label: '审计', description: '查看后台操作记录' }
 ]
 
 const emptyProduct: Omit<Product, 'id'> = {
@@ -200,6 +200,7 @@ export default function BackstagePage() {
     ['会员用户', users.length],
     ['素材文件', assets.length]
   ], [assets.length, orders, products, users.length])
+  const activeModule = modules.find((item) => item.key === active) || modules[0]
 
   async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     const response = await fetch(`${API_BASE}${path}`, {
@@ -362,9 +363,10 @@ export default function BackstagePage() {
   return (
     <main className="shell">
       <aside className="sidebar">
-        <div>
+        <div className="sidebar-head">
           <p className="brand">Xihong Jewelry</p>
           <h1>玺鸿后台</h1>
+          <span>Commerce Console</span>
         </div>
         <nav>
           {modules.map((item) => (
@@ -373,7 +375,7 @@ export default function BackstagePage() {
         </nav>
         <div className="admin-box">
           <strong>{admin.name}</strong>
-          <span>{admin.role === 'super_admin' ? '超级管理员' : '管理员'}</span>
+          <span className="role-pill">{admin.role === 'super_admin' ? '超级管理员' : '管理员'}</span>
           <button onClick={() => { window.localStorage.removeItem('xihong_admin_token'); setAdmin(null); setToken('') }}>退出</button>
         </div>
       </aside>
@@ -382,12 +384,17 @@ export default function BackstagePage() {
         <header className="topbar">
           <div>
             <p>天津玺鸿珠宝贸易有限公司</p>
-            <h2>{modules.find((item) => item.key === active)?.label}</h2>
+            <h2>{activeModule.label}</h2>
+            <span>{activeModule.description}</span>
           </div>
-          <button className="ghost" onClick={() => loadAll()}>刷新数据</button>
+          <div className="top-actions">
+            <span>{API_BASE}</span>
+            <button className="ghost" onClick={() => loadAll()}>刷新数据</button>
+          </div>
         </header>
         {message && <p className="message">{message}</p>}
 
+        <div className="content-body" key={active}>
         {active === 'dashboard' && (
           <section className="grid stats">
             {stats.map(([label, value]) => (
@@ -500,6 +507,7 @@ export default function BackstagePage() {
         )}
 
         {active === 'audit' && <ListPanel title="审计日志" items={audit.map((item) => ({ id: item.id, title: `${item.action} ${item.entity}`, meta: `${item.detail || item.entity_id} · ${new Date(item.created_at).toLocaleString()}` }))} />}
+        </div>
       </section>
     </main>
   )
