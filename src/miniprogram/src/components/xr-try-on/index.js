@@ -18,13 +18,23 @@ Component({
     },
     autoSync: {
       type: Number,
-      value: 9
+      value: 11,
+      observer(newVal) {
+        console.log('[xr-try-on] autoSync changed to:', newVal)
+        this.setData({ activeFinger: newVal })
+      }
     }
   },
   data: {
     arReady: false,
     assetsLoaded: false,
+    activeFinger: 11,
     progress: 0
+  },
+  lifetimes: {
+    attached() {
+      this.setData({ activeFinger: this.data.autoSync })
+    }
   },
   methods: {
     handleReady(event) {
@@ -32,6 +42,7 @@ Component({
       this.triggerEvent('scene-ready')
     },
     handleARReady() {
+      console.log('[xr-try-on] AR ready, activeFinger:', this.data.activeFinger)
       this.setData({ arReady: true })
       this.triggerEvent('ar-ready')
     },
@@ -45,6 +56,9 @@ Component({
     handleAssetsLoaded() {
       this.setData({ assetsLoaded: true })
       this.triggerEvent('asset-loaded')
+    },
+    handleTrackerSwitch(event) {
+      console.log('[xr-try-on] tracker switch:', event.detail.value)
     }
   }
 })

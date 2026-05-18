@@ -8,13 +8,35 @@
     <xr-asset-load wx:if="{{modelUrl}}" type="gltf" asset-id="jewelry-model" src="{{modelUrl}}" />
   </xr-assets>
   <xr-node wx:if="{{arReady}}">
-    <xr-ar-tracker id="tracker" mode="Hand" auto-sync="{{autoSync}}">
+    <!-- auto-sync子节点映射实测偏移, 已手动修正: 子节点1234对应位置4123 -->
+    <xr-ar-tracker id="tracker" mode="Hand" auto-sync="11 15 19 7" bind:ar-tracker-switch="handleTrackerSwitch">
       <xr-gltf
         wx:if="{{assetsLoaded}}"
         model="jewelry-model"
         position="{{modelPosition}}"
         rotation="{{modelRotation}}"
-        scale="{{modelScale}}"
+        scale="{{activeFinger === 7 ? modelScale : '0 0 0'}}"
+      />
+      <xr-gltf
+        wx:if="{{assetsLoaded}}"
+        model="jewelry-model"
+        position="{{modelPosition}}"
+        rotation="{{modelRotation}}"
+        scale="{{activeFinger === 11 ? modelScale : '0 0 0'}}"
+      />
+      <xr-gltf
+        wx:if="{{assetsLoaded}}"
+        model="jewelry-model"
+        position="{{modelPosition}}"
+        rotation="{{modelRotation}}"
+        scale="{{activeFinger === 15 ? modelScale : '0 0 0'}}"
+      />
+      <xr-gltf
+        wx:if="{{assetsLoaded}}"
+        model="jewelry-model"
+        position="{{modelPosition}}"
+        rotation="{{modelRotation}}"
+        scale="{{activeFinger === 19 ? modelScale : '0 0 0'}}"
       />
     </xr-ar-tracker>
     <xr-camera

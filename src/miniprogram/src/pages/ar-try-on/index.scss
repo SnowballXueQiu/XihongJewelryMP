@@ -41,3 +41,34 @@
   color: #4b4740;
   font-size: 28px;
 }
+
+.finger-picker {
+  margin-top: 24px;
+}
+
+.finger-picker-label {
+  display: block;
+  color: #d8d2c6;
+  font-size: 24px;
+  margin-bottom: 16px;
+}
+
+.finger-picker-options {
+  display: flex;
+  gap: 16px;
+}
+
+.finger-option {
+  padding: 12px 28px;
+  border: 1px solid rgba(251, 250, 247, 0.25);
+  border-radius: 8px;
+  color: #d8d2c6;
+  font-size: 26px;
+  transition: all 0.2s;
+}
+
+.finger-option.active {
+  border-color: #b89a63;
+  color: #fbfaf7;
+  background: rgba(184, 154, 99, 0.15);
+}
