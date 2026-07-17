@@ -77,19 +77,41 @@ export default function ArPage() {
   const resizeCanvases = () => {
     const video = videoRef.current
     if (!video) return
-    const w = video.videoWidth || window.innerWidth
-    const h = video.videoHeight || window.innerHeight
+    // Canvas dimensions always match the visible viewport (screen pixels)
+    const sw = window.innerWidth
+    const sh = window.innerHeight
     const sk = skeletonCanvasRef.current
-    if (sk && (sk.width !== w || sk.height !== h)) { sk.width = w; sk.height = h }
+    if (sk && (sk.width !== sw || sk.height !== sh)) { sk.width = sw; sk.height = sh }
     const three = threeRef.current
-    if (three.ready && (three.width !== w || three.height !== h)) {
-      three.width = w; three.height = h
-      three.renderer.setSize(w, h, false)
-      three.camera.left = -w / 2; three.camera.right = w / 2
-      three.camera.top = h / 2; three.camera.bottom = -h / 2
+    if (three.ready && (three.width !== sw || three.height !== sh)) {
+      three.width = sw; three.height = sh
+      three.renderer.setSize(sw, sh, false)
+      three.camera.left = -sw / 2; three.camera.right = sw / 2
+      three.camera.top = sh / 2; three.camera.bottom = -sh / 2
       three.camera.position.set(0, 0, 400)
       three.camera.near = -1000; three.camera.far = 1000
       three.camera.updateProjectionMatrix()
+    }
+  }
+
+  // Convert MediaPipe normalized [0,1] coords (in video space) to screen pixels,
+  // matching the object-fit:cover crop the <video> applies.
+  const videoToScreen = (nx: number, ny: number): { x: number; y: number } => {
+    const video = videoRef.current
+    const vw = video?.videoWidth || 1280
+    const vh = video?.videoHeight || 720
+    const sw = window.innerWidth
+    const sh = window.innerHeight
+    // Scale that fills the screen (cover)
+    const scale = Math.max(sw / vw, sh / vh)
+    const dispW = vw * scale
+    const dispH = vh * scale
+    // Top-left corner of the scaled video relative to screen (negative = cropped)
+    const ox = (sw - dispW) / 2
+    const oy = (sh - dispH) / 2
+    return {
+      x: nx * dispW + ox,
+      y: ny * dispH + oy,
     }
   }
 
@@ -151,11 +173,17 @@ export default function ArPage() {
     }
     three.modelRoot.visible = true
     const wrist = landmarks[0], indexBase = landmarks[5], pinkyBase = landmarks[17], middleBase = landmarks[9]
-    const x = (wrist.x - 0.5) * three.width
-    const y = (0.5 - wrist.y) * three.height
-    const palmWidth = Math.hypot(indexBase.x - pinkyBase.x, indexBase.y - pinkyBase.y) * three.width
-    const palmAngle = Math.atan2(indexBase.y - pinkyBase.y, indexBase.x - pinkyBase.x)
-    const wristToPalm = Math.atan2(middleBase.y - wrist.y, middleBase.x - wrist.x)
+    // Map wrist to screen pixels then shift to Three.js camera space (origin = screen center)
+    const wristScreen = videoToScreen(wrist.x, wrist.y)
+    const x = wristScreen.x - three.width / 2
+    const y = -(wristScreen.y - three.height / 2)
+    // Palm width in screen pixels for correct scale
+    const iScreen = videoToScreen(indexBase.x, indexBase.y)
+    const pScreen = videoToScreen(pinkyBase.x, pinkyBase.y)
+    const mScreen = videoToScreen(middleBase.x, middleBase.y)
+    const palmWidth = Math.hypot(iScreen.x - pScreen.x, iScreen.y - pScreen.y)
+    const palmAngle = Math.atan2(iScreen.y - pScreen.y, iScreen.x - pScreen.x)
+    const wristToPalm = Math.atan2(mScreen.y - wristScreen.y, mScreen.x - wristScreen.x)
     const scale = Math.max(28, palmWidth * 1.55) * three.modelBaseScale
     try {
       three.modelRoot.position.set(x, y, 0)
@@ -183,18 +211,20 @@ export default function ArPage() {
       groups.forEach(({ landmarks, handedness }: any) => {
         const d = debugRef.current
         const isSelected = d.hand === 'all' || d.hand === handedness
+        // Use cover-corrected screen coords for all drawing
+        const sc = landmarks.map((lm: Landmark) => videoToScreen(lm.x, lm.y))
         const drawConn = (connectors: number[][], color: string, lw: number) => {
           connectors.forEach(([a, b]) => {
             ctx.beginPath()
-            ctx.moveTo(landmarks[a].x * canvas.width, landmarks[a].y * canvas.height)
-            ctx.lineTo(landmarks[b].x * canvas.width, landmarks[b].y * canvas.height)
+            ctx.moveTo(sc[a].x, sc[a].y)
+            ctx.lineTo(sc[b].x, sc[b].y)
             ctx.strokeStyle = color; ctx.lineWidth = lw; ctx.stroke()
           })
         }
         const drawPts = (pts: number[], color: string, fill: string, r: number) => {
           pts.forEach(i => {
             ctx.beginPath()
-            ctx.arc(landmarks[i].x * canvas.width, landmarks[i].y * canvas.height, r, 0, Math.PI * 2)
+            ctx.arc(sc[i].x, sc[i].y, r, 0, Math.PI * 2)
             ctx.strokeStyle = color; ctx.fillStyle = fill; ctx.lineWidth = 1
             ctx.fill(); ctx.stroke()
           })
