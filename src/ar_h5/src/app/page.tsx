@@ -97,17 +97,17 @@ export default function ArPage() {
     const three = threeRef.current
     if (three.ready) return true
     try {
-      const [{ default: THREE }, { GLTFLoader }] = await Promise.all([
+      const [THREE, { GLTFLoader }] = await Promise.all([
         import('three'),
         import('three/examples/jsm/loaders/GLTFLoader.js'),
       ])
       three.scene = new THREE.Scene()
-      three.camera = new (THREE as any).OrthographicCamera(-1, 1, 1, -1, -1000, 1000)
-      three.renderer = new (THREE as any).WebGLRenderer({
+      three.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -1000, 1000)
+      three.renderer = new THREE.WebGLRenderer({
         canvas: jewelryCanvasRef.current!, alpha: true, antialias: true, preserveDrawingBuffer: false,
       })
       three.loader = new GLTFLoader()
-      three.modelRoot = new (THREE as any).Group()
+      three.modelRoot = new THREE.Group()
       three.renderer.setClearColor(0x000000, 0)
       three.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
       three.scene.add(three.modelRoot)
@@ -124,12 +124,12 @@ export default function ArPage() {
     const three = threeRef.current
     if (!three.ready || !three.loader) return
     setStatusMsg('加载试戴模型')
-    three.loader.load(url, (gltf: any) => {
+    three.loader.load(url, async (gltf: any) => {
       three.modelRoot.clear()
       three.model = gltf.scene
       // normalize
       try {
-        const { Box3, Vector3 } = require('three')
+        const { Box3, Vector3 } = await import('three')
         const b = new Box3().setFromObject(three.model)
         const size = new Vector3(); const center = new Vector3()
         b.getSize(size); b.getCenter(center)
@@ -158,9 +158,8 @@ export default function ArPage() {
     const wristToPalm = Math.atan2(middleBase.y - wrist.y, middleBase.x - wrist.x)
     const scale = Math.max(28, palmWidth * 1.55) * three.modelBaseScale
     try {
-      const { MathUtils } = require('three')
       three.modelRoot.position.set(x, y, 0)
-      three.modelRoot.rotation.set(MathUtils.degToRad(78), 0, -palmAngle + Math.PI / 2)
+      three.modelRoot.rotation.set(78 * (Math.PI / 180), 0, -palmAngle + Math.PI / 2)
       three.modelRoot.scale.setScalar(scale)
       three.modelRoot.position.x -= Math.cos(wristToPalm) * palmWidth * 0.15
       three.modelRoot.position.y += Math.sin(wristToPalm) * palmWidth * 0.15
