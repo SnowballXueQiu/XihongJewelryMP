@@ -1,13 +1,13 @@
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
-ENV PYTHONUNBUFFERED=1 \
-    UV_COMPILE_BYTECODE=1 \
-    UV_LINK_MODE=copy
+ENV PYTHONUNBUFFERED=1
+
+RUN pip install uv -i https://pypi.tuna.tsinghua.edu.cn/simple/
 
 COPY src/backend/pyproject.toml src/backend/uv.lock ./
-RUN uv sync --frozen --no-dev
+RUN UV_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple/ uv sync --frozen --no-dev
 
 COPY src/backend/app ./app
 
