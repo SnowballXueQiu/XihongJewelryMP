@@ -49,8 +49,9 @@ export default function ArPage() {
   const threeRef = useRef<any>({
     scene: null, camera: null, renderer: null, loader: null,
     model: null, modelRoot: null, modelBaseScale: 1,
-    width: 1, height: 1, ready: false,
+    width: 1, height: 1, ready: false, THREE: null,
   })
+  const prevQuatRef = useRef<any>(null)
   const legacyHandsRef = useRef<any>(null)
   const legacyCameraRef = useRef<any>(null)
   const tryOnHandednessRef = useRef<'right' | 'left'>('right')
@@ -133,6 +134,7 @@ export default function ArPage() {
       three.renderer.setClearColor(0x000000, 0)
       three.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
       three.scene.add(three.modelRoot)
+      three.THREE = THREE
       three.ready = true
       resizeCanvases()
       return true
@@ -169,25 +171,66 @@ export default function ArPage() {
     const three = threeRef.current
     if (!three.ready || !three.model || !landmarks || landmarks.length < 21 || debugRef.current.model === 'none') {
       if (three.modelRoot) three.modelRoot.visible = false
+      prevQuatRef.current = null
       return
     }
     three.modelRoot.visible = true
+    const THREE = three.THREE
     const wrist = landmarks[0], indexBase = landmarks[5], pinkyBase = landmarks[17], middleBase = landmarks[9]
-    // Map wrist to screen pixels then shift to Three.js camera space (origin = screen center)
+
+    // Screen position & scale
     const wristScreen = videoToScreen(wrist.x, wrist.y)
-    const x = wristScreen.x - three.width / 2
-    const y = -(wristScreen.y - three.height / 2)
-    // Palm width in screen pixels for correct scale
     const iScreen = videoToScreen(indexBase.x, indexBase.y)
     const pScreen = videoToScreen(pinkyBase.x, pinkyBase.y)
     const mScreen = videoToScreen(middleBase.x, middleBase.y)
     const palmWidth = Math.hypot(iScreen.x - pScreen.x, iScreen.y - pScreen.y)
-    const palmAngle = Math.atan2(iScreen.y - pScreen.y, iScreen.x - pScreen.x)
     const wristToPalm = Math.atan2(mScreen.y - wristScreen.y, mScreen.x - wristScreen.x)
+    const x = wristScreen.x - three.width / 2
+    const y = -(wristScreen.y - three.height / 2)
     const scale = Math.max(28, palmWidth * 1.55) * three.modelBaseScale
+
+    // Build orthonormal basis from palm landmarks using x/y/z
+    // Z depth is MediaPipe relative depth — positive = closer to camera
+    // Right axis: index_base → pinky_base (across palm width)
+    // Up axis: wrist → middle_base (along palm length)
+    // Normal: right × up (palm normal, pointing toward camera when hand faces cam)
+    const vw = videoRef.current?.videoWidth || 1280
+    const vh = videoRef.current?.videoHeight || 720
+    const depthScale = Math.max(vw, vh) // normalize z to same order as x/y pixel coords
+
+    const toVec3 = (lm: Landmark) => new THREE.Vector3(lm.x * vw, lm.y * vh, lm.z * depthScale)
+    const pWrist = toVec3(wrist)
+    const pIndex = toVec3(indexBase)
+    const pPinky = toVec3(pinkyBase)
+    const pMiddle = toVec3(middleBase)
+
+    // right: index → pinky
+    const right = new THREE.Vector3().subVectors(pPinky, pIndex).normalize()
+    // up: wrist → middle
+    const up = new THREE.Vector3().subVectors(pMiddle, pWrist).normalize()
+    // normal: right × up (palm faces camera in neutral pose)
+    const normal = new THREE.Vector3().crossVectors(right, up).normalize()
+    // re-orthogonalize up
+    const upOrtho = new THREE.Vector3().crossVectors(normal, right).normalize()
+
+    // Build rotation matrix: columns = right, upOrtho, normal
+    const mat = new THREE.Matrix4().makeBasis(right, upOrtho, normal)
+    const targetQuat = new THREE.Quaternion().setFromRotationMatrix(mat)
+
+    // Model correction: the GLB's initial orientation needs ~78° tilt around its local X axis
+    const MODEL_CORRECTION = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(78 * (Math.PI / 180), 0, 0)
+    )
+    targetQuat.multiply(MODEL_CORRECTION)
+
+    // SLERP for smooth tracking — alpha higher = snappier, lower = smoother
+    const SLERP_ALPHA = 0.35
+    if (!prevQuatRef.current) prevQuatRef.current = targetQuat.clone()
+    prevQuatRef.current.slerp(targetQuat, SLERP_ALPHA)
+
     try {
       three.modelRoot.position.set(x, y, 0)
-      three.modelRoot.rotation.set(78 * (Math.PI / 180), 0, -palmAngle + Math.PI / 2)
+      three.modelRoot.quaternion.copy(prevQuatRef.current)
       three.modelRoot.scale.setScalar(scale)
       three.modelRoot.position.x -= Math.cos(wristToPalm) * palmWidth * 0.15
       three.modelRoot.position.y += Math.sin(wristToPalm) * palmWidth * 0.15
