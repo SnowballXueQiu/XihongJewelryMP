@@ -5,11 +5,11 @@ services:
       dockerfile: src/backend/Dockerfile
     restart: unless-stopped
     env_file:
-      - ./src/backend/.env
+      - .env
     environment:
-      DATABASE_URL: sqlite:////app/data/xihong.sqlite3
-      PUBLIC_BASE_URL: https://api.xihongzhubao.com
-      WX_PAY_NOTIFY_URL: https://api.xihongzhubao.com/api/payments/wechat/notify
+      DATABASE_URL: ${DATABASE_URL:-sqlite:////app/data/xihong.sqlite3}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://api.xihongzhubao.com}
+      WX_PAY_NOTIFY_URL: ${WX_PAY_NOTIFY_URL:-https://api.xihongzhubao.com/api/payments/wechat/notify}
     volumes:
       - backend_data:/app/data
       - backend_uploads:/app/uploads
@@ -21,7 +21,7 @@ services:
       context: .
       dockerfile: src/backstage/Dockerfile
       args:
-        NEXT_PUBLIC_API_BASE: https://api.xihongzhubao.com
+        NEXT_PUBLIC_API_BASE: ${PUBLIC_BASE_URL:-https://api.xihongzhubao.com}
     restart: unless-stopped
     environment:
       NODE_ENV: production

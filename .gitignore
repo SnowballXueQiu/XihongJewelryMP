@@ -12,6 +12,7 @@ src/backstage/out/
 .env
 .env.*
 !.env.example
+!.env.template
 
 # backend runtime data
 src/backend/data/
