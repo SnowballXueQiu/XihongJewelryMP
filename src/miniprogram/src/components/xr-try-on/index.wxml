@@ -1,15 +1,24 @@
 <xr-scene
+  id="scene"
+  width="{{viewportWidth}}"
+  height="{{viewportHeight}}"
+  style="{{viewportStyle}}"
   ar-system="modes:Hand"
   bind:ready="handleReady"
   bind:ar-ready="handleARReady"
   bind:ar-error="handleARError"
+  bind:tick="handleTick"
 >
   <xr-assets bind:progress="handleAssetsProgress" bind:loaded="handleAssetsLoaded">
     <xr-asset-load wx:if="{{modelUrl}}" type="gltf" asset-id="jewelry-model" src="{{modelUrl}}" />
   </xr-assets>
   <xr-node wx:if="{{arReady}}">
-    <!-- auto-sync子节点映射实测偏移, 已手动修正: 子节点1234对应位置4123 -->
-    <xr-ar-tracker id="tracker" mode="Hand" auto-sync="11 15 19 7" bind:ar-tracker-switch="handleTrackerSwitch">
+    <xr-ar-tracker
+      id="tracker"
+      mode="Hand"
+      auto-sync="{{autoSync}}"
+      bind:ar-tracker-switch="handleTrackerSwitch"
+    >
       <xr-gltf
         wx:if="{{assetsLoaded}}"
         model="jewelry-model"
@@ -39,9 +48,27 @@
         scale="{{activeFinger === 19 ? modelScale : '0 0 0'}}"
       />
     </xr-ar-tracker>
+    <xr-ar-tracker
+      wx:if="{{debugSkeleton}}"
+      id="debug-tracker"
+      mode="Hand"
+      auto-sync="0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20"
+    >
+      <xr-mesh
+        wx:for="{{debugPoints}}"
+        wx:key="id"
+        geometry="cube"
+        scale="{{item.scale}}"
+        uniforms="{{item.uniforms}}"
+        states="renderQueue:2600,alphaMode:BLEND"
+      />
+    </xr-ar-tracker>
     <xr-camera
       id="camera"
       node-id="camera"
+      width="{{viewportWidth}}"
+      height="{{viewportHeight}}"
+      style="{{viewportStyle}}"
       clear-color="0.925 0.925 0.925 1"
       background="ar"
       is-ar-camera

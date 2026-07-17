@@ -2,7 +2,7 @@ import Taro from '@tarojs/taro'
 import { Banner, CartItem, Category, Order, Pet, Product, User } from '@/types/domain'
 import { mockCategories, mockPet, mockProducts, mockUser } from './mock'
 
-const API_BASE = 'http://127.0.0.1:8000'
+const API_BASE = 'https://api.xihongzhubao.com'
 type RequestOptions = Omit<Taro.request.Option, 'url'> & { url?: never }
 
 function moneyToCents(value?: string): number | undefined {

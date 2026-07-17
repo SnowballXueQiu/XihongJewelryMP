@@ -1,0 +1,21 @@
+page {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #000;
+}
+
+.ar-webview-page {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #000;
+}
+
+.ar-webview {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+}

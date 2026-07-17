@@ -6,7 +6,8 @@ export default defineAppConfig({
     'pages/product-detail/index',
     'pages/cart/index',
     'pages/order-confirm/index',
-    'pages/ar-try-on/index'
+    'pages/ar-try-on/index',
+    'pages/ar-mediapipe/index'
   ],
   window: {
     backgroundTextStyle: 'light',

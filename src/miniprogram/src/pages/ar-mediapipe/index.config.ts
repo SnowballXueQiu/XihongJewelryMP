@@ -1,8 +1,5 @@
 export default definePageConfig({
   navigationBarTitleText: 'AR 试戴',
   navigationStyle: 'custom',
-  disableScroll: true,
-  usingComponents: {
-    'xr-try-on': '../../components/xr-try-on/index'
-  }
+  disableScroll: true
 })

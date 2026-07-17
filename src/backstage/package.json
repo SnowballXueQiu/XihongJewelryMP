@@ -4,14 +4,15 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3001",
-    "build": "next build",
+    "build": "next build --webpack",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
     "next": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "sass": "^1.83.0"
+    "sass": "^1.83.0",
+    "three": "^0.184.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

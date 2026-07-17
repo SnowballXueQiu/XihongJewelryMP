@@ -53,7 +53,7 @@ export default function ProductDetailPage() {
       </View>
 
       {product.supports_ar && (
-        <Button className='secondary-btn wide' hoverClass='button-press' onClick={() => Taro.navigateTo({ url: `/pages/ar-try-on/index?id=${product.id}` })}>
+        <Button className='secondary-btn wide' hoverClass='button-press' onClick={() => Taro.navigateTo({ url: `/pages/ar-mediapipe/index?id=${product.id}` })}>
           AR 试戴
         </Button>
       )}

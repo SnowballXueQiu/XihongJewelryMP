@@ -1,0 +1,717 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <title>玺鸿珠宝 AR 试戴</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --gold: #b89a63;
+        --ivory: #fbfaf7;
+        --line: rgba(251, 250, 247, 0.18);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: #000;
+        color: var(--ivory);
+        font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+      }
+
+      .ar-shell {
+        position: fixed;
+        inset: 0;
+        overflow: hidden;
+        background: #000;
+      }
+
+      .video-view,
+      .media-wrap,
+      #webcam,
+      #output_canvas,
+      #jewelry_canvas {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+      }
+
+      #webcam {
+        z-index: 1;
+        object-fit: cover;
+        transform: rotateY(180deg);
+      }
+
+      #output_canvas {
+        z-index: 2;
+        pointer-events: none;
+        transform: rotateY(180deg);
+      }
+
+      #jewelry_canvas {
+        z-index: 3;
+        pointer-events: none;
+        transform: rotateY(180deg);
+      }
+
+      .topbar {
+        position: fixed;
+        top: 0;
+        right: 0;
+        left: 0;
+        z-index: 4;
+        display: flex;
+        height: calc(76px + env(safe-area-inset-top));
+        align-items: flex-end;
+        justify-content: center;
+        padding: 0 22px 16px;
+        background: linear-gradient(180deg, rgba(0, 0, 0, 0.58), rgba(0, 0, 0, 0));
+      }
+
+      .title {
+        font-size: 18px;
+        font-weight: 650;
+        letter-spacing: 0;
+      }
+
+      .status {
+        position: fixed;
+        top: calc(92px + env(safe-area-inset-top));
+        left: 50%;
+        z-index: 5;
+        min-width: 172px;
+        transform: translateX(-50%);
+        padding: 9px 13px;
+        border: 1px solid rgba(251, 250, 247, 0.14);
+        background: rgba(0, 0, 0, 0.42);
+        color: rgba(251, 250, 247, 0.72);
+        font-size: 12px;
+        text-align: center;
+      }
+
+      .status.is-active {
+        border-color: rgba(184, 154, 99, 0.58);
+        color: rgba(251, 250, 247, 0.92);
+      }
+
+      .panel {
+        position: fixed;
+        right: 14px;
+        bottom: calc(18px + env(safe-area-inset-bottom));
+        left: 14px;
+        z-index: 4;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 14px 18px;
+        min-height: 132px;
+        padding: 17px 18px;
+        border: 1px solid rgba(251, 250, 247, 0.16);
+        background: rgba(5, 5, 5, 0.58);
+        backdrop-filter: blur(18px);
+      }
+
+      .panel-main {
+        min-width: 0;
+      }
+
+      .product-name {
+        display: block;
+        font-size: 20px;
+        font-weight: 700;
+        line-height: 1.18;
+      }
+
+      .hint {
+        display: block;
+        margin-top: 8px;
+        color: rgba(251, 250, 247, 0.68);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .button {
+        align-self: start;
+        flex: 0 0 auto;
+        min-width: 104px;
+        height: 42px;
+        border: 1px solid rgba(184, 154, 99, 0.64);
+        border-radius: 0;
+        background: rgba(184, 154, 99, 0.9);
+        color: #111;
+        font-size: 14px;
+        font-weight: 650;
+      }
+
+      .gesture {
+        position: fixed;
+        right: 16px;
+        top: calc(132px + env(safe-area-inset-top));
+        z-index: 5;
+        display: none;
+        max-width: 176px;
+        padding: 9px 12px;
+        border: 1px solid rgba(184, 154, 99, 0.46);
+        background: rgba(0, 0, 0, 0.46);
+        color: rgba(251, 250, 247, 0.86);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .debug-controls {
+        grid-column: 1 / -1;
+        display: grid;
+        gap: 10px;
+        padding-top: 3px;
+      }
+
+      .control-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+
+      .control-row::-webkit-scrollbar {
+        display: none;
+      }
+
+      .control-label {
+        flex: 0 0 auto;
+        min-width: 42px;
+        color: rgba(251, 250, 247, 0.62);
+        font-size: 12px;
+      }
+
+      .chip {
+        flex: 0 0 auto;
+        min-width: 54px;
+        height: 30px;
+        padding: 0 11px;
+        border: 1px solid rgba(251, 250, 247, 0.18);
+        border-radius: 0;
+        background: rgba(0, 0, 0, 0.18);
+        color: rgba(251, 250, 247, 0.72);
+        font-size: 12px;
+      }
+
+      .chip.is-active {
+        border-color: rgba(184, 154, 99, 0.74);
+        background: rgba(184, 154, 99, 0.86);
+        color: #111;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="ar-shell">
+      <section id="liveView" class="video-view">
+        <div class="media-wrap">
+          <video id="webcam" autoplay playsinline muted></video>
+          <canvas id="jewelry_canvas"></canvas>
+          <canvas id="output_canvas"></canvas>
+        </div>
+      </section>
+
+      <div class="topbar">
+        <span class="title">AR 试戴</span>
+      </div>
+      <div id="status" class="status">点击启动识别</div>
+      <p id="gesture_output" class="gesture"></p>
+      <div class="panel">
+        <div class="panel-main">
+          <span id="productName" class="product-name">玺鸿珠宝 AR 试戴</span>
+          <span class="hint">把手放入画面，系统会实时识别 21 个手部关键点并绘制骨骼线。</span>
+        </div>
+        <button id="webcamButton" class="button">启动识别</button>
+        <div class="debug-controls" aria-label="手部调试控制">
+          <div class="control-row" data-group="hand">
+            <span class="control-label">手</span>
+            <button class="chip is-active" data-hand="all">全部</button>
+            <button class="chip" data-hand="right">右手</button>
+            <button class="chip" data-hand="left">左手</button>
+          </div>
+          <div class="control-row" data-group="part">
+            <span class="control-label">部位</span>
+            <button class="chip is-active" data-part="all">全部</button>
+            <button class="chip" data-part="wrist">手腕</button>
+            <button class="chip" data-part="thumb">大拇指</button>
+            <button class="chip" data-part="index">食指</button>
+            <button class="chip" data-part="middle">中指</button>
+            <button class="chip" data-part="ring">无名指</button>
+            <button class="chip" data-part="pinky">小拇指</button>
+          </div>
+          <div class="control-row" data-group="model">
+            <span class="control-label">模型</span>
+            <button class="chip is-active" data-model="/test-models/bracelet-1.glb">手镯 1</button>
+            <button class="chip" data-model="/test-models/bracelet-2.glb">手镯 2</button>
+            <button class="chip" data-model="none">隐藏</button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script>
+      const query = new URLSearchParams(window.location.search);
+      window.__xihongArReady = true;
+      const productName = query.get("title") || "玺鸿珠宝 AR 试戴";
+      const productNameElement = document.getElementById("productName");
+      const statusElement = document.getElementById("status");
+      const webcamButton = document.getElementById("webcamButton");
+      const video = document.getElementById("webcam");
+      const canvasElement = document.getElementById("output_canvas");
+      const jewelryCanvas = document.getElementById("jewelry_canvas");
+      const canvasCtx = canvasElement.getContext("2d");
+      const gestureOutput = document.getElementById("gesture_output");
+      const handButtons = Array.from(document.querySelectorAll("[data-hand]"));
+      const partButtons = Array.from(document.querySelectorAll("[data-part]"));
+      const modelButtons = Array.from(document.querySelectorAll("[data-model]"));
+
+      productNameElement.textContent = productName;
+
+      let runningMode = "IMAGE";
+      let webcamRunning = false;
+      let stream;
+      let activeEngine = "hands";
+      let legacyHands;
+      let legacyCamera;
+      const debugState = {
+        hand: "all",
+        part: "all",
+        model: "/test-models/bracelet-1.glb"
+      };
+      const tryOnState = {
+        handedness: "right",
+        landmarks: null
+      };
+      let THREE = null;
+      let GLTFLoader = null;
+      const three = {
+        scene: null,
+        camera: null,
+        renderer: null,
+        loader: null,
+        model: null,
+        modelRoot: null,
+        modelBaseScale: 1,
+        width: 1,
+        height: 1,
+        ready: false
+      };
+      const fingerParts = {
+        wrist: {
+          connectors: [[0, 1], [0, 5], [0, 17]],
+          points: [0]
+        },
+        thumb: {
+          connectors: [[0, 1], [1, 2], [2, 3], [3, 4]],
+          points: [1, 2, 3, 4]
+        },
+        index: {
+          connectors: [[0, 5], [5, 6], [6, 7], [7, 8]],
+          points: [5, 6, 7, 8]
+        },
+        middle: {
+          connectors: [[0, 9], [9, 10], [10, 11], [11, 12]],
+          points: [9, 10, 11, 12]
+        },
+        ring: {
+          connectors: [[0, 13], [13, 14], [14, 15], [15, 16]],
+          points: [13, 14, 15, 16]
+        },
+        pinky: {
+          connectors: [[0, 17], [17, 18], [18, 19], [19, 20]],
+          points: [17, 18, 19, 20]
+        }
+      };
+
+      const setStatus = (text, active = false) => {
+        statusElement.textContent = text;
+        statusElement.classList.toggle("is-active", active);
+      };
+
+      const withTimeout = (promise, timeoutMs, message) => {
+        return Promise.race([
+          promise,
+          new Promise((_, reject) => {
+            window.setTimeout(() => reject(new Error(message)), timeoutMs);
+          })
+        ]);
+      };
+
+      const resizeCanvasToVideo = () => {
+        const width = video.videoWidth || window.innerWidth;
+        const height = video.videoHeight || window.innerHeight;
+        if (canvasElement.width !== width || canvasElement.height !== height) {
+          canvasElement.width = width;
+          canvasElement.height = height;
+        }
+        resizeJewelryRenderer(width, height);
+      };
+
+      const loadScript = (src) => {
+        return new Promise((resolve, reject) => {
+          const existing = document.querySelector(`script[src="${src}"]`);
+          if (existing) {
+            resolve();
+            return;
+          }
+
+          const script = document.createElement("script");
+          script.src = src;
+          script.crossOrigin = "anonymous";
+          script.onload = resolve;
+          script.onerror = () => reject(new Error(`加载脚本失败: ${src}`));
+          document.head.appendChild(script);
+        });
+      };
+
+      const setActiveChip = (buttons, key, value) => {
+        buttons.forEach((button) => {
+          button.classList.toggle("is-active", button.dataset[key] === value);
+        });
+      };
+
+      handButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          debugState.hand = button.dataset.hand;
+          setActiveChip(handButtons, "hand", debugState.hand);
+        });
+      });
+
+      partButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          debugState.part = button.dataset.part;
+          setActiveChip(partButtons, "part", debugState.part);
+        });
+      });
+
+      modelButtons.forEach((button) => {
+        button.addEventListener("click", async () => {
+          debugState.model = button.dataset.model;
+          setActiveChip(modelButtons, "model", debugState.model);
+          if (debugState.model === "none") {
+            setJewelryVisible(false);
+            return;
+          }
+          setJewelryVisible(true);
+          await ensureThreeReady();
+          loadJewelryModel(debugState.model);
+        });
+      });
+
+      const ensureThreeReady = async () => {
+        if (three.ready) return true;
+        try {
+          const threeModule = await import("/vendor/three/three.module.js");
+          const loaderModule = await import("/vendor/three/examples/jsm/loaders/GLTFLoader.js");
+          THREE = threeModule;
+          GLTFLoader = loaderModule.GLTFLoader;
+          three.scene = new THREE.Scene();
+          three.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -1000, 1000);
+          three.renderer = new THREE.WebGLRenderer({
+            canvas: jewelryCanvas,
+            alpha: true,
+            antialias: true,
+            preserveDrawingBuffer: false
+          });
+          three.loader = new GLTFLoader();
+          three.modelRoot = new THREE.Group();
+          three.renderer.setClearColor(0x000000, 0);
+          three.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+          three.scene.add(three.modelRoot);
+          three.modelRoot.visible = true;
+          three.ready = true;
+          resizeJewelryRenderer(video.videoWidth || window.innerWidth, video.videoHeight || window.innerHeight);
+          return true;
+        } catch (error) {
+          console.error(error);
+          setStatus(`Three 初始化失败: ${error.message}`);
+          return false;
+        }
+      };
+
+      const resizeJewelryRenderer = (width, height) => {
+        if (!three.ready) return;
+        if (three.width === width && three.height === height) return;
+        three.width = width;
+        three.height = height;
+        three.renderer.setSize(width, height, false);
+        three.camera.left = -width / 2;
+        three.camera.right = width / 2;
+        three.camera.top = height / 2;
+        three.camera.bottom = -height / 2;
+        three.camera.position.set(0, 0, 400);
+        three.camera.near = -1000;
+        three.camera.far = 1000;
+        three.camera.updateProjectionMatrix();
+      };
+
+      const normalizeModel = (object) => {
+        if (!three.ready) return;
+        const box = new THREE.Box3().setFromObject(object);
+        const size = new THREE.Vector3();
+        const center = new THREE.Vector3();
+        box.getSize(size);
+        box.getCenter(center);
+        const maxAxis = Math.max(size.x, size.y, size.z, 0.001);
+        object.position.sub(center);
+        three.modelBaseScale = 1 / maxAxis;
+      };
+
+      const loadJewelryModel = (url) => {
+        if (!three.ready || !three.loader) return;
+        setStatus("加载试戴模型");
+        three.loader.load(
+          url,
+          (gltf) => {
+            three.modelRoot.clear();
+            three.model = gltf.scene;
+            normalizeModel(three.model);
+            three.modelRoot.add(three.model);
+            three.modelRoot.visible = true;
+            setStatus("试戴模型已加载", true);
+          },
+          undefined,
+          (error) => {
+            console.error(error);
+            setStatus("试戴模型加载失败");
+          }
+        );
+      };
+
+      const setJewelryVisible = (visible) => {
+        if (three.modelRoot) three.modelRoot.visible = visible;
+      };
+
+      const pickTryOnHand = (landmarkGroups) => {
+        const preferred = debugState.hand === "all" ? tryOnState.handedness : debugState.hand;
+        return landmarkGroups.find((item) => item.handedness === preferred) || landmarkGroups[0] || null;
+      };
+
+      const updateJewelryPose = (landmarks) => {
+        if (!three.ready || !three.model || !landmarks || landmarks.length < 21 || debugState.model === "none") {
+          if (three.modelRoot) three.modelRoot.visible = false;
+          return;
+        }
+
+        three.modelRoot.visible = true;
+        const wrist = landmarks[0];
+        const indexBase = landmarks[5];
+        const pinkyBase = landmarks[17];
+        const middleBase = landmarks[9];
+
+        const x = (wrist.x - 0.5) * three.width;
+        const y = (0.5 - wrist.y) * three.height;
+        const palmWidth = Math.hypot(indexBase.x - pinkyBase.x, indexBase.y - pinkyBase.y) * three.width;
+        const palmAngle = Math.atan2(indexBase.y - pinkyBase.y, indexBase.x - pinkyBase.x);
+        const wristToPalm = Math.atan2(middleBase.y - wrist.y, middleBase.x - wrist.x);
+        const scale = Math.max(28, palmWidth * 1.55) * three.modelBaseScale;
+
+        three.modelRoot.position.set(x, y, 0);
+        three.modelRoot.rotation.set(THREE.MathUtils.degToRad(78), 0, -palmAngle + Math.PI / 2);
+        three.modelRoot.scale.setScalar(scale);
+
+        // A slight offset away from the palm center places the bracelet closer to the wrist line.
+        three.modelRoot.position.x -= Math.cos(wristToPalm) * palmWidth * 0.15;
+        three.modelRoot.position.y += Math.sin(wristToPalm) * palmWidth * 0.15;
+      };
+
+      const renderJewelry = () => {
+        if (!three.ready) return;
+        three.renderer.render(three.scene, three.camera);
+      };
+
+      const getDisplayHandedness = (rawHandedness) => {
+        return rawHandedness === "Left" ? "right" : "left";
+      };
+
+      const shouldDrawHand = (handedness) => {
+        return debugState.hand === "all" || debugState.hand === handedness;
+      };
+
+      const drawConnectors = (drawingUtils, landmarks, connectors, color, lineWidth) => {
+        drawingUtils.drawConnectors(landmarks, connectors, {
+          color,
+          lineWidth
+        });
+      };
+
+      const drawPoints = (drawingUtils, landmarks, indexes, color, fillColor, radius) => {
+        drawingUtils.drawLandmarks(
+          indexes.map((index) => landmarks[index]),
+          {
+            color,
+            fillColor,
+            lineWidth: 1,
+            radius
+          }
+        );
+      };
+
+      const drawHandDebug = (drawingUtils, landmarks, isSelectedHand) => {
+        drawConnectors(
+          drawingUtils,
+          landmarks,
+          getHandConnections(),
+          isSelectedHand ? "rgba(216, 192, 138, 0.42)" : "rgba(251, 250, 247, 0.18)",
+          isSelectedHand ? 2 : 1
+        );
+        drawingUtils.drawLandmarks(landmarks, {
+          color: "rgba(251, 250, 247, 0.36)",
+          fillColor: "rgba(251, 250, 247, 0.42)",
+          lineWidth: 1,
+          radius: 2
+        });
+
+        if (!isSelectedHand) return;
+
+        if (debugState.part === "all") {
+          drawConnectors(drawingUtils, landmarks, getHandConnections(), "#D8C08A", 4);
+          drawingUtils.drawLandmarks(landmarks, {
+            color: "#FFFFFF",
+            fillColor: "#B89A63",
+            lineWidth: 1,
+            radius: 3
+          });
+          return;
+        }
+
+        const target = fingerParts[debugState.part];
+        if (!target) return;
+
+        drawConnectors(drawingUtils, landmarks, target.connectors, "#FFD86A", 6);
+        drawPoints(drawingUtils, landmarks, target.points, "#FFFFFF", "#FFCC33", debugState.part === "wrist" ? 6 : 4);
+      };
+
+      const getHandConnections = () => {
+        if (window.HAND_CONNECTIONS) return window.HAND_CONNECTIONS;
+
+        return [
+          [0, 1], [1, 2], [2, 3], [3, 4],
+          [0, 5], [5, 6], [6, 7], [7, 8],
+          [5, 9], [9, 10], [10, 11], [11, 12],
+          [9, 13], [13, 14], [14, 15], [15, 16],
+          [13, 17], [0, 17], [17, 18], [18, 19], [19, 20]
+        ];
+      };
+
+      const enableCam = async () => {
+        if (webcamRunning) {
+          webcamRunning = false;
+          webcamButton.textContent = "开启相机";
+          if (stream) stream.getTracks().forEach((track) => track.stop());
+          setStatus("相机已关闭");
+          return;
+        }
+      };
+
+      const initLegacyHands = async () => {
+        activeEngine = "hands";
+        setStatus("切换到 Hands 引擎");
+        await ensureThreeReady();
+        if (debugState.model !== "none" && !three.model) {
+          loadJewelryModel(debugState.model);
+        }
+        await loadScript("https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js");
+        await loadScript("https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js");
+        await loadScript("https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js");
+
+        legacyHands = new window.Hands({
+          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+        legacyHands.setOptions({
+          maxNumHands: 2,
+          modelComplexity: 1,
+          minDetectionConfidence: 0.55,
+          minTrackingConfidence: 0.55
+        });
+        legacyHands.onResults(drawLegacyResults);
+
+        legacyCamera = new window.Camera(video, {
+          onFrame: async () => {
+            await legacyHands.send({ image: video });
+          },
+          width: 1280,
+          height: 720
+        });
+        webcamRunning = true;
+        webcamButton.textContent = "关闭相机";
+        await legacyCamera.start();
+        setStatus("Hands 引擎已启动", true);
+      };
+
+      const drawLegacyResults = (results) => {
+        resizeCanvasToVideo();
+        canvasCtx.save();
+        canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+        if (results.multiHandLandmarks) {
+          const groups = results.multiHandLandmarks.map((landmarks, index) => {
+            const rawHandedness = results.multiHandedness?.[index]?.label || "Unknown";
+            const handedness = getDisplayHandedness(rawHandedness);
+            return { landmarks, handedness };
+          });
+
+          groups.forEach(({ landmarks, handedness }) => {
+            const selected = shouldDrawHand(handedness);
+
+            const drawingUtils = {
+              drawConnectors: (points, connectors, style) => window.drawConnectors(canvasCtx, points, connectors, style),
+              drawLandmarks: (points, style) => window.drawLandmarks(canvasCtx, points, style)
+            };
+            drawHandDebug(drawingUtils, landmarks, selected);
+          });
+
+          const tryOnHand = pickTryOnHand(groups);
+          tryOnState.handedness = tryOnHand?.handedness || tryOnState.handedness;
+          updateJewelryPose(tryOnHand?.landmarks);
+        } else {
+          updateJewelryPose(null);
+        }
+
+        renderJewelry();
+        canvasCtx.restore();
+
+        if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+          gestureOutput.style.display = "block";
+          gestureOutput.textContent = `${results.multiHandLandmarks.length} hand(s) · ${activeEngine}`;
+          setStatus("Hand landmarks active", true);
+        } else {
+          gestureOutput.style.display = "none";
+          setStatus("Waiting for hand");
+        }
+      };
+
+      webcamButton.addEventListener("click", () => {
+        if (activeEngine === "hands" && webcamRunning) {
+          webcamRunning = false;
+          webcamButton.textContent = "开启相机";
+          if (stream) stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+
+        withTimeout(initLegacyHands(), 12000, "Hands 引擎加载超时").catch((error) => {
+          console.error(error);
+          setStatus(`启动失败: ${error.name || error.message}`);
+          webcamButton.textContent = "重试";
+        });
+      });
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setStatus("当前环境不支持 getUserMedia");
+        webcamButton.disabled = true;
+      } else {
+        setStatus("点击启动识别");
+      }
+    </script>
+  </body>
+</html>

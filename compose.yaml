@@ -1,0 +1,46 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: src/backend/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ./src/backend/.env
+    environment:
+      DATABASE_URL: sqlite:////app/data/xihong.sqlite3
+      PUBLIC_BASE_URL: https://api.xihongzhubao.com
+      WX_PAY_NOTIFY_URL: https://api.xihongzhubao.com/api/payments/wechat/notify
+    volumes:
+      - backend_data:/app/data
+      - backend_uploads:/app/uploads
+    expose:
+      - "8000"
+
+  backstage:
+    build:
+      context: .
+      dockerfile: src/backstage/Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE: https://api.xihongzhubao.com
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+    expose:
+      - "3000"
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - backstage
+    ports:
+      - "80:80"
+    volumes:
+      - ./deploy/nginx/conf.d:/etc/nginx/conf.d:ro
+
+volumes:
+  backend_data:
+  backend_uploads:

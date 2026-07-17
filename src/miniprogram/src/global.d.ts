@@ -6,6 +6,11 @@ declare namespace JSX {
       'model-rotation'?: string
       'model-position'?: string
       'auto-sync'?: number
+      'debug-skeleton'?: boolean
+      width?: string
+      height?: string
+      onTrackerSwitch?: (event: { detail?: { value?: boolean } }) => void
+      onTrackerDebug?: (event: { detail?: { active?: boolean; points?: Array<{ x: number; y: number; z: number }> } }) => void
     }
   }
 }
