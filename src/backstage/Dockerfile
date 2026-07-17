@@ -7,7 +7,7 @@ RUN corepack enable && npm config set registry https://registry.npmmirror.com
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY src/backstage/package.json ./src/backstage/package.json
 
-RUN pnpm install --frozen-lockfile --filter @xihong/backstage...
+RUN pnpm install --frozen-lockfile --ignore-scripts --filter @xihong/backstage...
 
 COPY src/backstage ./src/backstage
 
