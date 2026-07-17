@@ -8,6 +8,7 @@
     "start": "next start -p 3002"
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "^0.10.35",
     "next": "latest",
     "react": "latest",
     "react-dom": "latest",
