@@ -3,19 +3,15 @@ import Taro, { useRouter } from '@tarojs/taro'
 import { WebView, View } from '@tarojs/components'
 import './index.scss'
 
-const DEFAULT_AR_WEB_ORIGIN = 'https://api.xihongzhubao.com'
+const AR_H5_ORIGIN = 'https://ar.xihongzhubao.com'
 
 export default function ArMediaPipePage() {
   const router = useRouter()
 
   const src = useMemo(() => {
     const productId = router.params.id || ''
-    const params = new URLSearchParams({
-      productId,
-      title: '玺鸿珠宝 AR 试戴'
-    })
-
-    return `${DEFAULT_AR_WEB_ORIGIN}/mediapipe-ar/index.html?${params.toString()}`
+    const params = new URLSearchParams({ productId })
+    return `${AR_H5_ORIGIN}/?${params.toString()}`
   }, [router.params.id])
 
   return (
