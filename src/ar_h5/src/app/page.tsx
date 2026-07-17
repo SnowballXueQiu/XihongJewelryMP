@@ -128,8 +128,6 @@ export default function ArPage() {
       three.modelRoot.clear()
       three.model = gltf.scene
       // normalize
-      const THREE = (three.renderer as any).__THREE || {}
-      const box = new (window as any).THREE?.Box3?.() || { setFromObject: () => {}, getSize: () => {}, getCenter: () => {} }
       try {
         const { Box3, Vector3 } = require('three')
         const b = new Box3().setFromObject(three.model)
