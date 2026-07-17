@@ -30,12 +30,25 @@ services:
     expose:
       - "3000"
 
+  ar_h5:
+    build:
+      context: .
+      dockerfile: src/ar_h5/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      HOSTNAME: 0.0.0.0
+    expose:
+      - "3001"
+
   nginx:
     image: nginx:1.27-alpine
     restart: unless-stopped
     depends_on:
       - backend
       - backstage
+      - ar_h5
     ports:
       - "80:80"
     volumes:
