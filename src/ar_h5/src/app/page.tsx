@@ -184,9 +184,10 @@ const DEFAULT_BP: BraceletParams = {
 
 // ─── Main Component ──────────────────────────────────────────────────────────────
 export default function ArBraceletPage() {
-  const videoRef   = useRef<HTMLVideoElement>(null)
-  const threeRef_  = useRef<HTMLCanvasElement>(null)   // Three.js WebGL canvas
-  const overlayRef = useRef<HTMLCanvasElement>(null)   // Canvas2D debug overlay
+  const videoRef    = useRef<HTMLVideoElement>(null)
+  const threeRef_   = useRef<HTMLCanvasElement>(null)   // Three.js WebGL canvas
+  const overlayRef  = useRef<HTMLCanvasElement>(null)   // Canvas2D debug overlay
+  const pixelCanvasRef = useRef<HTMLCanvasElement>(null) // hidden canvas for pixel sampling
 
   const [status,    setStatus   ] = useState('点击 "启动识别" 开始 AR 试戴')
   const [running,   setRunning  ] = useState(false)
@@ -209,17 +210,22 @@ export default function ArBraceletPage() {
     width:1, height:1, ready:false, geomKey:'',
   })
 
+  // Shared state between updateBraceletPose and drawOverlay
+  const measuredRadiusRef  = useRef<number>(40)
+  const braceletCenterRef  = useRef<V2>({ x: 0, y: 0 })
+
   // Smoothing & pose
   const filtersRef  = useRef(makeFilterBank())
   const prevQuatRef = useRef<any>(null)
 
   // MediaPipe Tasks refs
-  const handLandmarkerRef = useRef<any>(null)
-  const poseLandmarkerRef = useRef<any>(null)
-  const rafRef            = useRef<number>(0)
-  // Latest elbow landmark from PoseLandmarker (world coords, normalized)
-  const elbowLmRef        = useRef<Landmark | null>(null)
-  const wristPoseLmRef    = useRef<Landmark | null>(null)
+  const holisticRef = useRef<any>(null)
+  const rafRef      = useRef<number>(0)
+  // Latest elbow/wrist from HolisticLandmarker pose result
+  const elbowLmRef     = useRef<Landmark | null>(null)
+  const wristPoseLmRef = useRef<Landmark | null>(null)
+  // Latest pose landmarks array for arm skeleton drawing
+  const poseLmsRef = useRef<Landmark[] | null>(null)
 
   // ── Coordinate utilities ──────────────────────────────────────────────────────
 
@@ -334,12 +340,29 @@ export default function ArBraceletPage() {
     const pinkyScreen = lmToScreen(lm[LM.PINKY_MCP])
     const palmWidth   = Math.hypot(indexScreen.x - pinkyScreen.x, indexScreen.y - pinkyScreen.y)
 
-    // Bracelet center: wrist displaced toward elbow (−Y direction) by offsetFrac × palmWidth
-    const offsetPx = p.offsetFrac * palmWidth
-    const yN       = norm2(yProj)
-    const braceletCenter: V2 = {
-      x: wristScreen.x - offsetPx * yN.x,
-      y: wristScreen.y - offsetPx * yN.y,
+    // Bracelet center: on the elbow→wrist screen-space line.
+    // When pose elbow is available, interpolate directly in 2D screen space so
+    // the center is guaranteed to lie on the visible arm centerline.
+    const elbowForBasis  = elbowLmRef.current
+    const wristPosForBasis = wristPoseLmRef.current
+    let braceletCenter: V2
+    if (elbowForBasis && wristPosForBasis) {
+      const elbowSc  = lmToScreen(elbowForBasis)
+      const wristPosSc = lmToScreen(wristPosForBasis)
+      const armLen   = Math.hypot(wristPosSc.x - elbowSc.x, wristPosSc.y - elbowSc.y) || 1
+      const offsetPx = p.offsetFrac * palmWidth
+      const t        = Math.min(offsetPx / armLen, 0.9)
+      braceletCenter = {
+        x: wristPosSc.x + t * (elbowSc.x - wristPosSc.x),
+        y: wristPosSc.y + t * (elbowSc.y - wristPosSc.y),
+      }
+    } else {
+      const offsetPx = p.offsetFrac * palmWidth
+      const yN       = norm2(yProj)
+      braceletCenter = {
+        x: wristScreen.x - offsetPx * yN.x,
+        y: wristScreen.y - offsetPx * yN.y,
+      }
     }
 
     // 3×3 rotation matrix for HUD display: columns = [X|Y|Z]
@@ -351,6 +374,69 @@ export default function ArBraceletPage() {
 
     return { xAxis, yAxis, zAxis, xProj, yProj, zProj, wristScreen, braceletCenter, palmWidth, rotMat3x3 }
   }, [lmTo3D, lmToScreen, projectDir])
+
+  // ── Arm width measurement via pixel color sampling ────────────────────────────
+  // Strategy: draw video frame to a hidden canvas (no CSS mirror), sample pixels
+  // along the perpendicular to the arm axis from the wrist position,
+  // walk outward in both directions until the color diverges from the center color.
+  // Returns radius in screen pixels.
+  const measureArmRadius = useCallback((
+    wristNorm: V2,       // normalized (0-1) wrist pos in VIDEO space (not mirrored)
+    perpNorm:  V2,       // normalized perpendicular direction in video space
+    maxPx = 80,          // max pixels to search outward
+    threshold = 35,      // color diff threshold (0-255)
+  ): number => {
+    const video = videoRef.current
+    const pxCanvas = pixelCanvasRef.current
+    if (!video || !pxCanvas || video.readyState < 2) return 40 // fallback
+
+    const vw = video.videoWidth, vh = video.videoHeight
+    pxCanvas.width = vw; pxCanvas.height = vh
+    const ctx = pxCanvas.getContext('2d', { willReadFrequently: true })!
+    ctx.drawImage(video, 0, 0, vw, vh)
+
+    const cx = Math.round(wristNorm.x * vw)
+    const cy = Math.round(wristNorm.y * vh)
+
+    // clamp helper
+    const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
+
+    // Get center pixel color
+    const center = ctx.getImageData(clamp(cx, 0, vw-1), clamp(cy, 0, vh-1), 1, 1).data
+    const cr = center[0], cg = center[1], cb = center[2]
+
+    const colorDiff = (px: Uint8ClampedArray) =>
+      Math.abs(px[0]-cr) + Math.abs(px[1]-cg) + Math.abs(px[2]-cb)
+
+    // Walk outward in normalized perp direction, in video pixels
+    const pdx = perpNorm.x * vw / Math.max(vw, vh)
+    const pdy = perpNorm.y * vh / Math.max(vw, vh)
+
+    let dPos = 0, dNeg = 0
+    for (let i = 1; i <= maxPx; i++) {
+      if (dPos === 0) {
+        const px = clamp(Math.round(cx + pdx*i), 0, vw-1)
+        const py = clamp(Math.round(cy + pdy*i), 0, vh-1)
+        const d = colorDiff(ctx.getImageData(px, py, 1, 1).data)
+        if (d > threshold) dPos = i
+      }
+      if (dNeg === 0) {
+        const px = clamp(Math.round(cx - pdx*i), 0, vw-1)
+        const py = clamp(Math.round(cy - pdy*i), 0, vh-1)
+        const d = colorDiff(ctx.getImageData(px, py, 1, 1).data)
+        if (d > threshold) dNeg = i
+      }
+      if (dPos > 0 && dNeg > 0) break
+    }
+    if (dPos === 0) dPos = maxPx
+    if (dNeg === 0) dNeg = maxPx
+
+    // Convert from video pixels to screen pixels
+    const sw = window.innerWidth, sh = window.innerHeight
+    const coverScale = Math.max(sw / vw, sh / vh)
+    const radiusVideoPx = (dPos + dNeg) / 2
+    return radiusVideoPx * coverScale
+  }, [])
 
   // ── Three.js Initialization ───────────────────────────────────────────────────
   const initThree = useCallback(async (): Promise<boolean> => {
@@ -511,51 +597,94 @@ export default function ArBraceletPage() {
   const updateBraceletPose = useCallback((lm: Landmark[]) => {
     const t = ts.current
     if (!t.ready || !t.braceletGroup) return
-    const p    = bpRef.current
+    const p     = bpRef.current
     const THREE = t.THREE
 
     if (!p.show) { t.braceletGroup.visible = false; return }
     t.braceletGroup.visible = true
     rebuildBraceletMesh()
 
-    const { xAxis, yAxis, zAxis, braceletCenter, palmWidth } = computePalmBasis(lm)
+    const { xAxis, yAxis, zAxis, yProj, zProj, wristScreen } = computePalmBasis(lm)
 
-    // Build rotation matrix: columns = [xAxis | yAxis | zAxis]
-    const mat = new THREE.Matrix4().makeBasis(
-      new THREE.Vector3(xAxis.x, xAxis.y, xAxis.z),
-      new THREE.Vector3(yAxis.x, yAxis.y, yAxis.z),
-      new THREE.Vector3(zAxis.x, zAxis.y, zAxis.z),
-    )
+    // Pixel sampling: get arm radius from color boundary perpendicular to arm axis.
+    // wrist coords in original (unmirrored) video space for sampling.
+    const video = videoRef.current
+    const vw = video?.videoWidth || 1280, vh = video?.videoHeight || 720
+    const ds = Math.max(vw, vh)
+    const wristVideoNorm: V2 = { x: lm[LM.WRIST].x, y: lm[LM.WRIST].y }
+
+    // yAxis is in mirrored pixel space; un-mirror x, then rotate 90° for perp direction.
+    const yAxisVideo: V3 = { x: -yAxis.x / vw * ds, y: yAxis.y / vh * ds, z: yAxis.z }
+    const perpVideoNorm: V2 = norm2({ x: -yAxisVideo.y / vh, y: yAxisVideo.x / vw })
+    const measuredRadius = measureArmRadius(wristVideoNorm, perpVideoNorm)
+
+    // Bracelet center: on the elbow→wrist screen line (guaranteed to be on the arm axis).
+    const sw = window.innerWidth, sh = window.innerHeight
+    let braceletCenter: V2
+    const elbowPose = elbowLmRef.current
+    const wristPose = wristPoseLmRef.current
+    if (elbowPose && wristPose) {
+      const elbowSc  = lmToScreen(elbowPose)
+      const wristSc  = lmToScreen(wristPose)
+      const armLen   = Math.hypot(wristSc.x - elbowSc.x, wristSc.y - elbowSc.y) || 1
+      const offsetPx = p.offsetFrac * measuredRadius * 2
+      const frac     = Math.min(offsetPx / armLen, 0.9)
+      braceletCenter = {
+        x: wristSc.x + frac * (elbowSc.x - wristSc.x),
+        y: wristSc.y + frac * (elbowSc.y - wristSc.y),
+      }
+    } else {
+      const offsetPx = p.offsetFrac * measuredRadius * 2
+      const yN = norm2(yProj)
+      braceletCenter = {
+        x: wristScreen.x - offsetPx * yN.x,
+        y: wristScreen.y - offsetPx * yN.y,
+      }
+    }
+
+    // Store for overlay use
+    measuredRadiusRef.current = measuredRadius
+    braceletCenterRef.current = braceletCenter
+
+    // Build rotation from the ARM AXIS in 2D screen space.
+    // Pose z-depth is too noisy to use for a stable 3D yAxis → use screen-projected 2D arm direction.
+    // Arm direction in screen space: wrist → elbow (or yProj fallback)
+    let armDir2D: V2
+    if (elbowPose && wristPose) {
+      const es = lmToScreen(elbowPose), ws = lmToScreen(wristPose)
+      armDir2D = norm2({ x: es.x - ws.x, y: es.y - ws.y })
+    } else {
+      armDir2D = norm2(yProj)
+    }
+    // Bracelet Y axis (arm axis) in Three.js space: screen X maps to world X, screen Y flips.
+    const armY3 = new THREE.Vector3(armDir2D.x, -armDir2D.y, 0).normalize()
+    // Palm normal Z: use zAxis projected to screen, then lift to 3D (always pointing toward camera = +Z in Three.js)
+    const zProjN = norm2(zProj)
+    const palmZ3 = new THREE.Vector3(zProjN.x, -zProjN.y, Math.sqrt(Math.max(0, 1 - zProjN.x**2 - zProjN.y**2))).normalize()
+    // Re-orthogonalize: X = cross(Y, Z)
+    const armX3 = new THREE.Vector3().crossVectors(armY3, palmZ3).normalize()
+    const armZ3 = new THREE.Vector3().crossVectors(armX3, armY3).normalize()
+
+    const mat = new THREE.Matrix4().makeBasis(armX3, armY3, armZ3)
     const targetQ = new THREE.Quaternion().setFromRotationMatrix(mat)
 
-    // Optional manual twist around Y (arm axis) for gap position fine-tuning
     if (p.twistDeg !== 0) {
       const twistQ = new THREE.Quaternion().setFromAxisAngle(
-        new THREE.Vector3(0, 1, 0),
-        p.twistDeg * Math.PI / 180,
+        new THREE.Vector3(0, 1, 0), p.twistDeg * Math.PI / 180,
       )
       targetQ.multiply(twistQ)
     }
 
-    // SLERP smoothing toward target quaternion
-    if (!prevQuatRef.current) {
-      prevQuatRef.current = targetQ.clone()
-    } else {
-      prevQuatRef.current.slerp(targetQ, p.slerpFactor)
-    }
+    if (!prevQuatRef.current) prevQuatRef.current = targetQ.clone()
+    else prevQuatRef.current.slerp(targetQ, p.slerpFactor)
 
-    // Screen → Three.js ortho camera space (center origin, Y up)
-    const sw = window.innerWidth, sh = window.innerHeight
     const tx =  braceletCenter.x - sw / 2
-    const ty = -(braceletCenter.y - sh / 2)   // flip Y: image Y-down → Three.js Y-up
-
-    // Scale = actual bracelet radius in screen pixels (geometry built at radius=1)
-    const worldRadius = p.radiusFrac * palmWidth
+    const ty = -(braceletCenter.y - sh / 2)
 
     t.braceletGroup.position.set(tx, ty, 0)
     t.braceletGroup.quaternion.copy(prevQuatRef.current)
-    t.braceletGroup.scale.setScalar(worldRadius)
-  }, [computePalmBasis, rebuildBraceletMesh])
+    t.braceletGroup.scale.setScalar(measuredRadius * p.radiusFrac * (1 / 0.58))
+  }, [computePalmBasis, rebuildBraceletMesh, measureArmRadius])
 
   // ── Canvas2D Debug Overlay ────────────────────────────────────────────────────
   /**
@@ -572,7 +701,7 @@ export default function ArBraceletPage() {
     const canvas = overlayRef.current; if (!canvas) return
     const ctx    = canvas.getContext('2d')!
     ctx.save()
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    // Note: clearRect is done by drawResults before calling this function
 
     const p  = bpRef.current
     const sc = lm.map(l => lmToScreen(l))
@@ -676,43 +805,67 @@ export default function ArBraceletPage() {
       ctx.restore()
     }
 
-    // ── 6. 2D bracelet arc preview (foreshortened ellipse) ──
+    // ── 6. 2D bracelet arc preview (foreshortened ellipse, with occlusion) ──
     if (p.showArcPreview) {
-      const xN   = norm2(xProj), zN = norm2(zProj)
-      const xLen = len2(xProj), zLen = len2(zProj)
-      const R    = p.radiusFrac * palmWidth
-      const sA   = R                                          // semi-major (X direction)
-      const sB   = xLen > 0.5 ? R * zLen / xLen : R          // semi-minor (Z direction, foreshortened)
+      // Use measured radius (shared from updateBraceletPose) for correct size
+      const R  = measuredRadiusRef.current * p.radiusFrac * (1 / 0.58)
+      const cx = braceletCenterRef.current.x, cy = braceletCenterRef.current.y
+
+      // Arm direction in 2D screen space
+      let armDir2D: V2
+      if (elbowLmRef.current && wristPoseLmRef.current) {
+        const es = lmToScreen(elbowLmRef.current), ws = lmToScreen(wristPoseLmRef.current)
+        armDir2D = norm2({ x: es.x - ws.x, y: es.y - ws.y })
+      } else {
+        armDir2D = norm2(yProj)
+      }
+      // perpendicular to arm = the bracelet plane major axis in screen
+      const perpDir: V2 = { x: -armDir2D.y, y: armDir2D.x }
+
+      // Foreshortening: project zProj onto screen to get minor axis scale
+      const zN   = norm2(zProj)
+      const zLen = len2(zProj)
+      const xLen = len2(xProj)
+      const sA   = R                                           // semi-major along perp
+      const sB   = xLen > 0.5 ? R * zLen / xLen : R * 0.3    // semi-minor (depth)
 
       const gapHalf  = (p.gapDeg / 2) * Math.PI / 180
       const gapCtr   = Math.PI / 2
       const arcStart = gapCtr + gapHalf
       const arcEnd   = gapCtr - gapHalf + 2 * Math.PI
-      const cx       = braceletCenter.x, cy = braceletCenter.y
+      const SEGS     = 128
+
+      // Palm normal direction tells us which half faces toward camera (front) vs away (back)
+      // zProj.y < 0 means palm faces up in screen (toward camera) → sin(θ) > 0 is front
+      const palmFacingSign = zProj.y < 0 ? 1 : -1
 
       ctx.save()
-      // Arc body (gold, dashed)
-      ctx.beginPath()
-      for (let i = 0; i <= 128; i++) {
-        const θ  = arcStart + (i / 128) * (arcEnd - arcStart)
-        const px = cx + sA*Math.cos(θ)*xN.x + sB*Math.sin(θ)*zN.x
-        const py = cy + sA*Math.cos(θ)*xN.y + sB*Math.sin(θ)*zN.y
-        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py)
+      // Draw in two passes: back (dashed, faded) then front (solid, bright)
+      for (const pass of ['back', 'front'] as const) {
+        ctx.beginPath()
+        let penDown = false
+        for (let i = 0; i <= SEGS; i++) {
+          const θ  = arcStart + (i / SEGS) * (arcEnd - arcStart)
+          // Point on ellipse in screen: major axis = perpDir, minor axis = zN (depth)
+          const px = cx + sA * Math.cos(θ) * perpDir.x + sB * Math.sin(θ) * zN.x
+          const py = cy + sA * Math.cos(θ) * perpDir.y + sB * Math.sin(θ) * zN.y
+          // sin(θ) > 0 → front side (palm normal toward camera)
+          const isFront = Math.sin(θ) * palmFacingSign > 0
+          if ((pass === 'front') === isFront) {
+            if (!penDown) { ctx.moveTo(px, py); penDown = true }
+            else ctx.lineTo(px, py)
+          } else {
+            penDown = false
+          }
+        }
+        if (pass === 'back') {
+          ctx.strokeStyle = 'rgba(255,200,80,0.25)'; ctx.lineWidth = 2.5
+          ctx.setLineDash([4, 5]); ctx.stroke(); ctx.setLineDash([])
+        } else {
+          ctx.strokeStyle = 'rgba(255,220,80,0.85)'; ctx.lineWidth = 3
+          ctx.stroke()
+        }
       }
-      ctx.strokeStyle = 'rgba(255,200,80,0.28)'; ctx.lineWidth = 1.5
-      ctx.setLineDash([3, 3]); ctx.stroke(); ctx.setLineDash([])
-
-      // Gap arc (blue, dashed, on palm side +Z)
-      ctx.beginPath()
-      const gs = gapCtr - gapHalf, ge = gapCtr + gapHalf
-      for (let i = 0; i <= 24; i++) {
-        const θ  = gs + (i / 24) * (ge - gs)
-        const px = cx + sA*Math.cos(θ)*xN.x + sB*Math.sin(θ)*zN.x
-        const py = cy + sA*Math.cos(θ)*xN.y + sB*Math.sin(θ)*zN.y
-        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py)
-      }
-      ctx.strokeStyle = 'rgba(100,180,255,0.45)'; ctx.lineWidth = 1.5
-      ctx.setLineDash([3, 4]); ctx.stroke(); ctx.setLineDash([])
       ctx.restore()
     }
 
@@ -769,16 +922,53 @@ export default function ArBraceletPage() {
     ctx.restore()
   }, [computePalmBasis, lmToScreen])
 
+  // ── Pose arm skeleton ────────────────────────────────────────────────────────
+  // Upper-body connections: shoulder→elbow→wrist + wrist finger tips
+  const POSE_ARM_CONNECTIONS: [number, number][] = [
+    [11, 13], [13, 15], [15, 17], [15, 19], [15, 21], [17, 19],
+    [12, 14], [14, 16], [16, 18], [16, 20], [16, 22], [18, 20],
+    [11, 12],
+  ]
+
+  const drawPoseSkeleton = useCallback((ctx: CanvasRenderingContext2D, poseLms: Landmark[]) => {
+    if (!poseLms.length) return
+    ctx.save()
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)'
+    ctx.lineWidth = 2
+    for (const [a, b] of POSE_ARM_CONNECTIONS) {
+      const pa = poseLms[a], pb = poseLms[b]
+      if (!pa || !pb) continue
+      const sa = lmToScreen(pa), sb = lmToScreen(pb)
+      ctx.beginPath(); ctx.moveTo(sa.x, sa.y); ctx.lineTo(sb.x, sb.y); ctx.stroke()
+    }
+    for (const idx of [11, 12, 13, 14, 15, 16]) {
+      const lm = poseLms[idx]; if (!lm) continue
+      const s = lmToScreen(lm)
+      ctx.beginPath(); ctx.arc(s.x, s.y, 4, 0, Math.PI * 2)
+      ctx.fillStyle = idx < 13 ? 'rgba(180,180,255,0.8)' : idx < 15 ? 'rgba(100,200,255,0.9)' : 'rgba(255,200,100,0.9)'
+      ctx.fill()
+    }
+    ctx.restore()
+  }, [lmToScreen]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Main MediaPipe Results Callback ───────────────────────────────────────────
   const drawResults = useCallback((results: any) => {
     resizeAll()
     const t = ts.current
+    const canvas = overlayRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')!
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+    // ── Always draw pose arm skeleton if available ──
+    if (poseLmsRef.current) {
+      drawPoseSkeleton(ctx, poseLmsRef.current)
+    }
 
     if (results.multiHandLandmarks?.length > 0) {
-      // Filter all 21 landmarks of first detected hand through One Euro Filter
       const raw  = results.multiHandLandmarks[0] as Landmark[]
       const flts = filtersRef.current
-      const now  = performance.now() / 1000   // seconds
+      const now  = performance.now() / 1000
 
       const filtered: Landmark[] = raw.map((lm, i) => ({
         x: flts[i].x.filter(lm.x, now),
@@ -793,37 +983,30 @@ export default function ArBraceletPage() {
       if (t.braceletGroup) t.braceletGroup.visible = false
       prevQuatRef.current = null
 
-      const canvas = overlayRef.current
-      if (canvas) {
-        const ctx = canvas.getContext('2d')!
-        ctx.clearRect(0, 0, canvas.width, canvas.height)
-        ctx.save()
-        ctx.fillStyle = 'rgba(0,0,0,0.50)'
-        ctx.beginPath()
-        if (ctx.roundRect) ctx.roundRect(8, 8, 180, 24, 4); else ctx.rect(8, 8, 180, 24)
-        ctx.fill()
-        ctx.font = '10px monospace'; ctx.fillStyle = '#888'; ctx.textAlign = 'left'
-        ctx.fillText('等待手部检测…', 14, 24)
-        ctx.restore()
-      }
+      ctx.save()
+      ctx.fillStyle = 'rgba(0,0,0,0.50)'
+      ctx.beginPath()
+      if (ctx.roundRect) ctx.roundRect(8, 8, 180, 24, 4); else ctx.rect(8, 8, 180, 24)
+      ctx.fill()
+      ctx.font = '10px monospace'; ctx.fillStyle = '#888'; ctx.textAlign = 'left'
+      ctx.fillText('等待手部检测…', 14, 24)
+      ctx.restore()
       setHandCount(0)
     }
 
     if (t.ready) t.renderer.render(t.scene, t.camera)
-  }, [updateBraceletPose, drawOverlay, resizeAll])
+  }, [updateBraceletPose, drawOverlay, resizeAll, drawPoseSkeleton])
 
-  // ── Camera / MediaPipe Tasks Start-Stop ──────────────────────────────────────
+  // ── Camera / MediaPipe Tasks Start-Stop (HolisticLandmarker) ─────────────────
   const startAR = async () => {
     if (running) {
       cancelAnimationFrame(rafRef.current)
       const stream = videoRef.current?.srcObject as MediaStream | null
       stream?.getTracks().forEach(t => t.stop())
       if (videoRef.current) videoRef.current.srcObject = null
-      handLandmarkerRef.current?.close()
-      poseLandmarkerRef.current?.close()
-      handLandmarkerRef.current = null
-      poseLandmarkerRef.current = null
-      elbowLmRef.current = null; wristPoseLmRef.current = null
+      holisticRef.current?.close()
+      holisticRef.current = null
+      elbowLmRef.current = null; wristPoseLmRef.current = null; poseLmsRef.current = null
       setRunning(false); setHandCount(0)
       setStatus('AR 已停止')
       if (ts.current.braceletGroup) ts.current.braceletGroup.visible = false
@@ -835,44 +1018,27 @@ export default function ArBraceletPage() {
       await initThree()
       rebuildBraceletMesh(true)
 
-      // ── Load MediaPipe Tasks Vision ──
-      setStatus('加载 AI 模型…')
-      const { HandLandmarker, PoseLandmarker, FilesetResolver } = await import('@mediapipe/tasks-vision')
+      setStatus('加载 Holistic 模型…')
+      const { HolisticLandmarker, FilesetResolver } = await import('@mediapipe/tasks-vision')
 
       const vision = await FilesetResolver.forVisionTasks(
         'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm'
       )
 
-      // Hand + Pose landmarkers created in parallel
-      const [handLm, poseLm] = await Promise.all([
-        HandLandmarker.createFromOptions(vision, {
-          baseOptions: {
-            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
-            delegate: 'GPU',
-          },
-          runningMode:          'VIDEO',
-          numHands:             1,
-          minHandDetectionConfidence: 0.55,
-          minHandPresenceConfidence:  0.55,
-          minTrackingConfidence:      0.55,
-        }),
-        PoseLandmarker.createFromOptions(vision, {
-          baseOptions: {
-            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
-            delegate: 'GPU',
-          },
-          runningMode:    'VIDEO',
-          numPoses:       1,
-          minPoseDetectionConfidence: 0.55,
-          minPosePresenceConfidence:  0.55,
-          minTrackingConfidence:      0.55,
-        }),
-      ])
+      const holistic = await HolisticLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/holistic_landmarker/holistic_landmarker/float16/1/holistic_landmarker.task',
+          delegate: 'GPU',
+        },
+        runningMode: 'VIDEO',
+        minFaceDetectionConfidence: 0.5,
+        minFacePresenceConfidence:  0.5,
+        minHandLandmarksConfidence: 0.5,
+        minPoseDetectionConfidence: 0.5,
+        minPosePresenceConfidence:  0.5,
+      })
+      holisticRef.current = holistic
 
-      handLandmarkerRef.current = handLm
-      poseLandmarkerRef.current = poseLm
-
-      // ── Open camera ──
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: 1280, height: 720, facingMode: 'user' },
       })
@@ -883,39 +1049,44 @@ export default function ArBraceletPage() {
       filtersRef.current  = makeFilterBank(30, 1.0, 0.05)
       prevQuatRef.current = null
       setRunning(true)
-      setStatus('AR 试戴运行中 ✓ (PoseLandmarker + HandLandmarker)')
+      setStatus('AR 试戴运行中 ✓ (HolisticLandmarker)')
 
-      // ── Per-frame inference loop ──
       const loop = () => {
         rafRef.current = requestAnimationFrame(loop)
         if (video.readyState < 2) return
         const now = performance.now()
 
-        // Hand detection
-        const handResult = handLandmarkerRef.current?.detectForVideo(video, now)
-        // Pose detection (Lite — runs every frame, fast enough at 30fps)
-        const poseResult = poseLandmarkerRef.current?.detectForVideo(video, now)
+        const result = holisticRef.current?.detectForVideo(video, now)
+        if (!result) return
 
-        // Extract elbow & wrist from pose (landmarks 13=left elbow, 14=right elbow, 15=left wrist, 16=right wrist)
-        // PoseLandmarker uses normalized image coords same as HandLandmarker
-        if (poseResult?.landmarks?.[0]) {
-          const pl = poseResult.landmarks[0]
-          // Pick side matching detected hand handedness (default right → use left-side pose indices which appear on right in mirrored view)
-          // Pose landmark 13=LEFT_ELBOW, 14=RIGHT_ELBOW, 15=LEFT_WRIST, 16=RIGHT_WRIST
-          // In mirrored selfie: person's right hand → MediaPipe label "Left" → pose index 13/15
-          const isRight = handResult?.handedness?.[0]?.[0]?.categoryName === 'Right'
-          elbowLmRef.current    = pl[isRight ? 14 : 13] ?? null
-          wristPoseLmRef.current= pl[isRight ? 16 : 15] ?? null
+        // ── Store pose landmarks for arm skeleton ──
+        const poseLms: Landmark[] = result.poseLandmarks?.[0] ?? []
+        poseLmsRef.current = poseLms.length ? poseLms : null
+
+        // ── Extract elbow/wrist for forearm axis ──
+        // HolisticLandmarker: leftHandLandmarks = person's left (right in mirror)
+        // Pose: 13=L_elbow,14=R_elbow,15=L_wrist,16=R_wrist (image-space, not person-space)
+        // We match hand to pose by checking which hand result is present
+        const hasLeft  = (result.leftHandLandmarks?.length  ?? 0) > 0
+        const hasRight = (result.rightHandLandmarks?.length ?? 0) > 0
+        if (poseLms.length) {
+          // Use whichever hand is detected; prefer right hand (left in mirror = index 13/15)
+          const useLeft = hasLeft && !hasRight
+          elbowLmRef.current     = poseLms[useLeft ? 13 : 14] ?? null
+          wristPoseLmRef.current = poseLms[useLeft ? 15 : 16] ?? null
         } else {
           elbowLmRef.current = null; wristPoseLmRef.current = null
         }
 
-        // Build synthetic results object matching old drawResults format
-        if (handResult?.landmarks?.[0]) {
-          drawResults({
-            multiHandLandmarks: [handResult.landmarks[0]],
-            multiHandedness:    handResult.handedness,
-          })
+        // ── Pick hand landmarks (prefer right hand in mirror = leftHandLandmarks) ──
+        const handLms: Landmark[] = (
+          result.rightHandLandmarks?.[0] ??
+          result.leftHandLandmarks?.[0]  ??
+          []
+        )
+
+        if (handLms.length) {
+          drawResults({ multiHandLandmarks: [handLms], multiHandedness: [] })
         } else {
           drawResults({ multiHandLandmarks: [], multiHandedness: [] })
         }
@@ -987,6 +1158,9 @@ export default function ArBraceletPage() {
         ref={overlayRef}
         style={{ position:'absolute', inset:0, width:'100%', height:'100%', pointerEvents:'none' }}
       />
+
+      {/* Hidden pixel-sampling canvas — not displayed, used to read video pixels */}
+      <canvas ref={pixelCanvasRef} style={{ display:'none' }} />
 
       {/* Top status bar */}
       <div style={{
