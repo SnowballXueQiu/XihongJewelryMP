@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.35",
+    "lucide-react": "^0.468.0",
     "next": "latest",
     "react": "latest",
     "react-dom": "latest",
