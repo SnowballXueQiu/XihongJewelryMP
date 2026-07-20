@@ -191,11 +191,21 @@ export class JewelryRenderer {
       this.canvas.dataset.boundaryConfidence = (pose.boundaryConfidence ?? 0).toFixed(2);
       this.canvas.dataset.targetSpan = (pose.targetSpan ?? pose.armWidth).toFixed(1);
       this.canvas.dataset.planeProjection = (pose.planeProjection ?? 1).toFixed(2);
+      this.canvas.dataset.boundarySource = pose.boundarySource ?? "unknown";
+      this.canvas.dataset.alignmentErrorDegrees = (pose.alignmentErrorDegrees ?? 90).toFixed(2);
+      if (pose.armAxis) {
+        this.canvas.dataset.armAxisX = pose.armAxis[0].toFixed(3);
+        this.canvas.dataset.armAxisY = pose.armAxis[1].toFixed(3);
+      }
     } else {
       delete this.canvas.dataset.armWidth;
       delete this.canvas.dataset.boundaryConfidence;
       delete this.canvas.dataset.targetSpan;
       delete this.canvas.dataset.planeProjection;
+      delete this.canvas.dataset.boundarySource;
+      delete this.canvas.dataset.alignmentErrorDegrees;
+      delete this.canvas.dataset.armAxisX;
+      delete this.canvas.dataset.armAxisY;
     }
     this.canvas.dataset.handFacing = pose.frontFacing ? "palm" : "back";
     this.canvas.dataset.modelFlipped = String(modelFlipped);
@@ -206,7 +216,15 @@ export class JewelryRenderer {
   private verifyRenderedPixels(pose: Pose) {
     const gl = this.renderer.getContext();
     const pixelRatio = this.canvas.width / this.width;
-    const sampleSize = Math.round(Math.max(48, Math.min(300, pose.scale * pixelRatio * 1.5)));
+    const sampleSize = Math.round(Math.max(
+      48,
+      Math.min(
+        600,
+        this.canvas.width,
+        this.canvas.height,
+        pose.scale * pixelRatio * 2.25,
+      ),
+    ));
     const centerX = Math.round(pose.x * pixelRatio);
     const centerY = Math.round((this.height - pose.y) * pixelRatio);
     const x = Math.max(0, Math.min(this.canvas.width - sampleSize, centerX - sampleSize / 2));

@@ -41,6 +41,9 @@ export type Pose = {
   boundaryConfidence?: number;
   targetSpan?: number;
   planeProjection?: number;
+  boundarySource?: "segmentation" | "hybrid" | "color";
+  armAxis?: [number, number];
+  alignmentErrorDegrees?: number;
   orientation: [number, number, number, number];
   frontFacing: boolean;
   facingConfidence: number;

@@ -42,6 +42,7 @@ type Props = {
 
 type RendererType = import("../lib/arRenderer").JewelryRenderer;
 type TrackerType = import("../lib/handTracker").BrowserHandTracker;
+type SegmenterType = import("../lib/skinSegmenter").BodySkinSegmenter;
 
 const QA_IMAGES = {
   side: "/qa/fixtures/side.png",
@@ -52,10 +53,13 @@ const QA_IMAGES = {
   horizontal: "/qa/fixtures/horizontal.png",
   forearm: "/qa/fixtures/forearm.png",
   mobile: "/qa/fixtures/mobile.png",
+  "bent-back": "/qa/fixtures/bent-back.jpg",
+  "bent-palm": "/qa/fixtures/bent-palm.jpg",
+  "bent-horizontal": "/qa/fixtures/bent-horizontal.jpg",
 } as const;
 type QaImageKey = keyof typeof QA_IMAGES;
-const qaKey = new URLSearchParams((typeof window !== 'undefined' ? window.location.search : '')).get("qa") as QaImageKey | null;
-const QA_IMAGE_URL = process.env.NODE_ENV !== 'production' && qaKey && qaKey in QA_IMAGES
+const qaKey = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "").get("qa") as QaImageKey | null;
+const QA_IMAGE_URL = process.env.NODE_ENV !== "production" && qaKey && qaKey in QA_IMAGES
   ? QA_IMAGES[qaKey]
   : null;
 const QA_IMAGE_MODE = QA_IMAGE_URL !== null;
@@ -95,6 +99,7 @@ export const ARStage = forwardRef<ARStageHandle, Props>(function ARStage(
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<RendererType | null>(null);
   const trackerRef = useRef<TrackerType | null>(null);
+  const segmenterRef = useRef<SegmenterType | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const frameRef = useRef(0);
   const activeRef = useRef(false);
@@ -113,6 +118,8 @@ export const ARStage = forwardRef<ARStageHandle, Props>(function ARStage(
   const lastSeenRef = useRef(0);
   const lastInferenceRef = useRef(0);
   const lastBoundaryInferenceRef = useRef(0);
+  const segmentationGenerationRef = useRef(0);
+  const segmentationErrorReportedRef = useRef(false);
   const lastVideoTimeRef = useRef(-1);
   const lastStatusUpdateRef = useRef(0);
   const frameCounterRef = useRef({ count: 0, since: 0, fps: 0 });
@@ -155,6 +162,7 @@ export const ARStage = forwardRef<ARStageHandle, Props>(function ARStage(
     qaFrameRef.current = null;
     qaDetectionCompleteRef.current = false;
     boundaryRef.current = null;
+    segmentationGenerationRef.current += 1;
     smootherRef.current.reset();
     publishStatus({ phase: "idle", message: "试戴已暂停" }, true);
   }, [publishStatus, stopStream]);
@@ -254,25 +262,77 @@ export const ARStage = forwardRef<ARStageHandle, Props>(function ARStage(
         pose
         && currentProduct.anchor === "wrist"
         && mediaSource
-        && now - lastBoundaryInferenceRef.current >= 80
+        && now - lastBoundaryInferenceRef.current >= 125
       ) {
-        lastBoundaryInferenceRef.current = now;
         const guide = calculateForearmGuide(frame.landmarks, mapping);
-        if (guide) {
-          const boundary = boundaryEstimatorRef.current.estimate(
+        const segmenter = segmenterRef.current;
+        if (guide && !segmenter?.isProcessing) {
+          const poseScale = pose.scale;
+          const analysis = boundaryEstimatorRef.current.prepare(
             mediaSource,
             stage.clientWidth,
             stage.clientHeight,
             mapping.mirrored,
-            guide,
-            pose.scale,
           );
-          if (boundary && boundary.confidence >= 0.34) {
-            boundaryRef.current = { value: boundary, timestamp: now };
+          if (analysis) {
+            lastBoundaryInferenceRef.current = now;
+            const applyMeasurement = (
+              skinMask: Awaited<ReturnType<SegmenterType["segment"]>>,
+            ) => {
+              const boundary = boundaryEstimatorRef.current.estimate(
+                analysis,
+                guide,
+                poseScale,
+                skinMask,
+              );
+              const diagnostics = boundaryEstimatorRef.current.getDiagnostics();
+              const qaCanvas = canvasRef.current;
+              if (diagnostics && qaCanvas) {
+                qaCanvas.dataset.skinMaskSize = diagnostics.maskSize?.join("x") ?? "none";
+                qaCanvas.dataset.skinWristConfidence = diagnostics.wristConfidence?.toFixed(3)
+                  ?? "none";
+                qaCanvas.dataset.skinCenterConfidence = diagnostics.centerConfidence?.toFixed(3)
+                  ?? "none";
+                qaCanvas.dataset.initialArmAxis = `${diagnostics.initialAxis.x.toFixed(3)},${diagnostics.initialAxis.y.toFixed(3)}`;
+                qaCanvas.dataset.refinedArmAxis = `${diagnostics.refinedAxis.x.toFixed(3)},${diagnostics.refinedAxis.y.toFixed(3)}`;
+                qaCanvas.dataset.expectedArmWidth = diagnostics.expectedWidth.toFixed(1);
+                qaCanvas.dataset.skinProfileNegative = diagnostics.negativeProfile
+                  .map((value) => value.toFixed(3))
+                  .join(",");
+                qaCanvas.dataset.skinProfilePositive = diagnostics.positiveProfile
+                  .map((value) => value.toFixed(3))
+                  .join(",");
+              }
+              const confidenceFloor = boundary?.source === "color" ? 0.34 : 0.28;
+              if (boundary && boundary.confidence >= confidenceFloor) {
+                boundaryRef.current = { value: boundary, timestamp: performance.now() };
+              }
+            };
+
+            if (segmenter) {
+              const generation = segmentationGenerationRef.current;
+              segmenter.segment(analysis.source, now)?.then((skinMask) => {
+                if (!activeRef.current || generation !== segmentationGenerationRef.current) return;
+                applyMeasurement(skinMask);
+              }).catch((error) => {
+                if (!activeRef.current || generation !== segmentationGenerationRef.current) return;
+                if (!segmentationErrorReportedRef.current) {
+                  console.warn("Body-skin segmentation failed; using color fallback.", error);
+                  segmentationErrorReportedRef.current = true;
+                }
+                applyMeasurement(null);
+              });
+            } else {
+              applyMeasurement(null);
+            }
           }
         }
       }
-      if (pose && boundaryRef.current && now - boundaryRef.current.timestamp < 260) {
+      if (
+        pose
+        && boundaryRef.current
+        && (QA_IMAGE_MODE || now - boundaryRef.current.timestamp < 360)
+      ) {
         pose = applyArmBoundary(
           pose,
           boundaryRef.current.value,
@@ -342,17 +402,38 @@ export const ARStage = forwardRef<ARStageHandle, Props>(function ARStage(
               return tracker;
             }),
           );
+      const segmenterPromise = segmenterRef.current
+        ? Promise.resolve(segmenterRef.current)
+        : import("../lib/skinSegmenter")
+            .then(({ BodySkinSegmenter }) =>
+              BodySkinSegmenter.create(QA_IMAGE_MODE ? "IMAGE" : "VIDEO"),
+            )
+            .then((segmenter) => {
+              segmenterRef.current = segmenter;
+              return segmenter;
+            })
+            .catch((error) => {
+              console.warn("Body-skin segmentation unavailable; using color fallback.", error);
+              return null;
+            });
       const sourcePromise = QA_IMAGE_MODE
         ? imageRef.current?.decode()
         : requestCamera();
 
-      const [renderer] = await Promise.all([rendererPromise, trackerPromise, sourcePromise]);
+      const [renderer] = await Promise.all([
+        rendererPromise,
+        trackerPromise,
+        segmenterPromise,
+        sourcePromise,
+      ]);
       resizeRenderer();
       await renderer.setProduct(productRef.current);
       activeRef.current = true;
       const now = performance.now();
       lastSeenRef.current = 0;
       lastBoundaryInferenceRef.current = 0;
+      segmentationGenerationRef.current += 1;
+      segmentationErrorReportedRef.current = false;
       boundaryRef.current = null;
       qaFrameRef.current = null;
       qaDetectionCompleteRef.current = false;
@@ -377,6 +458,8 @@ export const ARStage = forwardRef<ARStageHandle, Props>(function ARStage(
     smootherRef.current.reset();
     poseRef.current = null;
     lastSeenRef.current = 0;
+    boundaryRef.current = null;
+    segmentationGenerationRef.current += 1;
   }, [publishStatus, requestCamera]);
 
   const capture = useCallback(async () => {
@@ -461,6 +544,7 @@ export const ARStage = forwardRef<ARStageHandle, Props>(function ARStage(
       cancelAnimationFrame(frameRef.current);
       stopStream();
       trackerRef.current?.close();
+      segmenterRef.current?.close();
       rendererRef.current?.dispose();
     },
     [stopStream],
