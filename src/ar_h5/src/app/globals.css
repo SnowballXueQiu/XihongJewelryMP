@@ -12,7 +12,8 @@
 }
 
 html,
-body {
+body,
+#root {
   width: 100%;
   height: 100%;
   margin: 0;
@@ -60,13 +61,11 @@ input:focus-visible {
   background: #5d625f;
 }
 
-.camera-feed--mirrored {
-  transform: scaleX(-1);
-}
-
 .jewelry-canvas {
   z-index: 2;
   display: block;
+  width: 100% !important;
+  height: 100% !important;
   pointer-events: none;
 }
 
@@ -552,7 +551,7 @@ input:focus-visible {
   accent-color: #ff715f;
 }
 
-.occlusion-toggle {
+.settings-toggle {
   position: relative;
   margin-top: 17px;
   padding-top: 15px;
@@ -563,22 +562,22 @@ input:focus-visible {
   cursor: pointer;
 }
 
-.occlusion-toggle > span:first-child {
+.settings-toggle > span:first-child {
   display: grid;
   gap: 3px;
 }
 
-.occlusion-toggle b {
+.settings-toggle b {
   font-size: 12px;
   font-weight: 580;
 }
 
-.occlusion-toggle small {
+.settings-toggle small {
   color: rgba(255, 255, 255, 0.46);
   font-size: 10px;
 }
 
-.occlusion-toggle input {
+.settings-toggle input {
   position: absolute;
   opacity: 0;
   pointer-events: none;
@@ -602,11 +601,11 @@ input:focus-visible {
   transition: transform 150ms ease;
 }
 
-.occlusion-toggle input:checked + .toggle-track {
+.settings-toggle input:checked + .toggle-track {
   background: #2da778;
 }
 
-.occlusion-toggle input:checked + .toggle-track span {
+.settings-toggle input:checked + .toggle-track span {
   transform: translateX(18px);
 }
 

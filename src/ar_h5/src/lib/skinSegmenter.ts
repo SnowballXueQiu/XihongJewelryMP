@@ -25,9 +25,15 @@ export class BodySkinSegmenter {
 
   private constructor(private readonly worker: Worker) {
     worker.addEventListener("message", this.handleMessage);
+    worker.addEventListener("error", this.handleWorkerError);
   }
 
-  static create(mode: SegmenterMode = "VIDEO") {
+  static create(mode: SegmenterMode = "VIDEO", signal?: AbortSignal) {
+    if (signal?.aborted) {
+      return Promise.reject<BodySkinSegmenter>(
+        new DOMException("皮肤分割初始化已取消", "AbortError"),
+      );
+    }
     return new Promise<BodySkinSegmenter>((resolve, reject) => {
       const worker = new Worker(new URL("./skinSegmenter.worker.ts", import.meta.url), {
         type: "module",
@@ -35,24 +41,32 @@ export class BodySkinSegmenter {
       const segmenter = new BodySkinSegmenter(worker);
       const handleStartup = (event: MessageEvent<WorkerMessage>) => {
         if (event.data.type === "ready") {
-          worker.removeEventListener("message", handleStartup);
-          worker.removeEventListener("error", handleWorkerError);
+          cleanupStartup();
           resolve(segmenter);
         } else if (event.data.type === "error") {
-          worker.removeEventListener("message", handleStartup);
-          worker.removeEventListener("error", handleWorkerError);
+          cleanupStartup();
           segmenter.close();
           reject(new Error(event.data.message));
         }
       };
       const handleWorkerError = (event: ErrorEvent) => {
-        worker.removeEventListener("message", handleStartup);
-        worker.removeEventListener("error", handleWorkerError);
+        cleanupStartup();
         segmenter.close();
         reject(new Error(event.message || "皮肤分割 Worker 初始化失败"));
       };
+      const handleAbort = () => {
+        cleanupStartup();
+        segmenter.close();
+        reject(new DOMException("皮肤分割初始化已取消", "AbortError"));
+      };
+      const cleanupStartup = () => {
+        worker.removeEventListener("message", handleStartup);
+        worker.removeEventListener("error", handleWorkerError);
+        signal?.removeEventListener("abort", handleAbort);
+      };
       worker.addEventListener("message", handleStartup);
       worker.addEventListener("error", handleWorkerError);
+      signal?.addEventListener("abort", handleAbort, { once: true });
       worker.postMessage({ type: "init", mode });
     });
   }
@@ -88,6 +102,10 @@ export class BodySkinSegmenter {
 
   private readonly handleMessage = (event: MessageEvent<WorkerMessage>) => {
     const message = event.data;
+    if (message.type === "error") {
+      this.rejectPending(new Error(message.message));
+      return;
+    }
     if (message.type !== "result") return;
     const request = this.pending.get(message.timestamp);
     if (!request) return;
@@ -103,13 +121,23 @@ export class BodySkinSegmenter {
     });
   };
 
+  private readonly handleWorkerError = (event: ErrorEvent) => {
+    this.rejectPending(new Error(event.message || "皮肤分割 Worker 运行失败"));
+  };
+
+  private rejectPending(error: Error) {
+    this.busy = false;
+    this.pending.forEach(({ reject }) => reject(error));
+    this.pending.clear();
+  }
+
   close() {
     if (this.closed) return;
     this.closed = true;
     this.worker.removeEventListener("message", this.handleMessage);
+    this.worker.removeEventListener("error", this.handleWorkerError);
     this.worker.terminate();
     const error = new Error("皮肤分割器已关闭");
-    this.pending.forEach(({ reject }) => reject(error));
-    this.pending.clear();
+    this.rejectPending(error);
   }
 }

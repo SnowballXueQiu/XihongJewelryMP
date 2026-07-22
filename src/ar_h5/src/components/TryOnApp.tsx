@@ -1,5 +1,4 @@
 'use client'
-
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -18,6 +17,7 @@ import { FaceModeControl } from "./FaceModeControl";
 import { ProductRail } from "./ProductRail";
 import { StatusIndicator } from "./StatusIndicator";
 import { DEFAULT_USER_CALIBRATION, PRODUCTS } from "../data/products";
+import { nextManualFaceMode } from "../lib/modelFace";
 import type {
   FaceMode,
   JewelryProduct,
@@ -29,6 +29,7 @@ type CaptureState = { url: string; blob: Blob } | null;
 
 export function TryOnApp() {
   const stageRef = useRef<ARStageHandle>(null);
+  const startAttemptRef = useRef(0);
   const [product, setProduct] = useState<JewelryProduct>(PRODUCTS[0]);
   const [faceMode, setFaceMode] = useState<FaceMode>("auto");
   const [calibration, setCalibration] = useState<UserCalibration>(DEFAULT_USER_CALIBRATION);
@@ -40,15 +41,27 @@ export function TryOnApp() {
 
   const handleStatus = useCallback((next: TrackingStatus) => {
     setStatus(next);
-    if (next.phase === "idle") setStarted(false);
+    if (next.phase === "idle" || next.phase === "error") {
+      startAttemptRef.current += 1;
+      setStarted(false);
+    }
   }, []);
 
   const handleStart = async () => {
+    const attempt = ++startAttemptRef.current;
     try {
       await stageRef.current?.start();
-      setStarted(true);
+      if (attempt === startAttemptRef.current) setStarted(true);
     } catch {
-      setStarted(false);
+      if (attempt === startAttemptRef.current) setStarted(false);
+    }
+  };
+
+  const handleSwitchCamera = async () => {
+    try {
+      await stageRef.current?.switchCamera();
+    } catch {
+      // ARStage publishes the actionable error and returns to the start gate.
     }
   };
 
@@ -104,10 +117,12 @@ export function TryOnApp() {
           className="icon-button"
           aria-label="切换摄像头"
           title="切换摄像头"
-          disabled={!started}
-          onClick={() => void stageRef.current?.switchCamera()}
+          disabled={!started || status.phase === "loading"}
+          onClick={() => void handleSwitchCamera()}
         >
-          <SwitchCamera size={21} />
+          {status.phase === "loading"
+            ? <RefreshCw className="is-spinning" size={21} />
+            : <SwitchCamera size={21} />}
         </button>
       </header>
 
@@ -164,7 +179,7 @@ export function TryOnApp() {
               className="icon-button icon-button--soft"
               aria-label="切换首饰正反面"
               title="切换正反面"
-              onClick={() => setFaceMode((mode) => (mode === "front" ? "back" : "front"))}
+              onClick={() => setFaceMode(nextManualFaceMode)}
             >
               <RefreshCw size={21} />
             </button>

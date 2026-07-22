@@ -1,101 +1,138 @@
 import {
   Box3,
+  BufferGeometry,
+  Camera,
   DirectionalLight,
   Group,
   HemisphereLight,
   Material,
   Mesh,
   MeshBasicMaterial,
-  OrthographicCamera,
+  PerspectiveCamera,
   PMREMGenerator,
   Quaternion,
   Scene,
   SphereGeometry,
   SRGBColorSpace,
+  Texture,
   Vector3,
   WebGLRenderer,
 } from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
-import { shouldFlipModel } from "./modelFace";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type {
   FaceMode,
   JewelryProduct,
   Pose,
   UserCalibration,
 } from "../types/ar";
+import { shouldFlipModel } from "./modelFace";
+import { pixelPoseToCamera } from "./projection";
+
+export type JewelrySceneContext = {
+  canvas: HTMLCanvasElement;
+  scene: Scene;
+  camera: Camera;
+  renderer: WebGLRenderer;
+};
 
 type LoadedModel = {
   group: Group;
+  geometries: BufferGeometry[];
   materials: Material[];
 };
 
+function disposeLoadedModel(model: LoadedModel | null) {
+  if (!model) return;
+  model.geometries.forEach((geometry) => geometry.dispose());
+  model.materials.forEach((material) => material.dispose());
+}
+
 export class JewelryRenderer {
   private readonly renderer: WebGLRenderer;
-  private readonly scene = new Scene();
-  private readonly camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 2400);
+  private readonly scene: Scene;
+  private readonly camera: Camera;
+  private readonly canvas: HTMLCanvasElement;
+  private readonly ownsRenderer: boolean;
   private readonly trackingRoot = new Group();
   private readonly modelPivot = new Group();
+  private readonly lighting = new Group();
   private readonly occluder: Mesh;
   private readonly userRotation = new Quaternion();
   private readonly screenAxis = new Vector3(0, 0, 1);
   private loaded: LoadedModel | null = null;
   private product: JewelryProduct | null = null;
+  private environmentTexture: Texture | null = null;
   private width = 1;
   private height = 1;
   private generation = 0;
-  private frameVerified = false;
 
-  constructor(private readonly canvas: HTMLCanvasElement) {
-    this.renderer = new WebGLRenderer({
-      canvas,
-      alpha: true,
-      antialias: true,
-      powerPreference: "high-performance",
-      preserveDrawingBuffer: true,
-    });
-    this.renderer.setClearColor(0x000000, 0);
-    this.renderer.outputColorSpace = SRGBColorSpace;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  constructor(source: HTMLCanvasElement | JewelrySceneContext) {
+    if (source instanceof HTMLCanvasElement) {
+      this.canvas = source;
+      this.scene = new Scene();
+      const camera = new PerspectiveCamera(52, 1, 0.01, 10);
+      camera.position.set(0, 0, 0);
+      this.camera = camera;
+      this.scene.add(camera);
+      this.renderer = new WebGLRenderer({
+        canvas: source,
+        alpha: true,
+        antialias: true,
+        powerPreference: "high-performance",
+        preserveDrawingBuffer: true,
+      });
+      this.renderer.setClearColor(0x000000, 0);
+      this.renderer.outputColorSpace = SRGBColorSpace;
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      this.ownsRenderer = true;
+    } else {
+      this.canvas = source.canvas;
+      this.scene = source.scene;
+      this.camera = source.camera;
+      this.renderer = source.renderer;
+      this.ownsRenderer = false;
+    }
+
     this.canvas.dataset.renderState = "pending";
+    this.lighting.add(new HemisphereLight(0xfff8ec, 0x2b3841, 2.4));
+    const key = new DirectionalLight(0xffffff, 4.2);
+    key.position.set(-0.45, 0.62, 1.1);
+    this.lighting.add(key);
+    const fill = new DirectionalLight(0xa8c4dc, 1.7);
+    fill.position.set(0.65, -0.2, 0.75);
+    this.lighting.add(fill);
+    this.camera.add(this.lighting);
 
-    this.camera.position.z = 1000;
-    this.camera.lookAt(0, 0, 0);
-
-    this.scene.add(new HemisphereLight(0xf6f2e8, 0x33404a, 2.1));
-    const key = new DirectionalLight(0xffffff, 3.6);
-    key.position.set(-240, 320, 620);
-    this.scene.add(key);
-    const fill = new DirectionalLight(0x9fb9d1, 1.5);
-    fill.position.set(320, -120, 380);
-    this.scene.add(fill);
-
-    const pmrem = new PMREMGenerator(this.renderer);
-    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-    pmrem.dispose();
+    if (!this.scene.environment) {
+      const pmrem = new PMREMGenerator(this.renderer);
+      this.environmentTexture = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+      this.scene.environment = this.environmentTexture;
+      pmrem.dispose();
+    }
 
     const depthMaterial = new MeshBasicMaterial({
       colorWrite: false,
       depthWrite: true,
       depthTest: true,
     });
-    this.occluder = new Mesh(new SphereGeometry(0.5, 36, 18), depthMaterial);
-    this.occluder.scale.set(0.86, 0.68, 1.4);
+    this.occluder = new Mesh(new SphereGeometry(0.5, 40, 24), depthMaterial);
     this.occluder.renderOrder = 0;
-    this.trackingRoot.add(this.occluder);
-    this.trackingRoot.add(this.modelPivot);
-    this.scene.add(this.trackingRoot);
+    this.trackingRoot.add(this.occluder, this.modelPivot);
+    this.camera.add(this.trackingRoot);
   }
 
   resize(width: number, height: number) {
     this.width = Math.max(1, width);
     this.height = Math.max(1, height);
+    this.canvas.style.width = `${this.width}px`;
+    this.canvas.style.height = `${this.height}px`;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(this.width, this.height, false);
-    this.camera.left = -this.width / 2;
-    this.camera.right = this.width / 2;
-    this.camera.top = this.height / 2;
-    this.camera.bottom = -this.height / 2;
-    this.camera.updateProjectionMatrix();
+    if (this.ownsRenderer && this.camera instanceof PerspectiveCamera) {
+      this.camera.aspect = this.width / this.height;
+      this.camera.updateProjectionMatrix();
+    }
   }
 
   async setProduct(product: JewelryProduct) {
@@ -107,18 +144,20 @@ export class JewelryRenderer {
     const bounds = new Box3().setFromObject(model);
     const center = bounds.getCenter(new Vector3());
     const size = bounds.getSize(new Vector3());
-    const largestDimension = Math.max(size.x, size.y, size.z) || 1;
+    const planeDiameter = Math.max(size.x, size.y) || 1;
     model.position.copy(center).multiplyScalar(-1);
     const normalizedRoot = new Group();
-    normalizedRoot.scale.setScalar(1 / largestDimension);
+    normalizedRoot.scale.setScalar(1 / planeDiameter);
     normalizedRoot.add(model);
 
     const materials: Material[] = [];
+    const geometries: BufferGeometry[] = [];
     model.traverse((child) => {
       if (!(child instanceof Mesh)) return;
       child.castShadow = false;
       child.receiveShadow = false;
       child.renderOrder = 1;
+      geometries.push(child.geometry);
       const sourceMaterials = Array.isArray(child.material)
         ? child.material
         : [child.material];
@@ -134,12 +173,16 @@ export class JewelryRenderer {
 
     this.modelPivot.clear();
     this.modelPivot.add(normalizedRoot);
-    this.loaded?.materials.forEach((material) => material.dispose());
-    this.loaded = { group: normalizedRoot, materials };
+    disposeLoadedModel(this.loaded);
+    this.loaded = { group: normalizedRoot, geometries, materials };
     this.product = product;
-    this.frameVerified = false;
+    this.occluder.scale.set(
+      product.anchor === "finger" ? 0.58 : 0.82,
+      product.anchor === "finger" ? 0.58 : 0.66 * product.calibration.modelPlaneSize[1],
+      product.anchor === "finger" ? 0.96 : 1.18,
+    );
     this.canvas.dataset.renderState = "pending";
-    delete this.canvas.dataset.visiblePixels;
+    this.canvas.dataset.modelPhysicalWidth = product.calibration.modelOuterWidthMeters.toFixed(4);
   }
 
   render(
@@ -151,19 +194,27 @@ export class JewelryRenderer {
   ) {
     if (!this.loaded || !this.product || !pose) {
       this.trackingRoot.visible = false;
-      this.renderer.render(this.scene, this.camera);
+      if (this.ownsRenderer) this.renderer.render(this.scene, this.camera);
       return;
     }
 
     const { calibration } = this.product;
-    const scale = pose.scale * calibration.sizeMultiplier * userCalibration.scale;
+    const pixelX = pose.x + userCalibration.offsetX;
+    const pixelY = pose.y + userCalibration.offsetY;
+    const placement = pixelPoseToCamera(
+      pixelX,
+      pixelY,
+      this.width,
+      this.height,
+      this.camera.projectionMatrix.elements,
+    );
+    const scale = pose.scale
+      * placement.worldPerPixel
+      * calibration.sizeMultiplier
+      * userCalibration.scale;
 
     this.trackingRoot.visible = opacity > 0.01;
-    this.trackingRoot.position.set(
-      pose.x - this.width / 2 + userCalibration.offsetX,
-      this.height / 2 - pose.y - userCalibration.offsetY,
-      0,
-    );
+    this.trackingRoot.position.set(...placement.position);
     this.trackingRoot.scale.setScalar(scale);
     this.trackingRoot.quaternion.fromArray(pose.orientation);
     if (userCalibration.rotation !== 0) {
@@ -183,73 +234,38 @@ export class JewelryRenderer {
     this.loaded.materials.forEach((material) => {
       material.opacity = opacity;
     });
-    this.canvas.dataset.poseScale = scale.toFixed(1);
+
+    this.canvas.dataset.poseScale = (pose.scale * calibration.sizeMultiplier).toFixed(1);
     this.canvas.dataset.scaleCorrection = pose.scaleCorrection.toFixed(2);
     this.canvas.dataset.scaleSource = pose.armWidth === undefined ? "landmarks" : "pixels";
+    this.canvas.dataset.handFacing = pose.frontFacing ? "palm" : "back";
+    this.canvas.dataset.modelFlipped = String(modelFlipped);
+    this.canvas.dataset.renderState = this.trackingRoot.visible ? "visible" : "hidden";
     if (pose.armWidth !== undefined) {
       this.canvas.dataset.armWidth = pose.armWidth.toFixed(1);
       this.canvas.dataset.boundaryConfidence = (pose.boundaryConfidence ?? 0).toFixed(2);
-      this.canvas.dataset.targetSpan = (pose.targetSpan ?? pose.armWidth).toFixed(1);
-      this.canvas.dataset.planeProjection = (pose.planeProjection ?? 1).toFixed(2);
       this.canvas.dataset.boundarySource = pose.boundarySource ?? "unknown";
-      this.canvas.dataset.alignmentErrorDegrees = (pose.alignmentErrorDegrees ?? 90).toFixed(2);
-      if (pose.armAxis) {
-        this.canvas.dataset.armAxisX = pose.armAxis[0].toFixed(3);
-        this.canvas.dataset.armAxisY = pose.armAxis[1].toFixed(3);
-      }
     } else {
       delete this.canvas.dataset.armWidth;
       delete this.canvas.dataset.boundaryConfidence;
-      delete this.canvas.dataset.targetSpan;
-      delete this.canvas.dataset.planeProjection;
       delete this.canvas.dataset.boundarySource;
-      delete this.canvas.dataset.alignmentErrorDegrees;
-      delete this.canvas.dataset.armAxisX;
-      delete this.canvas.dataset.armAxisY;
     }
-    this.canvas.dataset.handFacing = pose.frontFacing ? "palm" : "back";
-    this.canvas.dataset.modelFlipped = String(modelFlipped);
-    this.renderer.render(this.scene, this.camera);
-    if (!this.frameVerified) this.verifyRenderedPixels(pose);
-  }
 
-  private verifyRenderedPixels(pose: Pose) {
-    const gl = this.renderer.getContext();
-    const pixelRatio = this.canvas.width / this.width;
-    const sampleSize = Math.round(Math.max(
-      48,
-      Math.min(
-        600,
-        this.canvas.width,
-        this.canvas.height,
-        pose.scale * pixelRatio * 2.25,
-      ),
-    ));
-    const centerX = Math.round(pose.x * pixelRatio);
-    const centerY = Math.round((this.height - pose.y) * pixelRatio);
-    const x = Math.max(0, Math.min(this.canvas.width - sampleSize, centerX - sampleSize / 2));
-    const y = Math.max(0, Math.min(this.canvas.height - sampleSize, centerY - sampleSize / 2));
-    const pixels = new Uint8Array(sampleSize * sampleSize * 4);
-    gl.readPixels(x, y, sampleSize, sampleSize, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-
-    let visiblePixels = 0;
-    for (let index = 3; index < pixels.length; index += 4) {
-      if (pixels[index] > 8) visiblePixels += 1;
-    }
-    this.canvas.dataset.visiblePixels = String(visiblePixels);
-    this.canvas.dataset.renderState = visiblePixels > 8 ? "visible" : "blank";
-    this.frameVerified = visiblePixels > 8;
-  }
-
-  getCanvas() {
-    return this.canvas;
+    if (this.ownsRenderer) this.renderer.render(this.scene, this.camera);
   }
 
   dispose() {
     this.generation += 1;
-    this.loaded?.materials.forEach((material) => material.dispose());
+    disposeLoadedModel(this.loaded);
+    this.loaded = null;
+    this.trackingRoot.removeFromParent();
+    this.lighting.removeFromParent();
     this.occluder.geometry.dispose();
-    (this.occluder.material as MeshBasicMaterial).dispose();
-    this.renderer.dispose();
+    (this.occluder.material as Material).dispose();
+    if (this.environmentTexture && this.scene.environment === this.environmentTexture) {
+      this.scene.environment = null;
+      this.environmentTexture.dispose();
+    }
+    if (this.ownsRenderer) this.renderer.dispose();
   }
 }

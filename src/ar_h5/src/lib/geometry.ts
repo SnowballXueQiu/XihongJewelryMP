@@ -67,6 +67,7 @@ const normalize3 = (point: Point3): Point3 => {
   return multiply3(point, 1 / length);
 };
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const distance3 = (a: Point3, b: Point3) => length3(subtract3(a, b));
 
 const median = (values: number[]) => {
@@ -140,7 +141,6 @@ export function calculateForearmGuide(
 function palmFacingCamera(
   landmarks: Landmark[],
   handedness: "Left" | "Right" | "Unknown",
-  mirrored: boolean,
 ): { frontFacing: boolean; facingConfidence: number } {
   const wrist = landmarks[0];
   const index = landmarks[5];
@@ -153,9 +153,8 @@ function palmFacingCamera(
     0.0001,
   );
   const handednessSign = handedness === "Left" ? -1 : 1;
-  const mirrorSign = mirrored ? -1 : 1;
   return {
-    frontFacing: normalizedCross * handednessSign * mirrorSign < 0,
+    frontFacing: normalizedCross * handednessSign < 0,
     facingConfidence: Math.abs(normalizedCross),
   };
 }
@@ -262,6 +261,36 @@ function createLimbOrientation(
   return quaternionFromBasis(acrossAxis, surfaceAxis, limbAxis);
 }
 
+function createFingerOrientation(
+  points: Point3[],
+  start: Point3,
+  end: Point3,
+  handedness: "Left" | "Right" | "Unknown",
+): QuaternionTuple {
+  const fingerAxis = normalize3(subtract3(start, end));
+  const fromWristToIndex = subtract3(points[5], points[0]);
+  const fromWristToPinky = subtract3(points[17], points[0]);
+  const handednessSign = handedness === "Left" ? -1 : 1;
+  const rawSurface = multiply3(
+    cross3(fromWristToIndex, fromWristToPinky),
+    handednessSign,
+  );
+  let surfaceAxis = subtract3(
+    rawSurface,
+    multiply3(fingerAxis, dot3(rawSurface, fingerAxis)),
+  );
+
+  if (length3(surfaceAxis) < 0.0001) {
+    return createLimbOrientation(points, start, end, handedness);
+  }
+
+  surfaceAxis = normalize3(surfaceAxis);
+  let sideAxis = normalize3(cross3(surfaceAxis, fingerAxis));
+  surfaceAxis = normalize3(cross3(fingerAxis, sideAxis));
+  sideAxis = normalize3(cross3(surfaceAxis, fingerAxis));
+  return quaternionFromBasis(sideAxis, surfaceAxis, fingerAxis);
+}
+
 function correctedPalmWidth(
   screenPoints: Point2[],
   worldLandmarks: Landmark[] | undefined,
@@ -317,14 +346,14 @@ export function calculateWristPose(
   const screenPoints = landmarks.map((point) => mapLandmarkToViewport(point, mapping));
   const guide = forearmGuideFromScreenPoints(screenPoints);
   if (!guide) return null;
-  const { wrist, palmCenter, palmLength } = guide;
+  const { palmLength } = guide;
   const palmScale = correctedPalmWidth(screenPoints, worldLandmarks);
   if (!Number.isFinite(palmScale.width) || palmLength < 10 || palmScale.width < 6) return null;
   const points3 = orientationPoints(landmarks, worldLandmarks, screenPoints, mapping);
   const wrist3 = points3[0];
   const palmCenter3 = average3(...PALM_INDICES.map((index) => points3[index]));
   const orientation = createLimbOrientation(points3, wrist3, palmCenter3, handedness);
-  const facing = palmFacingCamera(landmarks, handedness, mapping.mirrored);
+  const facing = palmFacingCamera(landmarks, handedness);
 
   return {
     x: guide.anchor.x,
@@ -367,13 +396,18 @@ export function calculateFingerPose(
 
   const direction = normalize({ x: pip.x - mcp.x, y: pip.y - mcp.y });
   const points3 = orientationPoints(landmarks, worldLandmarks, screenPoints, mapping);
-  const orientation = createLimbOrientation(
+  const orientation = createFingerOrientation(
     points3,
     points3[mcpIndex],
     points3[pipIndex],
     handedness,
   );
-  const facing = palmFacingCamera(landmarks, handedness, mapping.mirrored);
+  const nextIndex = Math.min(20, pipIndex + 1);
+  const proximal = normalize3(subtract3(points3[pipIndex], points3[mcpIndex]));
+  const middle = normalize3(subtract3(points3[nextIndex], points3[pipIndex]));
+  const fingerBendDegrees = Math.acos(clamp(dot3(proximal, middle), -1, 1))
+    * 180 / Math.PI;
+  const facing = palmFacingCamera(landmarks, handedness);
 
   return {
     x: mcp.x + direction.x * fingerLength * 0.28,
@@ -386,11 +420,57 @@ export function calculateFingerPose(
     scaleCorrection: palmScale.correction,
     orientation,
     ...facing,
-    confidence,
+    confidence: confidence * (fingerBendDegrees > 60 ? 0.72 : 1),
+    fingerBendDegrees,
   };
 }
 
 const lerp = (from: number, to: number, amount: number) => from + (to - from) * amount;
+
+const smoothingAlpha = (cutoff: number, deltaSeconds: number) => {
+  const tau = 1 / (2 * Math.PI * cutoff);
+  return 1 / (1 + tau / deltaSeconds);
+};
+
+class OneEuroScalar {
+  private value = 0;
+  private raw = 0;
+  private derivative = 0;
+  private timestamp = 0;
+  private initialized = false;
+
+  constructor(
+    private readonly minCutoff: number,
+    private readonly beta: number,
+    private readonly derivativeCutoff = 1,
+  ) {}
+
+  update(next: number, timestamp: number) {
+    if (!this.initialized || timestamp - this.timestamp > 450) {
+      this.value = next;
+      this.raw = next;
+      this.derivative = 0;
+      this.timestamp = timestamp;
+      this.initialized = true;
+      return next;
+    }
+
+    const deltaSeconds = Math.max(0.001, (timestamp - this.timestamp) / 1000);
+    const rawDerivative = (next - this.raw) / deltaSeconds;
+    const derivativeAmount = smoothingAlpha(this.derivativeCutoff, deltaSeconds);
+    this.derivative = lerp(this.derivative, rawDerivative, derivativeAmount);
+    const cutoff = this.minCutoff + this.beta * Math.abs(this.derivative);
+    this.value = lerp(this.value, next, smoothingAlpha(cutoff, deltaSeconds));
+    this.raw = next;
+    this.timestamp = timestamp;
+    return this.value;
+  }
+
+  reset() {
+    this.initialized = false;
+    this.timestamp = 0;
+  }
+}
 
 function slerpQuaternion(
   from: QuaternionTuple,
@@ -433,17 +513,23 @@ function slerpQuaternion(
 export class PoseSmoother {
   private pose: Pose | null = null;
   private timestamp = 0;
+  private readonly xFilter = new OneEuroScalar(1.35, 0.008);
+  private readonly yFilter = new OneEuroScalar(1.35, 0.008);
+  private readonly logScaleFilter = new OneEuroScalar(1.1, 0.65);
+  private pendingFacing: boolean | null = null;
+  private pendingFacingFrames = 0;
 
   update(next: Pose, timestamp: number): Pose {
     if (!this.pose || timestamp - this.timestamp > 450) {
       this.pose = { ...next, orientation: [...next.orientation] as QuaternionTuple };
+      this.xFilter.update(next.x, timestamp);
+      this.yFilter.update(next.y, timestamp);
+      this.logScaleFilter.update(Math.log(next.scale), timestamp);
       this.timestamp = timestamp;
       return this.pose;
     }
 
     const deltaSeconds = Math.max(0.001, (timestamp - this.timestamp) / 1000);
-    const positionAmount = 1 - Math.exp(-deltaSeconds * 15);
-    const rotationAmount = 1 - Math.exp(-deltaSeconds * 12);
     const currentLogScale = Math.log(this.pose.scale);
     const requestedLogScale = Math.log(next.scale);
     const maxLogScaleStep = deltaSeconds * 3.2;
@@ -452,18 +538,44 @@ export class PoseSmoother {
       currentLogScale - maxLogScaleStep,
       currentLogScale + maxLogScaleStep,
     );
-    const scaleDelta = Math.abs(targetLogScale - currentLogScale);
-    const scaleSpeed = 11 + Math.min(5, scaleDelta * 18);
-    const scaleAmount = 1 - Math.exp(-deltaSeconds * scaleSpeed);
+    const filteredLogScale = this.logScaleFilter.update(targetLogScale, timestamp);
+    const metadataAmount = 1 - Math.exp(-deltaSeconds * 10);
+    const dot = Math.abs(
+      this.pose.orientation[0] * next.orientation[0]
+      + this.pose.orientation[1] * next.orientation[1]
+      + this.pose.orientation[2] * next.orientation[2]
+      + this.pose.orientation[3] * next.orientation[3],
+    );
+    const angularSpeed = (2 * Math.acos(clamp(dot, -1, 1))) / deltaSeconds;
+    const rotationCutoff = clamp(1.5 + angularSpeed * 0.55, 1.5, 12);
+    const rotationAmount = 1 - Math.exp(-2 * Math.PI * rotationCutoff * deltaSeconds);
+
+    let frontFacing = this.pose.frontFacing;
+    if (next.facingConfidence >= 0.14 && next.frontFacing !== frontFacing) {
+      if (this.pendingFacing === next.frontFacing) {
+        this.pendingFacingFrames += 1;
+      } else {
+        this.pendingFacing = next.frontFacing;
+        this.pendingFacingFrames = 1;
+      }
+      if (this.pendingFacingFrames >= 2) {
+        frontFacing = next.frontFacing;
+        this.pendingFacing = null;
+        this.pendingFacingFrames = 0;
+      }
+    } else {
+      this.pendingFacing = null;
+      this.pendingFacingFrames = 0;
+    }
 
     this.pose = {
-      x: lerp(this.pose.x, next.x, positionAmount),
-      y: lerp(this.pose.y, next.y, positionAmount),
-      scale: Math.exp(lerp(currentLogScale, targetLogScale, scaleAmount)),
-      scaleCorrection: lerp(this.pose.scaleCorrection, next.scaleCorrection, scaleAmount),
+      x: this.xFilter.update(next.x, timestamp),
+      y: this.yFilter.update(next.y, timestamp),
+      scale: Math.exp(filteredLogScale),
+      scaleCorrection: lerp(this.pose.scaleCorrection, next.scaleCorrection, metadataAmount),
       armWidth: next.armWidth === undefined
         ? undefined
-        : lerp(this.pose.armWidth ?? next.armWidth, next.armWidth, scaleAmount),
+        : lerp(this.pose.armWidth ?? next.armWidth, next.armWidth, metadataAmount),
       boundaryConfidence: next.boundaryConfidence,
       targetSpan: next.targetSpan,
       planeProjection: next.planeProjection,
@@ -471,9 +583,10 @@ export class PoseSmoother {
       armAxis: next.armAxis,
       alignmentErrorDegrees: next.alignmentErrorDegrees,
       orientation: slerpQuaternion(this.pose.orientation, next.orientation, rotationAmount),
-      frontFacing: next.facingConfidence >= 0.14 ? next.frontFacing : this.pose.frontFacing,
+      frontFacing,
       facingConfidence: next.facingConfidence,
-      confidence: lerp(this.pose.confidence, next.confidence, positionAmount),
+      confidence: lerp(this.pose.confidence, next.confidence, metadataAmount),
+      fingerBendDegrees: next.fingerBendDegrees,
     };
     this.timestamp = timestamp;
     return this.pose;
@@ -482,5 +595,47 @@ export class PoseSmoother {
   reset() {
     this.pose = null;
     this.timestamp = 0;
+    this.xFilter.reset();
+    this.yFilter.reset();
+    this.logScaleFilter.reset();
+    this.pendingFacing = null;
+    this.pendingFacingFrames = 0;
+  }
+}
+
+export class HandednessStabilizer {
+  private stable: "Left" | "Right" | "Unknown" = "Unknown";
+  private pending: "Left" | "Right" | "Unknown" = "Unknown";
+  private pendingFrames = 0;
+
+  update(candidate: "Left" | "Right" | "Unknown", score: number) {
+    if (this.stable === "Unknown") {
+      if (candidate !== "Unknown" && score >= 0.75) this.stable = candidate;
+      return this.stable;
+    }
+    if (candidate === "Unknown" || score < 0.75 || candidate === this.stable) {
+      this.pending = "Unknown";
+      this.pendingFrames = 0;
+      return this.stable;
+    }
+
+    if (this.pending === candidate) {
+      this.pendingFrames += 1;
+    } else {
+      this.pending = candidate;
+      this.pendingFrames = 1;
+    }
+    if (this.pendingFrames >= 3) {
+      this.stable = candidate;
+      this.pending = "Unknown";
+      this.pendingFrames = 0;
+    }
+    return this.stable;
+  }
+
+  reset() {
+    this.stable = "Unknown";
+    this.pending = "Unknown";
+    this.pendingFrames = 0;
   }
 }

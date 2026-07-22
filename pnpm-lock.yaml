@@ -14,6 +14,9 @@ importers:
 
   src/ar_h5:
     dependencies:
+      '@8thwall/engine-binary':
+        specifier: 1.0.0
+        version: 1.0.0
       '@mediapipe/tasks-vision':
         specifier: ^0.10.35
         version: 0.10.35
@@ -150,6 +153,9 @@ importers:
         version: 5.9.3
 
 packages:
+
+  '@8thwall/engine-binary@1.0.0':
+    resolution: {integrity: sha512-qH0WH7+HHQFtwzKL+TDEg8RT+RadC2eR3c2v+GcJW3Z+7ZedJYadHmA0lZcOXwntBbcQZkeKkj1HYuUKcZanrA==}
 
   '@adobe/css-tools@4.3.3':
     resolution: {integrity: sha512-rE0Pygv0sEZ4vBWHlAgJLGDU7Pm8xoO6p3wsEceb7GYAjScrOHpEo8KK/eVkAcnSM+slAEtXjA2JpdjLp4fJQQ==}
@@ -5710,6 +5716,8 @@ packages:
     engines: {node: '>=10'}
 
 snapshots:
+
+  '@8thwall/engine-binary@1.0.0': {}
 
   '@adobe/css-tools@4.3.3': {}
 

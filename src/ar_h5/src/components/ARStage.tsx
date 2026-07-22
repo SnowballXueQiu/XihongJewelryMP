@@ -1,29 +1,36 @@
+'use client'
 import {
   forwardRef,
   useCallback,
   useEffect,
   useImperativeHandle,
   useRef,
+  useState,
 } from "react";
+import {
+  applyArmBoundary,
+  ArmBoundaryEstimator,
+  type ArmBoundary,
+} from "../lib/armBoundary";
+import {
+  calculateFingerPose,
+  calculateForearmGuide,
+  calculateWristPose,
+  HandednessStabilizer,
+  PoseSmoother,
+} from "../lib/geometry";
 import type {
   FaceMode,
+  HandFrame,
   JewelryProduct,
   Pose,
   TrackingStatus,
   UserCalibration,
   ViewportMapping,
 } from "../types/ar";
-import {
-  calculateFingerPose,
-  calculateForearmGuide,
-  calculateWristPose,
-  PoseSmoother,
-} from "../lib/geometry";
-import {
-  applyArmBoundary,
-  ArmBoundaryEstimator,
-  type ArmBoundary,
-} from "../lib/armBoundary";
+import type { XR8CameraDirection } from "../types/eighthWall";
+import { shouldRollbackFailedCameraSwitch } from "../lib/cameraSwitch";
+import { posePresentationState } from "../lib/trackingPresentation";
 
 export type ARStageHandle = {
   start: () => Promise<void>;
@@ -41,8 +48,18 @@ type Props = {
 };
 
 type RendererType = import("../lib/arRenderer").JewelryRenderer;
+type RuntimeType = import("../lib/eighthWallRuntime").EighthWallRuntime;
 type TrackerType = import("../lib/handTracker").BrowserHandTracker;
 type SegmenterType = import("../lib/skinSegmenter").BodySkinSegmenter;
+
+type TrackingInput = {
+  source: CanvasImageSource;
+  width: number;
+  height: number;
+  mirrored: boolean;
+  timestamp: number;
+  epoch: number;
+};
 
 const QA_IMAGES = {
   side: "/qa/fixtures/side.png",
@@ -57,12 +74,44 @@ const QA_IMAGES = {
   "bent-palm": "/qa/fixtures/bent-palm.jpg",
   "bent-horizontal": "/qa/fixtures/bent-horizontal.jpg",
 } as const;
+
 type QaImageKey = keyof typeof QA_IMAGES;
-const qaKey = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "").get("qa") as QaImageKey | null;
+const qaKey = typeof window !== "undefined"
+  ? (new URLSearchParams(window.location.search).get("qa") as QaImageKey | null)
+  : null;
 const QA_IMAGE_URL = process.env.NODE_ENV !== "production" && qaKey && qaKey in QA_IMAGES
-  ? QA_IMAGES[qaKey]
+  ? QA_IMAGES[qaKey as QaImageKey]
   : null;
 const QA_IMAGE_MODE = QA_IMAGE_URL !== null;
+
+function cancelledSession() {
+  return new DOMException("AR 会话已取消", "AbortError");
+}
+
+function isCancelledSession(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
+function abortable<T>(operation: Promise<T>, signal: AbortSignal) {
+  if (signal.aborted) return Promise.reject<T>(cancelledSession());
+  return new Promise<T>((resolve, reject) => {
+    const handleAbort = () => {
+      signal.removeEventListener("abort", handleAbort);
+      reject(cancelledSession());
+    };
+    signal.addEventListener("abort", handleAbort, { once: true });
+    operation.then(
+      (value) => {
+        signal.removeEventListener("abort", handleAbort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener("abort", handleAbort);
+        reject(error);
+      },
+    );
+  });
+}
 
 function drawCover(
   context: CanvasRenderingContext2D,
@@ -71,22 +120,37 @@ function drawCover(
   sourceHeight: number,
   width: number,
   height: number,
-  mirrored: boolean,
 ) {
   const scale = Math.max(width / sourceWidth, height / sourceHeight);
   const drawWidth = sourceWidth * scale;
   const drawHeight = sourceHeight * scale;
-  const x = (width - drawWidth) / 2;
-  const y = (height - drawHeight) / 2;
-  if (mirrored) {
-    context.save();
-    context.translate(width, 0);
-    context.scale(-1, 1);
-    context.drawImage(source, x, y, drawWidth, drawHeight);
-    context.restore();
-    return;
-  }
-  context.drawImage(source, x, y, drawWidth, drawHeight);
+  context.drawImage(
+    source,
+    (width - drawWidth) / 2,
+    (height - drawHeight) / 2,
+    drawWidth,
+    drawHeight,
+  );
+}
+
+function primeCanvasSize(
+  canvas: HTMLCanvasElement,
+  width: number,
+  height: number,
+) {
+  const displayWidth = Math.max(1, Math.round(width));
+  const displayHeight = Math.max(1, Math.round(height));
+  const pixelRatio = Math.min(window.devicePixelRatio, 2);
+  canvas.style.width = `${displayWidth}px`;
+  canvas.style.height = `${displayHeight}px`;
+  canvas.width = Math.round(displayWidth * pixelRatio);
+  canvas.height = Math.round(displayHeight * pixelRatio);
+}
+
+function trackingCopy(product: JewelryProduct) {
+  return product.anchor === "finger"
+    ? { tracking: "已贴合手指", searching: "将手指放入取景框", lost: "请保持手指在画面内" }
+    : { tracking: "已贴合手腕", searching: "将手腕放入取景框", lost: "请保持手腕在画面内" };
 }
 
 export const ARStage = forwardRef<ARStageHandle, Props>(function ARStage(
@@ -94,33 +158,38 @@ export const ARStage = forwardRef<ARStageHandle, Props>(function ARStage(
   ref,
 ) {
   const stageRef = useRef<HTMLDivElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<RendererType | null>(null);
+  const runtimeRef = useRef<RuntimeType | null>(null);
   const trackerRef = useRef<TrackerType | null>(null);
   const segmenterRef = useRef<SegmenterType | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const frameRef = useRef(0);
+  const qaAnimationRef = useRef(0);
+  const [cameraDirection, setCameraDirection] = useState<XR8CameraDirection>("user");
   const activeRef = useRef(false);
-  const facingRef = useRef<"user" | "environment">("environment");
+  const sessionEpochRef = useRef(0);
+  const sessionAbortRef = useRef<AbortController | null>(null);
+  const startPromiseRef = useRef<Promise<void> | null>(null);
+  const switchPromiseRef = useRef<Promise<void> | null>(null);
+  const trackingInputRef = useRef<TrackingInput | null>(null);
+  const directionRef = useRef<XR8CameraDirection>("user");
   const productRef = useRef(product);
   const faceModeRef = useRef(faceMode);
   const calibrationRef = useRef(calibration);
   const occlusionRef = useRef(occlusion);
   const statusRef = useRef<TrackingStatus>({ phase: "idle", message: "准备试戴" });
   const smootherRef = useRef(new PoseSmoother());
+  const handednessRef = useRef(new HandednessStabilizer());
   const boundaryEstimatorRef = useRef(new ArmBoundaryEstimator());
   const boundaryRef = useRef<{ value: ArmBoundary; timestamp: number } | null>(null);
-  const qaFrameRef = useRef<ReturnType<TrackerType["detectImage"]>>(null);
-  const qaDetectionCompleteRef = useRef(false);
   const poseRef = useRef<Pose | null>(null);
+  const qaFrameRef = useRef<HandFrame | null>(null);
+  const qaDetectionCompleteRef = useRef(false);
   const lastSeenRef = useRef(0);
-  const lastInferenceRef = useRef(0);
+  const validFramesRef = useRef(0);
   const lastBoundaryInferenceRef = useRef(0);
   const segmentationGenerationRef = useRef(0);
   const segmentationErrorReportedRef = useRef(false);
-  const lastVideoTimeRef = useRef(-1);
   const lastStatusUpdateRef = useRef(0);
   const frameCounterRef = useRef({ count: 0, since: 0, fps: 0 });
 
@@ -134,10 +203,10 @@ export const ARStage = forwardRef<ARStageHandle, Props>(function ARStage(
       const now = performance.now();
       const previous = statusRef.current;
       if (
-        !force &&
-        previous.phase === next.phase &&
-        previous.message === next.message &&
-        now - lastStatusUpdateRef.current < 700
+        !force
+        && previous.phase === next.phase
+        && previous.message === next.message
+        && now - lastStatusUpdateRef.current < 700
       ) {
         return;
       }
@@ -148,326 +217,606 @@ export const ARStage = forwardRef<ARStageHandle, Props>(function ARStage(
     [onStatus],
   );
 
-  const stopStream = useCallback(() => {
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-    streamRef.current = null;
-    if (videoRef.current) videoRef.current.srcObject = null;
-  }, []);
-
-  const stop = useCallback(() => {
-    activeRef.current = false;
-    cancelAnimationFrame(frameRef.current);
-    stopStream();
+  const resetTracking = useCallback(() => {
     poseRef.current = null;
     qaFrameRef.current = null;
     qaDetectionCompleteRef.current = false;
     boundaryRef.current = null;
+    lastSeenRef.current = 0;
+    validFramesRef.current = 0;
+    lastBoundaryInferenceRef.current = 0;
     segmentationGenerationRef.current += 1;
     smootherRef.current.reset();
-    publishStatus({ phase: "idle", message: "试戴已暂停" }, true);
-  }, [publishStatus, stopStream]);
+    handednessRef.current.reset();
+  }, []);
 
   const resizeRenderer = useCallback(() => {
     const stage = stageRef.current;
-    const renderer = rendererRef.current;
-    if (!stage || !renderer) return;
-    renderer.resize(stage.clientWidth, stage.clientHeight);
+    if (!stage || !rendererRef.current) return;
+    rendererRef.current.resize(stage.clientWidth, stage.clientHeight);
   }, []);
 
-  const requestCamera = useCallback(async () => {
-    if (QA_IMAGE_MODE) return;
-    if (!navigator.mediaDevices?.getUserMedia) {
-      throw new Error("当前浏览器不支持摄像头访问");
-    }
-    if (!window.isSecureContext && location.hostname !== "localhost") {
-      throw new Error("摄像头需要通过 HTTPS 打开");
-    }
+  const recordBoundaryDiagnostics = useCallback(() => {
+    const diagnostics = boundaryEstimatorRef.current.getDiagnostics();
+    const canvas = canvasRef.current;
+    if (!diagnostics || !canvas) return;
+    canvas.dataset.skinMaskSize = diagnostics.maskSize?.join("x") ?? "none";
+    canvas.dataset.skinWristConfidence = diagnostics.wristConfidence?.toFixed(3) ?? "none";
+    canvas.dataset.skinCenterConfidence = diagnostics.centerConfidence?.toFixed(3) ?? "none";
+    canvas.dataset.initialArmAxis = `${diagnostics.initialAxis.x.toFixed(3)},${diagnostics.initialAxis.y.toFixed(3)}`;
+    canvas.dataset.refinedArmAxis = `${diagnostics.refinedAxis.x.toFixed(3)},${diagnostics.refinedAxis.y.toFixed(3)}`;
+  }, []);
 
-    stopStream();
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: false,
-      video: {
-        facingMode: { ideal: facingRef.current },
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
-        frameRate: { ideal: 30, max: 30 },
-      },
-    });
-    streamRef.current = stream;
-    const video = videoRef.current;
-    if (!video) return;
-    video.srcObject = stream;
-    await video.play();
-  }, [stopStream]);
-
-  const animate = useCallback(() => {
-    if (!activeRef.current || !rendererRef.current) return;
-    const now = performance.now();
+  const consumeFrame = useCallback((
+    frame: HandFrame | null,
+    source: CanvasImageSource,
+    sourceWidth: number,
+    sourceHeight: number,
+    mirrored: boolean,
+    timestamp: number,
+  ) => {
+    frameCounterRef.current.count += 1;
     const stage = stageRef.current;
-    const video = videoRef.current;
-    const image = imageRef.current;
-    let frame = null;
+    if (!frame || !stage || sourceWidth < 1 || sourceHeight < 1) return;
 
-    if (QA_IMAGE_MODE && image && trackerRef.current) {
-      if (!qaDetectionCompleteRef.current && image.complete && image.naturalWidth > 0) {
-        qaFrameRef.current = trackerRef.current.detectImage(image, now);
-        qaDetectionCompleteRef.current = true;
-      }
-      frame = qaFrameRef.current;
-    } else if (
-      video &&
-      trackerRef.current &&
-      video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
-      video.currentTime !== lastVideoTimeRef.current &&
-      now - lastInferenceRef.current >= 33
-    ) {
-      lastInferenceRef.current = now;
-      lastVideoTimeRef.current = video.currentTime;
-      frame = trackerRef.current.detect(video, now);
+    const mapping: ViewportMapping = {
+      sourceWidth,
+      sourceHeight,
+      width: stage.clientWidth,
+      height: stage.clientHeight,
+      mirrored,
+    };
+    const stableHandedness = handednessRef.current.update(frame.handedness, frame.score);
+    const currentProduct = productRef.current;
+    let pose = currentProduct.anchor === "finger"
+      ? calculateFingerPose(
+          frame.landmarks,
+          frame.worldLandmarks,
+          mapping,
+          stableHandedness,
+          currentProduct.finger ?? "ring",
+          frame.score,
+        )
+      : calculateWristPose(
+          frame.landmarks,
+          frame.worldLandmarks,
+          mapping,
+          stableHandedness,
+          frame.score,
+        );
+    const canvas = canvasRef.current;
+    if (process.env.NODE_ENV !== "production" && canvas) {
+      canvas.dataset.poseCandidate = pose ? "valid" : "invalid";
     }
+    if (!pose) return;
 
-    if (stage && frame) {
-      const sourceWidth = QA_IMAGE_MODE
-        ? image?.naturalWidth || stage.clientWidth
-        : video?.videoWidth || stage.clientWidth;
-      const sourceHeight = QA_IMAGE_MODE
-        ? image?.naturalHeight || stage.clientHeight
-        : video?.videoHeight || stage.clientHeight;
-      const mapping: ViewportMapping = {
-        sourceWidth,
-        sourceHeight,
-        width: stage.clientWidth,
-        height: stage.clientHeight,
-        mirrored: !QA_IMAGE_MODE && facingRef.current === "user",
-      };
-      const currentProduct = productRef.current;
-      let pose = currentProduct.anchor === "finger"
-        ? calculateFingerPose(
-            frame.landmarks,
-            frame.worldLandmarks,
-            mapping,
-            frame.handedness,
-            currentProduct.finger ?? "ring",
-            frame.score,
-          )
-        : calculateWristPose(
-            frame.landmarks,
-            frame.worldLandmarks,
-            mapping,
-            frame.handedness,
-            frame.score,
-          );
-      const mediaSource = QA_IMAGE_MODE ? image : video;
-      if (
-        pose
-        && currentProduct.anchor === "wrist"
-        && mediaSource
-        && now - lastBoundaryInferenceRef.current >= 125
-      ) {
-        const guide = calculateForearmGuide(frame.landmarks, mapping);
-        const segmenter = segmenterRef.current;
-        if (guide && !segmenter?.isProcessing) {
-          const poseScale = pose.scale;
-          const analysis = boundaryEstimatorRef.current.prepare(
-            mediaSource,
-            stage.clientWidth,
-            stage.clientHeight,
-            mapping.mirrored,
-          );
-          if (analysis) {
-            lastBoundaryInferenceRef.current = now;
-            const applyMeasurement = (
-              skinMask: Awaited<ReturnType<SegmenterType["segment"]>>,
-            ) => {
-              const boundary = boundaryEstimatorRef.current.estimate(
-                analysis,
-                guide,
-                poseScale,
-                skinMask,
-              );
-              const diagnostics = boundaryEstimatorRef.current.getDiagnostics();
-              const qaCanvas = canvasRef.current;
-              if (diagnostics && qaCanvas) {
-                qaCanvas.dataset.skinMaskSize = diagnostics.maskSize?.join("x") ?? "none";
-                qaCanvas.dataset.skinWristConfidence = diagnostics.wristConfidence?.toFixed(3)
-                  ?? "none";
-                qaCanvas.dataset.skinCenterConfidence = diagnostics.centerConfidence?.toFixed(3)
-                  ?? "none";
-                qaCanvas.dataset.initialArmAxis = `${diagnostics.initialAxis.x.toFixed(3)},${diagnostics.initialAxis.y.toFixed(3)}`;
-                qaCanvas.dataset.refinedArmAxis = `${diagnostics.refinedAxis.x.toFixed(3)},${diagnostics.refinedAxis.y.toFixed(3)}`;
-                qaCanvas.dataset.expectedArmWidth = diagnostics.expectedWidth.toFixed(1);
-                qaCanvas.dataset.skinProfileNegative = diagnostics.negativeProfile
-                  .map((value) => value.toFixed(3))
-                  .join(",");
-                qaCanvas.dataset.skinProfilePositive = diagnostics.positiveProfile
-                  .map((value) => value.toFixed(3))
-                  .join(",");
-              }
-              const confidenceFloor = boundary?.source === "color" ? 0.34 : 0.28;
-              if (boundary && boundary.confidence >= confidenceFloor) {
-                boundaryRef.current = { value: boundary, timestamp: performance.now() };
-              }
-            };
-
-            if (segmenter) {
-              const generation = segmentationGenerationRef.current;
-              segmenter.segment(analysis.source, now)?.then((skinMask) => {
-                if (!activeRef.current || generation !== segmentationGenerationRef.current) return;
-                applyMeasurement(skinMask);
-              }).catch((error) => {
-                if (!activeRef.current || generation !== segmentationGenerationRef.current) return;
-                if (!segmentationErrorReportedRef.current) {
-                  console.warn("Body-skin segmentation failed; using color fallback.", error);
-                  segmentationErrorReportedRef.current = true;
-                }
-                applyMeasurement(null);
-              });
-            } else {
-              applyMeasurement(null);
+    if (
+      currentProduct.anchor === "wrist"
+      && timestamp - lastBoundaryInferenceRef.current >= 125
+    ) {
+      const guide = calculateForearmGuide(frame.landmarks, mapping);
+      const segmenter = segmenterRef.current;
+      if (guide && !segmenter?.isProcessing) {
+        const analysis = boundaryEstimatorRef.current.prepare(
+          source,
+          stage.clientWidth,
+          stage.clientHeight,
+          mirrored,
+        );
+        if (analysis) {
+          lastBoundaryInferenceRef.current = timestamp;
+          const candidatePose = { x: pose.x, y: pose.y, scale: pose.scale };
+          const generation = segmentationGenerationRef.current;
+          const applyMeasurement = (
+            skinMask: Awaited<ReturnType<SegmenterType["segment"]>>,
+          ) => {
+            if (!activeRef.current || generation !== segmentationGenerationRef.current) return;
+            const currentPose = poseRef.current;
+            const latency = performance.now() - timestamp;
+            const movement = currentPose
+              ? Math.hypot(currentPose.x - candidatePose.x, currentPose.y - candidatePose.y)
+              : 0;
+            if (latency > 280 || movement > Math.max(18, candidatePose.scale * 0.45)) return;
+            const boundary = boundaryEstimatorRef.current.estimate(
+              analysis,
+              guide,
+              candidatePose.scale,
+              skinMask,
+            );
+            recordBoundaryDiagnostics();
+            const confidenceFloor = boundary?.source === "color" ? 0.34 : 0.28;
+            if (boundary && boundary.confidence >= confidenceFloor) {
+              boundaryRef.current = { value: boundary, timestamp: performance.now() };
             }
+          };
+
+          if (segmenter) {
+            segmenter.segment(analysis.source, timestamp)?.then(applyMeasurement).catch((error) => {
+              if (!activeRef.current || generation !== segmentationGenerationRef.current) return;
+              if (!segmentationErrorReportedRef.current) {
+                console.warn("Body-skin segmentation unavailable; using color fallback.", error);
+                segmentationErrorReportedRef.current = true;
+              }
+              applyMeasurement(null);
+            });
+          } else {
+            applyMeasurement(null);
           }
         }
       }
-      if (
-        pose
-        && boundaryRef.current
-        && (QA_IMAGE_MODE || now - boundaryRef.current.timestamp < 360)
-      ) {
-        pose = applyArmBoundary(
-          pose,
-          boundaryRef.current.value,
-          currentProduct.calibration.sizeMultiplier,
-          currentProduct.calibration.modelPlaneSize,
-        );
-      }
-      if (pose) {
-        poseRef.current = smootherRef.current.update(pose, now);
-        lastSeenRef.current = now;
-      }
     }
 
-    const timeSinceSeen = now - lastSeenRef.current;
-    const holdOpacity = timeSinceSeen < 180 ? 1 : Math.max(0, 1 - (timeSinceSeen - 180) / 260);
-    rendererRef.current.render(
-      poseRef.current,
+    if (boundaryRef.current && (QA_IMAGE_MODE || timestamp - boundaryRef.current.timestamp < 300)) {
+      pose = applyArmBoundary(
+        pose,
+        boundaryRef.current.value,
+        1,
+        currentProduct.calibration.modelPlaneSize,
+      );
+    }
+    poseRef.current = smootherRef.current.update(pose, timestamp);
+    if (process.env.NODE_ENV !== "production" && canvas) {
+      canvas.dataset.poseAcceptedAt = timestamp.toFixed(1);
+      canvas.dataset.poseX = pose.x.toFixed(1);
+      canvas.dataset.poseY = pose.y.toFixed(1);
+      canvas.dataset.rawPoseScale = pose.scale.toFixed(1);
+    }
+    validFramesRef.current = QA_IMAGE_MODE ? 2 : validFramesRef.current + 1;
+    lastSeenRef.current = timestamp;
+  }, [recordBoundaryDiagnostics]);
+
+  const updatePresentation = useCallback((timestamp: number) => {
+    if (!activeRef.current) return;
+    const presentation = posePresentationState(
+      validFramesRef.current,
+      lastSeenRef.current,
+      timestamp,
+      poseRef.current !== null,
+    );
+    const { elapsed, opacity } = presentation;
+    const canvas = canvasRef.current;
+    if (process.env.NODE_ENV !== "production" && canvas) {
+      canvas.dataset.poseAvailable = String(poseRef.current !== null);
+      canvas.dataset.poseElapsed = Number.isFinite(elapsed) ? elapsed.toFixed(1) : "none";
+      canvas.dataset.presentationAt = timestamp.toFixed(1);
+    }
+    if (presentation.shouldReset) {
+      poseRef.current = null;
+      validFramesRef.current = 0;
+      smootherRef.current.reset();
+    }
+    rendererRef.current?.render(
+      presentation.confirmed ? poseRef.current : null,
       faceModeRef.current,
       calibrationRef.current,
-      holdOpacity,
+      opacity,
       occlusionRef.current,
     );
 
     const counter = frameCounterRef.current;
-    counter.count += 1;
-    if (now - counter.since >= 1000) {
-      counter.fps = Math.round((counter.count * 1000) / Math.max(1, now - counter.since));
+    if (timestamp - counter.since >= 1000) {
+      counter.fps = Math.round((counter.count * 1000) / Math.max(1, timestamp - counter.since));
       counter.count = 0;
-      counter.since = now;
+      counter.since = timestamp;
     }
-
-    if (timeSinceSeen < 180) {
+    const copy = trackingCopy(productRef.current);
+    if (presentation.confirmed && elapsed <= 100) {
       publishStatus({
         phase: "tracking",
-        message: "已贴合手腕",
+        message: copy.tracking,
         fps: counter.fps,
         facing: poseRef.current?.frontFacing ? "front" : "back",
       });
-    } else if (poseRef.current && timeSinceSeen < 700) {
-      publishStatus({ phase: "lost", message: "请保持手腕在画面内", fps: counter.fps });
+    } else if (presentation.confirmed && poseRef.current && elapsed < 450) {
+      publishStatus({ phase: "lost", message: copy.lost, fps: counter.fps });
     } else {
-      publishStatus({ phase: "searching", message: "将手腕放入取景框", fps: counter.fps });
+      publishStatus({ phase: "searching", message: copy.searching, fps: counter.fps });
     }
-
-    frameRef.current = requestAnimationFrame(animate);
   }, [publishStatus]);
 
-  const start = useCallback(async () => {
-    if (activeRef.current) return;
-    publishStatus({ phase: "loading", message: "正在准备 AR" }, true);
+  const isSessionCurrent = useCallback(
+    (epoch: number) => activeRef.current && sessionEpochRef.current === epoch,
+    [],
+  );
 
-    try {
-      const canvas = canvasRef.current;
-      if (!canvas) throw new Error("AR 画布初始化失败");
-      const rendererPromise = rendererRef.current
-        ? Promise.resolve(rendererRef.current)
-        : import("../lib/arRenderer").then(({ JewelryRenderer }) => {
-            const renderer = new JewelryRenderer(canvas);
-            rendererRef.current = renderer;
-            return renderer;
-          });
-      const trackerPromise = trackerRef.current
-        ? Promise.resolve(trackerRef.current)
-        : import("../lib/handTracker").then(({ BrowserHandTracker }) =>
-            BrowserHandTracker.create(QA_IMAGE_MODE ? "IMAGE" : "VIDEO").then((tracker) => {
-              trackerRef.current = tracker;
-              return tracker;
-            }),
-          );
-      const segmenterPromise = segmenterRef.current
-        ? Promise.resolve(segmenterRef.current)
-        : import("../lib/skinSegmenter")
-            .then(({ BodySkinSegmenter }) =>
-              BodySkinSegmenter.create(QA_IMAGE_MODE ? "IMAGE" : "VIDEO"),
-            )
-            .then((segmenter) => {
-              segmenterRef.current = segmenter;
-              return segmenter;
-            })
-            .catch((error) => {
-              console.warn("Body-skin segmentation unavailable; using color fallback.", error);
-              return null;
-            });
-      const sourcePromise = QA_IMAGE_MODE
-        ? imageRef.current?.decode()
-        : requestCamera();
-
-      const [renderer] = await Promise.all([
-        rendererPromise,
-        trackerPromise,
-        segmenterPromise,
-        sourcePromise,
-      ]);
-      resizeRenderer();
-      await renderer.setProduct(productRef.current);
-      activeRef.current = true;
-      const now = performance.now();
-      lastSeenRef.current = 0;
-      lastBoundaryInferenceRef.current = 0;
-      segmentationGenerationRef.current += 1;
-      segmentationErrorReportedRef.current = false;
-      boundaryRef.current = null;
-      qaFrameRef.current = null;
-      qaDetectionCompleteRef.current = false;
-      frameCounterRef.current = { count: 0, since: now, fps: 0 };
-      publishStatus({ phase: "searching", message: "将手腕放入取景框" }, true);
-      frameRef.current = requestAnimationFrame(animate);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "AR 初始化失败";
-      publishStatus({ phase: "error", message }, true);
-      stopStream();
-      throw error;
+  const failSession = useCallback((
+    epoch: number,
+    message: string,
+    closeTracker = false,
+  ) => {
+    if (!isSessionCurrent(epoch)) return;
+    sessionEpochRef.current += 1;
+    sessionAbortRef.current?.abort();
+    sessionAbortRef.current = null;
+    activeRef.current = false;
+    startPromiseRef.current = null;
+    switchPromiseRef.current = null;
+    trackingInputRef.current = null;
+    cancelAnimationFrame(qaAnimationRef.current);
+    runtimeRef.current?.stop();
+    rendererRef.current?.dispose();
+    rendererRef.current = null;
+    if (closeTracker) {
+      trackerRef.current?.close();
+      trackerRef.current = null;
     }
-  }, [animate, publishStatus, requestCamera, resizeRenderer, stopStream]);
+    resetTracking();
+    publishStatus({ phase: "error", message }, true);
+  }, [isSessionCurrent, publishStatus, resetTracking]);
 
-  const switchCamera = useCallback(async () => {
-    if (QA_IMAGE_MODE) return;
-    facingRef.current = facingRef.current === "environment" ? "user" : "environment";
-    videoRef.current?.classList.toggle("camera-feed--mirrored", facingRef.current === "user");
-    if (!activeRef.current) return;
+  const handleTrackingResult = useCallback((frame: HandFrame | null, timestamp: number) => {
+    const input = trackingInputRef.current;
+    if (
+      !input
+      || input.timestamp !== timestamp
+      || !isSessionCurrent(input.epoch)
+    ) {
+      return;
+    }
+    const canvas = canvasRef.current;
+    if (process.env.NODE_ENV !== "production" && canvas) {
+      const resultCount = Number(canvas.dataset.trackingResults ?? 0) + 1;
+      canvas.dataset.trackingResults = String(resultCount);
+      canvas.dataset.trackingResult = frame ? "hand" : "none";
+      canvas.dataset.trackingInferenceMs = (performance.now() - timestamp).toFixed(1);
+      if (frame) canvas.dataset.handScore = frame.score.toFixed(3);
+    }
+    if (QA_IMAGE_MODE) {
+      qaFrameRef.current = frame;
+      qaDetectionCompleteRef.current = true;
+      return;
+    }
+    consumeFrame(
+      frame,
+      input.source,
+      input.width,
+      input.height,
+      input.mirrored,
+      timestamp,
+    );
+  }, [consumeFrame, isSessionCurrent]);
+
+  const handleTrackingError = useCallback((error: Error) => {
+    const input = trackingInputRef.current;
+    if (!input || !isSessionCurrent(input.epoch)) return;
+    console.error(error);
+    failSession(input.epoch, "手部追踪暂时不可用", true);
+  }, [failSession, isSessionCurrent]);
+
+  const startLiveRuntime = useCallback(async (
+    epoch: number,
+    direction: XR8CameraDirection,
+  ) => {
+    const canvas = canvasRef.current;
+    const stage = stageRef.current;
+    if (!canvas || !stage) throw new Error("AR 画布初始化失败");
+    primeCanvasSize(canvas, stage.clientWidth, stage.clientHeight);
+    const [{ JewelryRenderer }, { EighthWallRuntime }] = await Promise.all([
+      import("../lib/arRenderer"),
+      import("../lib/eighthWallRuntime"),
+    ]);
+    if (!isSessionCurrent(epoch)) throw cancelledSession();
+    const runtime = runtimeRef.current ?? new EighthWallRuntime();
+    runtimeRef.current = runtime;
+    await runtime.start(canvas, direction, {
+      onSceneReady: async (context) => {
+        if (!isSessionCurrent(epoch)) throw cancelledSession();
+        rendererRef.current?.dispose();
+        const renderer = new JewelryRenderer(context);
+        rendererRef.current = renderer;
+        resizeRenderer();
+        try {
+          await renderer.setProduct(productRef.current);
+          if (!isSessionCurrent(epoch)) throw cancelledSession();
+          canvas.dataset.xr8Version = runtime.version() ?? "unknown";
+        } catch (error) {
+          if (rendererRef.current === renderer) {
+            rendererRef.current = null;
+            renderer.dispose();
+          }
+          throw error;
+        }
+      },
+      onFrame: ({ source, width, height, mirrored, timestamp }) => {
+        if (!isSessionCurrent(epoch)) return;
+        const tracker = trackerRef.current;
+        if (tracker?.process(source, timestamp)) {
+          if (process.env.NODE_ENV !== "production") {
+            canvas.dataset.trackingFrames = String(
+              Number(canvas.dataset.trackingFrames ?? 0) + 1,
+            );
+          }
+          trackingInputRef.current = {
+            source,
+            width,
+            height,
+            mirrored,
+            timestamp,
+            epoch,
+          };
+        }
+      },
+      onUpdate: (timestamp) => {
+        if (isSessionCurrent(epoch)) updatePresentation(timestamp);
+      },
+      onCanvasSize: () => {
+        if (isSessionCurrent(epoch)) {
+          resizeRenderer();
+        }
+      },
+      onCameraStatus: (cameraStatus) => {
+        if (!isSessionCurrent(epoch)) return;
+        if (cameraStatus === "requesting") {
+          publishStatus({ phase: "loading", message: "正在请求摄像头" }, true);
+        } else if (cameraStatus === "failed") {
+          failSession(epoch, "无法访问摄像头");
+        }
+      },
+      onError: (error) => {
+        failSession(epoch, error.message);
+      },
+    });
+    if (!isSessionCurrent(epoch)) throw cancelledSession();
+  }, [failSession, isSessionCurrent, publishStatus, resizeRenderer, updatePresentation]);
+
+  const startQaLoop = useCallback((epoch: number) => {
+    const tick = (timestamp: number) => {
+      if (!isSessionCurrent(epoch)) return;
+      const image = imageRef.current;
+      const tracker = trackerRef.current;
+      if (
+        image
+        && tracker
+        && image.naturalWidth > 0
+        && !qaDetectionCompleteRef.current
+        && tracker.process(image, timestamp)
+      ) {
+        trackingInputRef.current = {
+          source: image,
+          width: image.naturalWidth,
+          height: image.naturalHeight,
+          mirrored: false,
+          timestamp,
+          epoch,
+        };
+      }
+      if (image && qaFrameRef.current && image.naturalWidth > 0) {
+        consumeFrame(
+          qaFrameRef.current,
+          image,
+          image.naturalWidth,
+          image.naturalHeight,
+          false,
+          timestamp,
+        );
+      }
+      updatePresentation(timestamp);
+      qaAnimationRef.current = requestAnimationFrame(tick);
+    };
+    qaAnimationRef.current = requestAnimationFrame(tick);
+  }, [consumeFrame, isSessionCurrent, updatePresentation]);
+
+  const stop = useCallback(() => {
+    sessionEpochRef.current += 1;
+    sessionAbortRef.current?.abort();
+    sessionAbortRef.current = null;
+    activeRef.current = false;
+    startPromiseRef.current = null;
+    switchPromiseRef.current = null;
+    trackingInputRef.current = null;
+    cancelAnimationFrame(qaAnimationRef.current);
+    runtimeRef.current?.stop();
+    rendererRef.current?.dispose();
+    rendererRef.current = null;
+    resetTracking();
+    publishStatus({ phase: "idle", message: "试戴已暂停" }, true);
+  }, [publishStatus, resetTracking]);
+
+  const start = useCallback(() => {
+    if (startPromiseRef.current) return startPromiseRef.current;
+    if (activeRef.current) return Promise.resolve();
+
+    sessionAbortRef.current?.abort();
+    const controller = new AbortController();
+    sessionAbortRef.current = controller;
+    const epoch = ++sessionEpochRef.current;
+    const operation = (async () => {
+      const created: { tracker?: TrackerType; segmenter?: SegmenterType } = {};
+      try {
+        publishStatus({ phase: "loading", message: "正在准备 AR" }, true);
+        activeRef.current = true;
+        if (!QA_IMAGE_MODE && !window.isSecureContext && location.hostname !== "localhost") {
+          throw new Error("摄像头需要通过 HTTPS 打开");
+        }
+        trackingInputRef.current = null;
+        resetTracking();
+        segmentationErrorReportedRef.current = false;
+        const now = performance.now();
+        frameCounterRef.current = { count: 0, since: now, fps: 0 };
+
+        const trackerPromise = trackerRef.current
+          ? Promise.resolve(trackerRef.current)
+          : import("../lib/handTracker")
+              .then(({ BrowserHandTracker }) => BrowserHandTracker.create(
+                QA_IMAGE_MODE ? "IMAGE" : "VIDEO",
+                { onResult: handleTrackingResult, onError: handleTrackingError },
+                controller.signal,
+              ))
+              .then((tracker) => {
+                if (controller.signal.aborted || sessionEpochRef.current !== epoch) {
+                  tracker.close();
+                  throw cancelledSession();
+                }
+                created.tracker = tracker;
+                return tracker;
+              });
+        const segmenterPromise = segmenterRef.current
+          ? Promise.resolve(segmenterRef.current)
+          : import("../lib/skinSegmenter")
+              .then(({ BodySkinSegmenter }) =>
+                BodySkinSegmenter.create(
+                  QA_IMAGE_MODE ? "IMAGE" : "VIDEO",
+                  controller.signal,
+                ),
+              )
+              .then((segmenter) => {
+                if (controller.signal.aborted || sessionEpochRef.current !== epoch) {
+                  segmenter.close();
+                  throw cancelledSession();
+                }
+                created.segmenter = segmenter;
+                return segmenter;
+              })
+              .catch((error) => {
+                if (isCancelledSession(error)) throw error;
+                console.warn("Body-skin segmentation unavailable; using color fallback.", error);
+                return null;
+              });
+
+        const [tracker, segmenter] = await abortable(
+          Promise.all([trackerPromise, segmenterPromise]),
+          controller.signal,
+        );
+        if (!isSessionCurrent(epoch)) {
+          throw cancelledSession();
+        }
+        tracker.setCallbacks({ onResult: handleTrackingResult, onError: handleTrackingError });
+        trackerRef.current = tracker;
+        segmenterRef.current = segmenter;
+
+        if (QA_IMAGE_MODE) {
+          const canvas = canvasRef.current;
+          const image = imageRef.current;
+          if (!canvas || !image) throw new Error("QA 画面初始化失败");
+          await abortable(image.decode(), controller.signal);
+          if (!isSessionCurrent(epoch)) throw cancelledSession();
+          const { JewelryRenderer } = await abortable(
+            import("../lib/arRenderer"),
+            controller.signal,
+          );
+          if (!isSessionCurrent(epoch)) throw cancelledSession();
+          const renderer = new JewelryRenderer(canvas);
+          rendererRef.current = renderer;
+          resizeRenderer();
+          await abortable(renderer.setProduct(productRef.current), controller.signal);
+          if (!isSessionCurrent(epoch)) throw cancelledSession();
+          startQaLoop(epoch);
+        } else {
+          await startLiveRuntime(epoch, directionRef.current);
+        }
+        if (!isSessionCurrent(epoch)) throw cancelledSession();
+        publishStatus({
+          phase: "searching",
+          message: trackingCopy(productRef.current).searching,
+        }, true);
+      } catch (error) {
+        if (created.tracker && trackerRef.current !== created.tracker) {
+          created.tracker.close();
+        }
+        if (created.segmenter && segmenterRef.current !== created.segmenter) {
+          created.segmenter.close();
+        }
+        if (isSessionCurrent(epoch)) {
+          controller.abort();
+          if (sessionAbortRef.current === controller) sessionAbortRef.current = null;
+          activeRef.current = false;
+          runtimeRef.current?.stop();
+          rendererRef.current?.dispose();
+          rendererRef.current = null;
+          trackingInputRef.current = null;
+          resetTracking();
+          const message = error instanceof Error ? error.message : "AR 初始化失败";
+          publishStatus({ phase: "error", message }, true);
+        }
+        throw error;
+      } finally {
+        if (sessionEpochRef.current === epoch) startPromiseRef.current = null;
+      }
+    })();
+    startPromiseRef.current = operation;
+    return operation;
+  }, [
+    handleTrackingError,
+    handleTrackingResult,
+    isSessionCurrent,
+    publishStatus,
+    resetTracking,
+    resizeRenderer,
+    startLiveRuntime,
+    startQaLoop,
+  ]);
+
+  const switchCamera = useCallback(() => {
+    if (QA_IMAGE_MODE) return Promise.resolve();
+    if (switchPromiseRef.current) return switchPromiseRef.current;
+    const previousDirection = directionRef.current;
+    const nextDirection = previousDirection === "user" ? "environment" : "user";
+    if (!activeRef.current) {
+      directionRef.current = nextDirection;
+      setCameraDirection(nextDirection);
+      return Promise.resolve();
+    }
+
+    sessionAbortRef.current?.abort();
+    const controller = new AbortController();
+    sessionAbortRef.current = controller;
+    const epoch = ++sessionEpochRef.current;
+    directionRef.current = nextDirection;
+    setCameraDirection(nextDirection);
     publishStatus({ phase: "loading", message: "正在切换摄像头" }, true);
-    await requestCamera();
-    smootherRef.current.reset();
-    poseRef.current = null;
-    lastSeenRef.current = 0;
-    boundaryRef.current = null;
-    segmentationGenerationRef.current += 1;
-  }, [publishStatus, requestCamera]);
+    trackingInputRef.current = null;
+    runtimeRef.current?.stop();
+    rendererRef.current?.dispose();
+    rendererRef.current = null;
+    resetTracking();
+
+    const operation = (async () => {
+      try {
+        await startLiveRuntime(epoch, nextDirection);
+        if (!isSessionCurrent(epoch)) throw cancelledSession();
+        publishStatus({
+          phase: "searching",
+          message: trackingCopy(productRef.current).searching,
+        }, true);
+      } catch (error) {
+        const ownsActiveSession = isSessionCurrent(epoch);
+        const shouldRollbackDirection = shouldRollbackFailedCameraSwitch({
+          active: activeRef.current,
+          currentEpoch: sessionEpochRef.current,
+          switchEpoch: epoch,
+          currentDirection: directionRef.current,
+          failedDirection: nextDirection,
+        });
+        if (ownsActiveSession) {
+          controller.abort();
+          if (sessionAbortRef.current === controller) sessionAbortRef.current = null;
+          activeRef.current = false;
+          runtimeRef.current?.stop();
+          rendererRef.current?.dispose();
+          rendererRef.current = null;
+          trackingInputRef.current = null;
+          resetTracking();
+          const message = error instanceof Error ? error.message : "摄像头切换失败";
+          publishStatus({ phase: "error", message }, true);
+        }
+        if (shouldRollbackDirection) {
+          directionRef.current = previousDirection;
+          setCameraDirection(previousDirection);
+        }
+        throw error;
+      } finally {
+        if (sessionEpochRef.current === epoch) switchPromiseRef.current = null;
+      }
+    })();
+    switchPromiseRef.current = operation;
+    return operation;
+  }, [isSessionCurrent, publishStatus, resetTracking, startLiveRuntime]);
 
   const capture = useCallback(async () => {
     const stage = stageRef.current;
-    const video = videoRef.current;
     const image = imageRef.current;
-    const overlay = canvasRef.current;
-    if (!stage || !overlay) return null;
+    const canvas = canvasRef.current;
+    if (!stage || !canvas) return null;
     const pixelRatio = Math.min(window.devicePixelRatio, 2);
     const width = Math.round(stage.clientWidth * pixelRatio);
     const height = Math.round(stage.clientHeight * pixelRatio);
@@ -476,32 +825,12 @@ export const ARStage = forwardRef<ARStageHandle, Props>(function ARStage(
     output.height = height;
     const context = output.getContext("2d");
     if (!context) return null;
-
-    context.fillStyle = "#767a75";
+    context.fillStyle = "#5d625f";
     context.fillRect(0, 0, width, height);
     if (QA_IMAGE_MODE && image?.naturalWidth && image.naturalHeight) {
-      drawCover(
-        context,
-        image,
-        image.naturalWidth,
-        image.naturalHeight,
-        width,
-        height,
-        false,
-      );
-    } else if (video?.videoWidth && video.videoHeight) {
-      drawCover(
-        context,
-        video,
-        video.videoWidth,
-        video.videoHeight,
-        width,
-        height,
-        facingRef.current === "user",
-      );
+      drawCover(context, image, image.naturalWidth, image.naturalHeight, width, height);
     }
-    context.drawImage(overlay, 0, 0, width, height);
-
+    context.drawImage(canvas, 0, 0, width, height);
     return new Promise<Blob | null>((resolve) => output.toBlob(resolve, "image/png", 0.96));
   }, []);
 
@@ -531,42 +860,44 @@ export const ARStage = forwardRef<ARStageHandle, Props>(function ARStage(
   }, [stop]);
 
   useEffect(() => {
-    if (!rendererRef.current || !activeRef.current) return;
-    rendererRef.current.setProduct(product).catch((error) => {
+    const renderer = rendererRef.current;
+    const epoch = sessionEpochRef.current;
+    if (!renderer || !activeRef.current) return;
+    renderer.setProduct(product).catch((error) => {
+      if (!isSessionCurrent(epoch) || rendererRef.current !== renderer) return;
       console.error(error);
-      publishStatus({ phase: "error", message: "首饰模型加载失败" }, true);
+      failSession(epoch, "首饰模型加载失败");
     });
-  }, [product, publishStatus]);
+  }, [failSession, isSessionCurrent, product]);
 
   useEffect(
     () => () => {
+      sessionEpochRef.current += 1;
+      sessionAbortRef.current?.abort();
+      sessionAbortRef.current = null;
       activeRef.current = false;
-      cancelAnimationFrame(frameRef.current);
-      stopStream();
+      trackingInputRef.current = null;
+      cancelAnimationFrame(qaAnimationRef.current);
+      runtimeRef.current?.stop();
       trackerRef.current?.close();
       segmenterRef.current?.close();
       rendererRef.current?.dispose();
     },
-    [stopStream],
+    [],
   );
 
   return (
     <div
       ref={stageRef}
       className="ar-stage"
+      data-engine={QA_IMAGE_MODE ? "fixture" : "8thwall"}
       data-qa-image={qaKey ?? undefined}
+      data-camera-direction={cameraDirection}
+      data-preview-mirrored="false"
     >
       {QA_IMAGE_URL ? (
         <img ref={imageRef} className="camera-feed" src={QA_IMAGE_URL} alt="手部追踪测试画面" />
-      ) : (
-        <video
-          ref={videoRef}
-          className={facingRef.current === "user" ? "camera-feed camera-feed--mirrored" : "camera-feed"}
-          autoPlay
-          muted
-          playsInline
-        />
-      )}
+      ) : null}
       <canvas ref={canvasRef} className="jewelry-canvas" aria-label="AR 首饰渲染画布" />
     </div>
   );

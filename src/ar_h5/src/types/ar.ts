@@ -48,6 +48,7 @@ export type Pose = {
   frontFacing: boolean;
   facingConfidence: number;
   confidence: number;
+  fingerBendDegrees?: number;
 };
 
 export type ViewportMapping = {

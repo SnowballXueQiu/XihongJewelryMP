@@ -83,7 +83,7 @@ export function CalibrationPanel({
         ))}
       </div>
 
-      <label className="occlusion-toggle">
+      <label className="settings-toggle">
         <span>
           <b>手腕遮挡</b>
           <small>隐藏首饰背侧</small>
