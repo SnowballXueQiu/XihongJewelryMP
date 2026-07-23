@@ -9,12 +9,22 @@ export type XR8CameraPixelResult = {
   pixels: Uint8Array;
 };
 
+export type XR8TextureViewport = {
+  width: number;
+  height: number;
+  offsetX: number;
+  offsetY: number;
+};
+
 export type XR8PipelineModule = {
   name: string;
   onAttach?: (args: Record<string, unknown>) => void;
   onStart?: (args: Record<string, unknown>) => void | Promise<void>;
   onProcessCpu?: (args: {
-    processGpuResult?: { camerapixelarray?: XR8CameraPixelResult };
+    processGpuResult?: {
+      camerapixelarray?: XR8CameraPixelResult;
+      gltexturerenderer?: { viewport?: XR8TextureViewport };
+    };
   }) => void;
   onUpdate?: (args: Record<string, unknown>) => void;
   onCanvasSizeChange?: (args: { canvasWidth: number; canvasHeight: number }) => void;

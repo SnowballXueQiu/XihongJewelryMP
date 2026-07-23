@@ -1,4 +1,4 @@
-import type { Pose } from "../types/ar";
+import type { Pose, ViewportRect } from "../types/ar";
 import type { ForearmGuide } from "./geometry";
 
 type Point2 = { x: number; y: number };
@@ -48,6 +48,7 @@ const ANALYSIS_LONG_EDGE = 480;
 const JEWELRY_CLEARANCE = 1.08;
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
+const lerp = (from: number, to: number, amount: number) => from + (to - from) * amount;
 
 const colorDistance = (a: Color, b: Color) => {
   const meanRed = (a.r + b.r) / 2;
@@ -629,6 +630,70 @@ export function applyArmBoundary(
   };
 }
 
+export function stabilizeArmBoundary(
+  candidate: ArmBoundary,
+  reference: Pick<Pose, "x" | "y" | "scale">,
+  previous: ArmBoundary | null,
+): ArmBoundary | null {
+  const confidenceFloor = candidate.source === "color"
+    ? 0.55
+    : candidate.source === "hybrid"
+      ? 0.46
+      : 0.42;
+  const widthRatio = candidate.width / Math.max(reference.scale, 1);
+  const centerDistance = Math.hypot(
+    candidate.center.x - reference.x,
+    candidate.center.y - reference.y,
+  );
+  if (
+    candidate.confidence < confidenceFloor
+    || widthRatio < 0.48
+    || widthRatio > 1.55
+    || centerDistance > Math.max(22, reference.scale * 0.45)
+  ) {
+    return null;
+  }
+  if (!previous) return candidate;
+
+  const previousWidthRatio = candidate.width / Math.max(previous.width, 1);
+  const previousCenterDistance = Math.hypot(
+    candidate.center.x - previous.center.x,
+    candidate.center.y - previous.center.y,
+  );
+  if (
+    previousWidthRatio < 0.72
+    || previousWidthRatio > 1.38
+    || previousCenterDistance > Math.max(18, reference.scale * 0.3)
+  ) {
+    return null;
+  }
+
+  const amount = clamp(0.18 + candidate.confidence * 0.34, 0.28, 0.52);
+  const axisX = lerp(previous.axis.x, candidate.axis.x, amount);
+  const axisY = lerp(previous.axis.y, candidate.axis.y, amount);
+  const axisLength = Math.hypot(axisX, axisY) || 1;
+  const axis = { x: axisX / axisLength, y: axisY / axisLength };
+  return {
+    center: {
+      x: lerp(previous.center.x, candidate.center.x, amount),
+      y: lerp(previous.center.y, candidate.center.y, amount),
+    },
+    width: lerp(previous.width, candidate.width, amount),
+    negativeEdge: {
+      x: lerp(previous.negativeEdge.x, candidate.negativeEdge.x, amount),
+      y: lerp(previous.negativeEdge.y, candidate.negativeEdge.y, amount),
+    },
+    positiveEdge: {
+      x: lerp(previous.positiveEdge.x, candidate.positiveEdge.x, amount),
+      y: lerp(previous.positiveEdge.y, candidate.positiveEdge.y, amount),
+    },
+    axis,
+    perpendicular: { x: -axis.y, y: axis.x },
+    confidence: lerp(previous.confidence, candidate.confidence, amount),
+    source: candidate.source,
+  };
+}
+
 function sourceDimensions(source: CanvasImageSource) {
   if (source instanceof HTMLVideoElement) {
     return { width: source.videoWidth, height: source.videoHeight };
@@ -660,6 +725,7 @@ export class ArmBoundaryEstimator {
     stageWidth: number,
     stageHeight: number,
     mirrored: boolean,
+    viewport?: ViewportRect | null,
   ): ArmAnalysisFrame | null {
     if (!this.context || stageWidth < 1 || stageHeight < 1) return null;
     const sourceSize = sourceDimensions(source);
@@ -676,10 +742,10 @@ export class ArmBoundaryEstimator {
     }
 
     const coverScale = Math.max(width / sourceSize.width, height / sourceSize.height);
-    const drawWidth = sourceSize.width * coverScale;
-    const drawHeight = sourceSize.height * coverScale;
-    const drawX = (width - drawWidth) / 2;
-    const drawY = (height - drawHeight) / 2;
+    const drawWidth = viewport ? viewport.width * analysisScale : sourceSize.width * coverScale;
+    const drawHeight = viewport ? viewport.height * analysisScale : sourceSize.height * coverScale;
+    const drawX = viewport ? viewport.x * analysisScale : (width - drawWidth) / 2;
+    const drawY = viewport ? viewport.y * analysisScale : (height - drawHeight) / 2;
     this.context.setTransform(1, 0, 0, 1, 0, 0);
     this.context.clearRect(0, 0, width, height);
     if (mirrored) {

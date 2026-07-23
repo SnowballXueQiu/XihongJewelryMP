@@ -1,10 +1,12 @@
 import * as THREE from "three";
 import type { JewelrySceneContext } from "./arRenderer";
+import type { ViewportRect } from "../types/ar";
 import type {
   XR8Api,
   XR8CameraDirection,
   XR8CameraPixelResult,
   XR8PipelineModule,
+  XR8TextureViewport,
 } from "../types/eighthWall";
 
 type CameraFrame = {
@@ -12,6 +14,7 @@ type CameraFrame = {
   width: number;
   height: number;
   mirrored: boolean;
+  viewport: ViewportRect | null;
   timestamp: number;
 };
 
@@ -127,6 +130,35 @@ export function compactPixels(
     );
   }
   return output;
+}
+
+export function cameraViewportToCss(
+  viewport: XR8TextureViewport | undefined,
+  canvas: HTMLCanvasElement,
+): ViewportRect | null {
+  if (
+    !viewport
+    || !Number.isFinite(viewport.width)
+    || !Number.isFinite(viewport.height)
+    || !Number.isFinite(viewport.offsetX)
+    || !Number.isFinite(viewport.offsetY)
+    || viewport.width <= 0
+    || viewport.height <= 0
+    || canvas.width < 1
+    || canvas.height < 1
+    || canvas.clientWidth < 1
+    || canvas.clientHeight < 1
+  ) {
+    return null;
+  }
+  const scaleX = canvas.clientWidth / canvas.width;
+  const scaleY = canvas.clientHeight / canvas.height;
+  return {
+    x: viewport.offsetX * scaleX,
+    y: (canvas.height - viewport.offsetY - viewport.height) * scaleY,
+    width: viewport.width * scaleX,
+    height: viewport.height * scaleY,
+  };
 }
 
 export class EighthWallRuntime {
@@ -276,11 +308,24 @@ export class EighthWallRuntime {
           if (process.env.NODE_ENV !== "production") {
             canvas.dataset.cameraFrameSize = `${frame.cols}x${frame.rows}`;
           }
+          const displayViewport = cameraViewportToCss(
+            processGpuResult?.gltexturerenderer?.viewport,
+            canvas,
+          );
+          if (process.env.NODE_ENV !== "production" && displayViewport) {
+            canvas.dataset.cameraViewport = [
+              displayViewport.x,
+              displayViewport.y,
+              displayViewport.width,
+              displayViewport.height,
+            ].map((value) => value.toFixed(1)).join(",");
+          }
           callbacks.onFrame({
             source: this.frameCanvas,
             width: frame.cols,
             height: frame.rows,
             mirrored: false,
+            viewport: displayViewport,
             timestamp: now,
           });
         },
@@ -319,6 +364,7 @@ export class EighthWallRuntime {
         jewelryModule,
       ]);
       const camera = xr8.XrConfig.camera();
+      // XR8 only exposes FRONT/BACK; the engine and browser choose the physical lens.
       xr8.run({
         canvas,
         allowFront: true,

@@ -51,12 +51,20 @@ export type Pose = {
   fingerBendDegrees?: number;
 };
 
+export type ViewportRect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
 export type ViewportMapping = {
   sourceWidth: number;
   sourceHeight: number;
   width: number;
   height: number;
   mirrored: boolean;
+  viewport?: ViewportRect | null;
 };
 
 export type ProductCalibration = {

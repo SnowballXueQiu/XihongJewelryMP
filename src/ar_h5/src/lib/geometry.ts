@@ -67,7 +67,6 @@ const normalize3 = (point: Point3): Point3 => {
   return multiply3(point, 1 / length);
 };
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const distance3 = (a: Point3, b: Point3) => length3(subtract3(a, b));
 
 const median = (values: number[]) => {
@@ -85,10 +84,72 @@ const average3 = (...points: Point3[]): Point3 => ({
   z: points.reduce((sum, point) => sum + point.z, 0) / points.length,
 });
 
+function robustWorldPalmWidth(worldLandmarks: Landmark[]) {
+  const palmPoints = PALM_INDICES.map((index) => worldLandmarks[index]);
+  let bestFit: { indices: number[]; score: number } | null = null;
+
+  for (let from = 0; from < palmPoints.length - 1; from += 1) {
+    for (let to = from + 1; to < palmPoints.length; to += 1) {
+      const step = 1 / (to - from);
+      const slope = multiply3(subtract3(palmPoints[to], palmPoints[from]), step);
+      const origin = subtract3(palmPoints[from], multiply3(slope, from));
+      const residuals = palmPoints
+        .map((point, index) => ({
+          index,
+          residual: distance3(point, {
+            x: origin.x + slope.x * index,
+            y: origin.y + slope.y * index,
+            z: origin.z + slope.z * index,
+          }),
+        }))
+        .sort((a, b) => a.residual - b.residual);
+      const score = residuals.slice(0, 3).reduce((sum, item) => sum + item.residual, 0);
+      if (!bestFit || score < bestFit.score) {
+        bestFit = { indices: residuals.slice(0, 3).map((item) => item.index), score };
+      }
+    }
+  }
+
+  const inlierIndices = bestFit?.indices ?? [0, 1, 2, 3];
+  const meanIndex = inlierIndices.reduce((sum, index) => sum + index, 0)
+    / inlierIndices.length;
+  const meanPoint = average3(...inlierIndices.map((index) => palmPoints[index]));
+  const denominator = inlierIndices.reduce(
+    (sum, index) => sum + (index - meanIndex) ** 2,
+    0,
+  );
+  const fittedStep = inlierIndices.reduce((sum, index) => {
+    const weight = index - meanIndex;
+    const offset = subtract3(palmPoints[index], meanPoint);
+    return {
+      x: sum.x + offset.x * weight,
+      y: sum.y + offset.y * weight,
+      z: sum.z + offset.z * weight,
+    };
+  }, { x: 0, y: 0, z: 0 });
+  const fittedWidth = length3(multiply3(fittedStep, 3 / Math.max(denominator, 0.001)));
+  const palmLengths = PALM_INDICES
+    .map((index) => distance3(worldLandmarks[0], worldLandmarks[index]))
+    .sort((a, b) => a - b);
+  const referencePalmLength = palmLengths[Math.floor((palmLengths.length - 1) / 2)];
+  return clamp(
+    fittedWidth,
+    referencePalmLength * 0.5,
+    referencePalmLength * 1.4,
+  );
+}
+
 export function mapLandmarkToViewport(
   landmark: Landmark,
   mapping: ViewportMapping,
 ): Point2 {
+  if (mapping.viewport) {
+    return {
+      x: mapping.viewport.x
+        + (mapping.mirrored ? 1 - landmark.x : landmark.x) * mapping.viewport.width,
+      y: mapping.viewport.y + landmark.y * mapping.viewport.height,
+    };
+  }
   const scale = Math.max(
     mapping.width / mapping.sourceWidth,
     mapping.height / mapping.sourceHeight,
@@ -324,14 +385,15 @@ function correctedPalmWidth(
     (ratio) => Math.abs(ratio - centerRatio) <= allowedDeviation,
   );
   const pixelsPerMeter = median(stableRatios.length >= 3 ? stableRatios : ratios);
-  const worldPalmWidth = Math.hypot(
-    worldLandmarks[17].x - worldLandmarks[5].x,
-    worldLandmarks[17].y - worldLandmarks[5].y,
-    worldLandmarks[17].z - worldLandmarks[5].z,
-  );
-  const estimatedWidth = pixelsPerMeter * worldPalmWidth;
-  const correction = estimatedWidth / Math.max(observedWidth, 1);
-  return { width: estimatedWidth, correction };
+  const worldPalmWidth = robustWorldPalmWidth(worldLandmarks);
+  const rawCorrection = (pixelsPerMeter * worldPalmWidth) / Math.max(observedWidth, 1);
+  const observedPalmLength = distance(screenPoints[0], screenPoints[9]);
+  const screenAspect = observedWidth / Math.max(observedPalmLength, 1);
+  // Large depth compensation is plausible only when the 2D hand is visibly side-on.
+  const sideViewEvidence = clamp((0.72 - screenAspect) / 0.52, 0, 1);
+  const maximumCorrection = 1.25 + sideViewEvidence * 10.75;
+  const correction = clamp(rawCorrection, 0.88, maximumCorrection);
+  return { width: observedWidth * correction, correction };
 }
 
 export function calculateWristPose(
@@ -516,6 +578,7 @@ export class PoseSmoother {
   private readonly xFilter = new OneEuroScalar(1.35, 0.008);
   private readonly yFilter = new OneEuroScalar(1.35, 0.008);
   private readonly logScaleFilter = new OneEuroScalar(1.1, 0.65);
+  private scaleSamples: number[] = [];
   private pendingFacing: boolean | null = null;
   private pendingFacingFrames = 0;
 
@@ -525,13 +588,16 @@ export class PoseSmoother {
       this.xFilter.update(next.x, timestamp);
       this.yFilter.update(next.y, timestamp);
       this.logScaleFilter.update(Math.log(next.scale), timestamp);
+      this.scaleSamples = Array(3).fill(Math.log(next.scale));
       this.timestamp = timestamp;
       return this.pose;
     }
 
     const deltaSeconds = Math.max(0.001, (timestamp - this.timestamp) / 1000);
     const currentLogScale = Math.log(this.pose.scale);
-    const requestedLogScale = Math.log(next.scale);
+    this.scaleSamples.push(Math.log(next.scale));
+    if (this.scaleSamples.length > 5) this.scaleSamples.shift();
+    const requestedLogScale = median(this.scaleSamples);
     const maxLogScaleStep = deltaSeconds * 3.2;
     const targetLogScale = clamp(
       requestedLogScale,
@@ -598,6 +664,7 @@ export class PoseSmoother {
     this.xFilter.reset();
     this.yFilter.reset();
     this.logScaleFilter.reset();
+    this.scaleSamples = [];
     this.pendingFacing = null;
     this.pendingFacingFrames = 0;
   }

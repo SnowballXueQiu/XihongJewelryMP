@@ -10,6 +10,7 @@ import {
 import {
   applyArmBoundary,
   ArmBoundaryEstimator,
+  stabilizeArmBoundary,
   type ArmBoundary,
 } from "../lib/armBoundary";
 import {
@@ -27,6 +28,7 @@ import type {
   TrackingStatus,
   UserCalibration,
   ViewportMapping,
+  ViewportRect,
 } from "../types/ar";
 import type { XR8CameraDirection } from "../types/eighthWall";
 import { shouldRollbackFailedCameraSwitch } from "../lib/cameraSwitch";
@@ -57,6 +59,7 @@ type TrackingInput = {
   width: number;
   height: number;
   mirrored: boolean;
+  viewport: ViewportRect | null;
   timestamp: number;
   epoch: number;
 };
@@ -253,6 +256,7 @@ export const ARStage = forwardRef<ARStageHandle, Props>(function ARStage(
     sourceWidth: number,
     sourceHeight: number,
     mirrored: boolean,
+    viewport: ViewportRect | null,
     timestamp: number,
   ) => {
     frameCounterRef.current.count += 1;
@@ -265,6 +269,7 @@ export const ARStage = forwardRef<ARStageHandle, Props>(function ARStage(
       width: stage.clientWidth,
       height: stage.clientHeight,
       mirrored,
+      viewport,
     };
     const stableHandedness = handednessRef.current.update(frame.handedness, frame.score);
     const currentProduct = productRef.current;
@@ -302,6 +307,7 @@ export const ARStage = forwardRef<ARStageHandle, Props>(function ARStage(
           stage.clientWidth,
           stage.clientHeight,
           mirrored,
+          viewport,
         );
         if (analysis) {
           lastBoundaryInferenceRef.current = timestamp;
@@ -324,9 +330,20 @@ export const ARStage = forwardRef<ARStageHandle, Props>(function ARStage(
               skinMask,
             );
             recordBoundaryDiagnostics();
-            const confidenceFloor = boundary?.source === "color" ? 0.34 : 0.28;
-            if (boundary && boundary.confidence >= confidenceFloor) {
-              boundaryRef.current = { value: boundary, timestamp: performance.now() };
+            if (boundary) {
+              const now = performance.now();
+              const previousBoundary = boundaryRef.current
+                && now - boundaryRef.current.timestamp < 450
+                ? boundaryRef.current.value
+                : null;
+              const stableBoundary = stabilizeArmBoundary(
+                boundary,
+                candidatePose,
+                previousBoundary,
+              );
+              if (stableBoundary) {
+                boundaryRef.current = { value: stableBoundary, timestamp: now };
+              }
             }
           };
 
@@ -346,7 +363,7 @@ export const ARStage = forwardRef<ARStageHandle, Props>(function ARStage(
       }
     }
 
-    if (boundaryRef.current && (QA_IMAGE_MODE || timestamp - boundaryRef.current.timestamp < 300)) {
+    if (boundaryRef.current && (QA_IMAGE_MODE || timestamp - boundaryRef.current.timestamp < 450)) {
       pose = applyArmBoundary(
         pose,
         boundaryRef.current.value,
@@ -472,6 +489,7 @@ export const ARStage = forwardRef<ARStageHandle, Props>(function ARStage(
       input.width,
       input.height,
       input.mirrored,
+      input.viewport,
       timestamp,
     );
   }, [consumeFrame, isSessionCurrent]);
@@ -517,7 +535,7 @@ export const ARStage = forwardRef<ARStageHandle, Props>(function ARStage(
           throw error;
         }
       },
-      onFrame: ({ source, width, height, mirrored, timestamp }) => {
+      onFrame: ({ source, width, height, mirrored, viewport, timestamp }) => {
         if (!isSessionCurrent(epoch)) return;
         const tracker = trackerRef.current;
         if (tracker?.process(source, timestamp)) {
@@ -531,6 +549,7 @@ export const ARStage = forwardRef<ARStageHandle, Props>(function ARStage(
             width,
             height,
             mirrored,
+            viewport,
             timestamp,
             epoch,
           };
@@ -576,6 +595,7 @@ export const ARStage = forwardRef<ARStageHandle, Props>(function ARStage(
           width: image.naturalWidth,
           height: image.naturalHeight,
           mirrored: false,
+          viewport: null,
           timestamp,
           epoch,
         };
@@ -587,6 +607,7 @@ export const ARStage = forwardRef<ARStageHandle, Props>(function ARStage(
           image.naturalWidth,
           image.naturalHeight,
           false,
+          null,
           timestamp,
         );
       }
