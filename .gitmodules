@@ -1,0 +1,3 @@
+[submodule "src/ar_h5"]
+	path = src/ar_h5
+	url = https://github.com/SnowballXueQiu/ar-tryon.git

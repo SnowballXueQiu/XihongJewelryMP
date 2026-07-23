@@ -33,14 +33,10 @@ services:
   ar_h5:
     build:
       context: .
-      dockerfile: src/ar_h5/Dockerfile
+      dockerfile: deploy/ar_h5/Dockerfile
     restart: unless-stopped
-    environment:
-      NODE_ENV: production
-      PORT: "3001"
-      HOSTNAME: 0.0.0.0
     expose:
-      - "3001"
+      - "3020"
 
   nginx:
     image: nginx:1.27-alpine

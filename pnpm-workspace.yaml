@@ -2,7 +2,6 @@ packages:
   - src/miniprogram
   - src/backend
   - src/backstage
-  - src/ar_h5
 
 onlyBuiltDependencies:
   - '@parcel/watcher'
