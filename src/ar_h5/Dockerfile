@@ -2,7 +2,9 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-RUN corepack enable && npm config set registry https://registry.npmmirror.com
+RUN npm config set registry https://registry.npmmirror.com && \
+    COREPACK_NPM_REGISTRY=https://registry.npmmirror.com corepack enable && \
+    COREPACK_NPM_REGISTRY=https://registry.npmmirror.com corepack prepare pnpm@10.29.2 --activate
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY src/ar_h5/package.json ./src/ar_h5/package.json
