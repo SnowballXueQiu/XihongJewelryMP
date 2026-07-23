@@ -10,6 +10,7 @@ import {
 import {
   applyArmBoundary,
   ArmBoundaryEstimator,
+  followArmBoundary,
   stabilizeArmBoundary,
   type ArmBoundary,
 } from "../lib/armBoundary";
@@ -184,7 +185,12 @@ export const ARStage = forwardRef<ARStageHandle, Props>(function ARStage(
   const smootherRef = useRef(new PoseSmoother());
   const handednessRef = useRef(new HandednessStabilizer());
   const boundaryEstimatorRef = useRef(new ArmBoundaryEstimator());
-  const boundaryRef = useRef<{ value: ArmBoundary; timestamp: number } | null>(null);
+  const BOUNDARY_RETENTION_MS = 1200;
+  const boundaryRef = useRef<{
+    value: ArmBoundary;
+    timestamp: number;
+    reference: Pick<Pose, "x" | "y" | "scale">;
+  } | null>(null);
   const poseRef = useRef<Pose | null>(null);
   const qaFrameRef = useRef<HandFrame | null>(null);
   const qaDetectionCompleteRef = useRef(false);
@@ -332,9 +338,9 @@ export const ARStage = forwardRef<ARStageHandle, Props>(function ARStage(
             recordBoundaryDiagnostics();
             if (boundary) {
               const now = performance.now();
-              const previousBoundary = boundaryRef.current
-                && now - boundaryRef.current.timestamp < 450
-                ? boundaryRef.current.value
+              const prev = boundaryRef.current;
+              const previousBoundary = prev && now - prev.timestamp < BOUNDARY_RETENTION_MS
+                ? followArmBoundary(prev.value, prev.reference, candidatePose)
                 : null;
               const stableBoundary = stabilizeArmBoundary(
                 boundary,
@@ -342,7 +348,11 @@ export const ARStage = forwardRef<ARStageHandle, Props>(function ARStage(
                 previousBoundary,
               );
               if (stableBoundary) {
-                boundaryRef.current = { value: stableBoundary, timestamp: now };
+                boundaryRef.current = {
+                  value: stableBoundary,
+                  timestamp: now,
+                  reference: candidatePose,
+                };
               }
             }
           };
@@ -363,10 +373,19 @@ export const ARStage = forwardRef<ARStageHandle, Props>(function ARStage(
       }
     }
 
-    if (boundaryRef.current && (QA_IMAGE_MODE || timestamp - boundaryRef.current.timestamp < 450)) {
+    const storedBoundary = boundaryRef.current;
+    if (
+      storedBoundary
+      && (QA_IMAGE_MODE || timestamp - storedBoundary.timestamp < BOUNDARY_RETENTION_MS)
+    ) {
+      const projectedBoundary = followArmBoundary(
+        storedBoundary.value,
+        storedBoundary.reference,
+        { x: pose.x, y: pose.y, scale: pose.scale },
+      );
       pose = applyArmBoundary(
         pose,
-        boundaryRef.current.value,
+        projectedBoundary,
         1,
         currentProduct.calibration.modelPlaneSize,
       );

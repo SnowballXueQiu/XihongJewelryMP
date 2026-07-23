@@ -84,10 +84,11 @@ const average3 = (...points: Point3[]): Point3 => ({
   z: points.reduce((sum, point) => sum + point.z, 0) / points.length,
 });
 
-function robustWorldPalmWidth(worldLandmarks: Landmark[]) {
-  const palmPoints = PALM_INDICES.map((index) => worldLandmarks[index]);
+function robustPalmAcrossVector(points: Point3[]) {
+  const palmPoints = PALM_INDICES.map((index) => points[index]);
   let bestFit: { indices: number[]; score: number } | null = null;
 
+  // Fit the four MCP points while allowing one noisy depth point to be excluded.
   for (let from = 0; from < palmPoints.length - 1; from += 1) {
     for (let to = from + 1; to < palmPoints.length; to += 1) {
       const step = 1 / (to - from);
@@ -127,15 +128,19 @@ function robustWorldPalmWidth(worldLandmarks: Landmark[]) {
       z: sum.z + offset.z * weight,
     };
   }, { x: 0, y: 0, z: 0 });
-  const fittedWidth = length3(multiply3(fittedStep, 3 / Math.max(denominator, 0.001)));
+  return multiply3(fittedStep, 3 / Math.max(denominator, 0.001));
+}
+
+function robustWorldPalmWidth(worldLandmarks: Landmark[]) {
+  const fittedWidth = length3(robustPalmAcrossVector(worldLandmarks));
   const palmLengths = PALM_INDICES
     .map((index) => distance3(worldLandmarks[0], worldLandmarks[index]))
     .sort((a, b) => a - b);
   const referencePalmLength = palmLengths[Math.floor((palmLengths.length - 1) / 2)];
   return clamp(
     fittedWidth,
-    referencePalmLength * 0.5,
-    referencePalmLength * 1.4,
+    referencePalmLength * 0.68,
+    referencePalmLength * 1.22,
   );
 }
 
@@ -306,7 +311,7 @@ function createLimbOrientation(
 ): QuaternionTuple {
   const limbAxis = normalize3(subtract3(start, end));
   const handednessSign = handedness === "Left" ? -1 : 1;
-  const rawAcross = multiply3(subtract3(points[17], points[5]), handednessSign);
+  const rawAcross = multiply3(robustPalmAcrossVector(points), handednessSign);
   let acrossAxis = subtract3(rawAcross, multiply3(limbAxis, dot3(rawAcross, limbAxis)));
 
   if (length3(acrossAxis) < 0.0001) {
@@ -612,8 +617,13 @@ export class PoseSmoother {
       + this.pose.orientation[2] * next.orientation[2]
       + this.pose.orientation[3] * next.orientation[3],
     );
-    const angularSpeed = (2 * Math.acos(clamp(dot, -1, 1))) / deltaSeconds;
-    const rotationCutoff = clamp(1.5 + angularSpeed * 0.55, 1.5, 12);
+    const requestedAngle = 2 * Math.acos(clamp(dot, -1, 1));
+    const maximumAngle = deltaSeconds * 8;
+    const targetOrientation = requestedAngle > maximumAngle
+      ? slerpQuaternion(this.pose.orientation, next.orientation, maximumAngle / requestedAngle)
+      : next.orientation;
+    const angularSpeed = Math.min(8, requestedAngle / deltaSeconds);
+    const rotationCutoff = clamp(1.5 + angularSpeed * 0.45, 1.5, 7);
     const rotationAmount = 1 - Math.exp(-2 * Math.PI * rotationCutoff * deltaSeconds);
 
     let frontFacing = this.pose.frontFacing;
@@ -648,7 +658,7 @@ export class PoseSmoother {
       boundarySource: next.boundarySource,
       armAxis: next.armAxis,
       alignmentErrorDegrees: next.alignmentErrorDegrees,
-      orientation: slerpQuaternion(this.pose.orientation, next.orientation, rotationAmount),
+      orientation: slerpQuaternion(this.pose.orientation, targetOrientation, rotationAmount),
       frontFacing,
       facingConfidence: next.facingConfidence,
       confidence: lerp(this.pose.confidence, next.confidence, metadataAmount),

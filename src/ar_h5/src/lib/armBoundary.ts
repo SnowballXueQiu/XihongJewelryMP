@@ -46,6 +46,8 @@ export type ArmBoundary = {
 
 const ANALYSIS_LONG_EDGE = 480;
 const JEWELRY_CLEARANCE = 1.08;
+const MIN_BOUNDARY_SCALE_RATIO = 0.82;
+const MAX_BOUNDARY_SCALE_RATIO = 1.22;
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
 const lerp = (from: number, to: number, amount: number) => from + (to - from) * amount;
@@ -614,14 +616,20 @@ export function applyArmBoundary(
     0.34,
     planeProjectionOnArmNormal(orientation, boundary.perpendicular, modelPlaneSize),
   );
+  const measuredScale = targetSpan / (planeProjection * sizeMultiplier);
+  const scale = clamp(
+    measuredScale,
+    pose.scale * MIN_BOUNDARY_SCALE_RATIO,
+    pose.scale * MAX_BOUNDARY_SCALE_RATIO,
+  );
   return {
     ...pose,
     x: boundary.center.x,
     y: boundary.center.y,
-    scale: targetSpan / (planeProjection * sizeMultiplier),
+    scale,
     armWidth: boundary.width,
     boundaryConfidence: boundary.confidence,
-    targetSpan,
+    targetSpan: scale * planeProjection * sizeMultiplier,
     planeProjection,
     boundarySource: boundary.source,
     armAxis: [boundary.axis.x, boundary.axis.y],
@@ -691,6 +699,29 @@ export function stabilizeArmBoundary(
     perpendicular: { x: -axis.y, y: axis.x },
     confidence: lerp(previous.confidence, candidate.confidence, amount),
     source: candidate.source,
+  };
+}
+
+export function followArmBoundary(
+  boundary: ArmBoundary,
+  measuredPose: Pick<Pose, "x" | "y" | "scale">,
+  currentPose: Pick<Pose, "x" | "y" | "scale">,
+): ArmBoundary {
+  const scaleRatio = clamp(
+    currentPose.scale / Math.max(measuredPose.scale, 1),
+    MIN_BOUNDARY_SCALE_RATIO,
+    MAX_BOUNDARY_SCALE_RATIO,
+  );
+  const followPoint = (point: { x: number; y: number }): { x: number; y: number } => ({
+    x: currentPose.x + (point.x - measuredPose.x) * scaleRatio,
+    y: currentPose.y + (point.y - measuredPose.y) * scaleRatio,
+  });
+  return {
+    ...boundary,
+    center: followPoint(boundary.center),
+    width: boundary.width * scaleRatio,
+    negativeEdge: followPoint(boundary.negativeEdge),
+    positiveEdge: followPoint(boundary.positiveEdge),
   };
 }
 
