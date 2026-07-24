@@ -9,6 +9,7 @@ src/backstage/.next/
 src/backstage/out/
 src/ar_h5/.next/
 src/ar_h5/next-env.d.ts
+deploy/ar_h5/dist/
 
 # local env and secrets
 .env
