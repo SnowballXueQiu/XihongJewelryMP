@@ -7,13 +7,15 @@
     "postinstall": "pnpm install:backend",
     "install:backend": "cd src/backend && uv sync",
     "predev": "node scripts/kill-dev-ports.mjs",
-    "dev": "concurrently -n backend,miniprogram,backstage -c gray,yellow,white \"pnpm --dir src/backend dev\" \"pnpm --dir src/miniprogram dev:weapp\" \"pnpm --dir src/backstage dev\"",
+    "dev": "concurrently -n backend,miniprogram,backstage,ar-h5 -c gray,yellow,white,cyan \"pnpm --dir src/backend dev\" \"pnpm --dir src/miniprogram dev:weapp\" \"pnpm --dir src/backstage dev\" \"pnpm --dir src/ar_h5 dev\"",
     "dev:backend": "pnpm --dir src/backend dev",
     "dev:miniprogram": "pnpm --dir src/miniprogram dev:weapp",
     "dev:backstage": "pnpm --dir src/backstage dev",
-    "build": "pnpm --dir src/miniprogram build:weapp && pnpm --dir src/backstage build",
+    "dev:ar-h5": "pnpm --dir src/ar_h5 dev",
+    "build": "pnpm --dir src/miniprogram build:weapp && pnpm --dir src/backstage build && pnpm --dir src/ar_h5 build",
     "build:miniprogram": "pnpm --dir src/miniprogram build:weapp",
     "build:backstage": "pnpm --dir src/backstage build",
+    "build:ar-h5": "pnpm --dir src/ar_h5 build",
     "test:backend": "pnpm --dir src/backend test"
   },
   "devDependencies": {
