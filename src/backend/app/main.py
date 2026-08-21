@@ -90,6 +90,16 @@ app.mount("/uploads", StaticFiles(directory=settings.uploads_dir), name="uploads
 app.include_router(admin_router)
 
 
+@app.middleware("http")
+async def prevent_api_caching(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path == "/health" or request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "private, no-store, max-age=0, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
+
 def _aware(value: datetime) -> datetime:
     return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
 

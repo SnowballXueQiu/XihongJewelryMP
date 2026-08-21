@@ -7,6 +7,17 @@ from app.main import app
 client = TestClient(app)
 
 
+def test_api_responses_disable_shared_caching():
+    with client:
+        health = client.get("/health")
+        assert health.status_code == 200
+        assert health.headers["cache-control"] == "private, no-store, max-age=0, must-revalidate"
+
+        products = client.get("/api/products")
+        assert products.status_code == 200
+        assert products.headers["cache-control"] == "private, no-store, max-age=0, must-revalidate"
+
+
 def test_products_and_pet_flow():
     with client:
         products = client.get("/api/products").json()
