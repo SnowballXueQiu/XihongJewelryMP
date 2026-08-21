@@ -163,6 +163,13 @@ class Order(SQLModel, table=True):
     receiver_phone: str = ""
     receiver_address: str = ""
     buyer_note: str = ""
+    fulfillment_type: str = Field(default="delivery", index=True)
+    pickup_slot: str = ""
+    pickup_code: str = ""
+    invoice_type: str = "none"
+    invoice_title: str = ""
+    invoice_tax_number: str = ""
+    invoice_email: str = ""
     logistics_company: str = ""
     tracking_no: str = ""
     created_at: datetime = Field(default_factory=utc_now)

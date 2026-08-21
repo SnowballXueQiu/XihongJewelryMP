@@ -76,7 +76,7 @@ export default function ProfilePage() {
         </View>
 
         <View className='section-head'><Text>我的服务</Text><Text /></View>
-        <View className='service-menu'>{menu.map((item, index) => <Button key={item.label} hoverClass='menu-press' onClick={() => Taro.navigateTo({ url: item.url })}><Text className='menu-index'>0{index + 1}</Text><View><Text>{item.label}</Text><Text>{item.copy}</Text></View>{item.value && <Text className='menu-value'>{item.value}</Text>}<IconFont name='chevronRight' className='arrow' /></Button>)}</View>
+        <View className='service-menu'>{menu.map((item, index) => <Button key={item.label} hoverClass='menu-press' onClick={() => item.url === '/pages/cart/index' ? Taro.switchTab({ url: item.url }) : Taro.navigateTo({ url: item.url })}><Text className='menu-index'>0{index + 1}</Text><View><Text>{item.label}</Text><Text>{item.copy}</Text></View>{item.value && <Text className='menu-value'>{item.value}</Text>}<IconFont name='chevronRight' className='arrow' /></Button>)}</View>
         <View className='profile-assurance'><Text>终身保养 · 正品承诺 · 专属顾问</Text><Text>XIHONG JEWELRY</Text></View>
       </View>
     </View>

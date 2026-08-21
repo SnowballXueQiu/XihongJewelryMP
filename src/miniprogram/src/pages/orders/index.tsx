@@ -4,6 +4,7 @@ import { Button, ScrollView, Text, View } from '@tarojs/components'
 import { cancelOrder, completeOrder, fetchOrders, formatMoney, orderStatusLabel } from '@/services/api'
 import { performOrderPayment, presentPaymentError } from '@/services/payment'
 import { Order, OrderStatus } from '@/types/domain'
+import IconFont from '@/components/IconFont'
 import './index.scss'
 
 type OrderGroup = 'all' | 'pending_payment' | 'processing' | 'shipped' | 'completed'
@@ -52,7 +53,7 @@ export default function OrdersPage() {
       const result = await performOrderPayment(order.id)
       if (result !== 'cancelled') Taro.navigateTo({ url: `/pages/payment-result/index?orderId=${order.id}&result=${result}` })
     } catch (error) {
-      await presentPaymentError(error)
+      await presentPaymentError(error, order.id)
     } finally { setActing(0) }
   }
 
@@ -76,7 +77,7 @@ export default function OrdersPage() {
 
   return (
     <View className='orders-page'>
-      <View className='orders-head'><Text>ORDER ARCHIVE</Text><Text>我的订单</Text></View>
+      <View className='orders-head'><View><Text>ORDER ARCHIVE</Text><Text>我的订单</Text></View><IconFont name='order' /></View>
       <ScrollView scrollX className='order-tabs' showScrollbar={false}>
         <View className='tabs-inner'>{tabs.map((tab) => (
           <Button key={tab.key} className={active === tab.key ? 'tab active' : 'tab'} onClick={() => setActive(tab.key)}>{tab.label}</Button>
@@ -92,6 +93,7 @@ export default function OrdersPage() {
               {order.items.slice(0, 2).map((item) => <View className='order-product' key={`${item.product_id}-${item.product_name}`}><View className='product-monogram'>{item.product_name.slice(0, 1)}</View><View><Text>{item.product_name}</Text><Text>{formatMoney(item.unit_price_cents)} × {item.quantity}</Text></View></View>)}
               {order.items.length > 2 && <Text className='more-items'>另有 {order.items.length - 2} 件</Text>}
             </View>
+            {order.fulfillment_type === 'pickup' && <View className='pickup-summary'><IconFont name='location' /><View><Text>到店自提 · {order.pickup_slot}</Text>{order.pickup_code && <Text>提货口令 {order.pickup_code}</Text>}</View></View>}
             <View className='order-total'><Text>共 {order.items.reduce((sum, item) => sum + item.quantity, 0)} 件</Text><Text>实付</Text><Text>{formatMoney(order.total_cents)}</Text></View>
             {(order.can_pay || order.can_cancel || order.status === 'shipped') && <View className='order-actions' onClick={(event) => event.stopPropagation()}>
               {order.can_cancel && <Button disabled={acting === order.id} onClick={() => cancel(order)}>取消订单</Button>}
@@ -100,7 +102,7 @@ export default function OrdersPage() {
             </View>}
           </View>
         ))}
-        {!loading && !visibleOrders.length && <View className='orders-empty'><View className='empty-orbit' /><Text>这里还没有订单</Text><Text>去挑选一件值得长久珍藏的珠宝</Text><Button onClick={() => Taro.switchTab({ url: '/pages/products/index' })}>探索作品</Button></View>}
+        {!loading && !visibleOrders.length && <View className='orders-empty'><View className='empty-icon'><IconFont name='order' /></View><Text>这里还没有订单</Text><Text>去挑选一件值得长久珍藏的珠宝</Text><Button onClick={() => Taro.switchTab({ url: '/pages/products/index' })}>探索作品</Button></View>}
       </View>
     </View>
   )

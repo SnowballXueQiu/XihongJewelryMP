@@ -175,11 +175,47 @@ def _payment_params(intent: PaymentIntent, mock: bool) -> PaymentParams:
     )
 
 
+def current_pending_order_amounts(session: Session, order: Order) -> tuple[int, int]:
+    """Return the amount a still-unpaid order should use under current shipping rules."""
+    if order.status != OrderStatus.pending_payment:
+        return order.shipping_fee_cents, order.total_cents
+    if order.fulfillment_type == "pickup":
+        return 0, max(1, order.subtotal_cents - order.discount_cents)
+    items = session.exec(select(OrderItem).where(OrderItem.order_id == order.id)).all()
+    products = [session.get(Product, item.product_id) for item in items]
+    shipping_fee_cents, free_shipping_threshold_cents = get_commerce_rules(session)
+    all_items_free_shipping = bool(products) and all(product and product.free_shipping for product in products)
+    shipping = 0 if all_items_free_shipping or order.subtotal_cents >= free_shipping_threshold_cents else shipping_fee_cents
+    return shipping, max(1, order.subtotal_cents + shipping - order.discount_cents)
+
+
+def refresh_pending_order_pricing(session: Session, order: Order) -> None:
+    shipping, total = current_pending_order_amounts(session, order)
+    if shipping == order.shipping_fee_cents and total == order.total_cents:
+        return
+    pending_intents = session.exec(
+        select(PaymentIntent).where(PaymentIntent.order_id == order.id, PaymentIntent.status == PaymentStatus.pending)
+    ).all()
+    for intent in pending_intents:
+        if not settings.wx_pay_mock and intent.out_trade_no:
+            wechat_pay.close_order(intent.out_trade_no)
+        intent.status = PaymentStatus.closed
+        intent.updated_at = datetime.now(timezone.utc)
+        session.add(intent)
+    order.shipping_fee_cents = shipping
+    order.total_cents = total
+    order.updated_at = datetime.now(timezone.utc)
+    session.add(order)
+    session.commit()
+    session.refresh(order)
+
+
 def start_order_payment(order: Order, user: User, session: Session) -> PaymentParams:
     if order.user_id != user.id:
         raise ValueError("Order not found")
     if order.status != OrderStatus.pending_payment:
         raise ValueError("Order is not payable")
+    refresh_pending_order_pricing(session, order)
 
     existing = session.exec(
         select(PaymentIntent)
@@ -200,7 +236,10 @@ def start_order_payment(order: Order, user: User, session: Session) -> PaymentPa
         session.commit()
         return _payment_params(existing, False)
 
-    out_trade_no = order.order_no
+    prior_intent = session.exec(
+        select(PaymentIntent).where(PaymentIntent.order_id == order.id).order_by(col(PaymentIntent.created_at).desc())
+    ).first()
+    out_trade_no = order.order_no if not prior_intent else f"{order.order_no}{token_hex(2).upper()}"
     if settings.wx_pay_mock:
         nonce = token_hex(16)
         timestamp = str(int(time()))
@@ -261,9 +300,18 @@ def create_order_from_items(
     session: Session,
     user_id: int,
     item_quantities: list[tuple[int, int]],
-    address_id: int,
+    address_id: int | None,
     coupon_id: int | None,
     buyer_note: str,
+    fulfillment_type: str = "delivery",
+    pickup_slot: str = "",
+    invoice_type: str = "none",
+    invoice_title: str = "",
+    invoice_tax_number: str = "",
+    invoice_email: str = "",
+    pickup_store_name: str = "玺鸿珠宝天津店",
+    pickup_store_address: str = "天津市和平区南京路 219 号",
+    pickup_store_phone: str = "16622515550",
 ) -> Order:
     if not item_quantities:
         raise ValueError("Order items are required")
@@ -281,14 +329,24 @@ def create_order_from_items(
         if product.stock < quantity:
             raise ValueError(f"Product {product.name} stock is insufficient")
 
-    address = session.get(Address, address_id)
-    if not address or address.user_id != user_id:
-        raise ValueError("Shipping address not found")
+    if fulfillment_type not in {"delivery", "pickup"}:
+        raise ValueError("配送方式无效")
+    address = session.get(Address, address_id) if address_id else None
+    if fulfillment_type == "delivery" and (not address or address.user_id != user_id):
+        raise ValueError("请先选择收货地址")
+    if fulfillment_type == "pickup" and not pickup_slot.strip():
+        raise ValueError("请选择到店自提时间")
+    if invoice_type not in {"none", "personal", "company"}:
+        raise ValueError("发票类型无效")
+    if invoice_type == "company" and (not invoice_title.strip() or not invoice_tax_number.strip()):
+        raise ValueError("企业发票需要填写抬头和税号")
+    if invoice_type == "personal" and not invoice_title.strip():
+        invoice_title = "个人"
 
     subtotal = sum(products[product_id].price_cents * quantity for product_id, quantity in merged.items())
     shipping_fee_cents, free_shipping_threshold_cents = get_commerce_rules(session)
     all_items_free_shipping = all(products[product_id].free_shipping for product_id in merged)
-    shipping = 0 if all_items_free_shipping or subtotal >= free_shipping_threshold_cents else shipping_fee_cents
+    shipping = 0 if fulfillment_type == "pickup" or all_items_free_shipping or subtotal >= free_shipping_threshold_cents else shipping_fee_cents
     discount = 0
     user_coupon = None
     if coupon_id is not None:
@@ -309,7 +367,7 @@ def create_order_from_items(
             raise ValueError("Order does not meet the coupon threshold")
         discount = min(coupon.amount_cents, subtotal)
 
-    receiver_address = " ".join(filter(None, [address.province, address.city, address.district, address.detail]))
+    receiver_address = " ".join(filter(None, [address.province, address.city, address.district, address.detail])) if address else pickup_store_address
     order = Order(
         user_id=user_id,
         subtotal_cents=subtotal,
@@ -317,14 +375,23 @@ def create_order_from_items(
         discount_cents=discount,
         total_cents=max(1, subtotal + shipping - discount),
         coupon_id=coupon_id,
-        receiver_name=address.receiver_name,
-        receiver_phone=address.phone,
+        receiver_name=address.receiver_name if address else pickup_store_name,
+        receiver_phone=address.phone if address else pickup_store_phone,
         receiver_address=receiver_address,
         buyer_note=buyer_note,
+        fulfillment_type=fulfillment_type,
+        pickup_slot=pickup_slot.strip() if fulfillment_type == "pickup" else "",
+        invoice_type=invoice_type,
+        invoice_title=invoice_title.strip() if invoice_type != "none" else "",
+        invoice_tax_number=invoice_tax_number.strip() if invoice_type == "company" else "",
+        invoice_email=invoice_email.strip() if invoice_type != "none" else "",
     )
     session.add(order)
     session.flush()
     order.order_no = f"XH{datetime.now().strftime('%y%m%d')}{order.id:08d}"
+    if fulfillment_type == "pickup":
+        pickup_phrases = ("桂花金珠", "月光珍珠", "山茶红玉", "星砂流光", "鸢尾方糖", "晨露钻石")
+        order.pickup_code = f"{100 + (order.id or 0) % 900}. {pickup_phrases[(order.id or 0) % len(pickup_phrases)]}"
     for product_id, quantity in merged.items():
         product = products[product_id]
         result = session.exec(
@@ -386,7 +453,7 @@ def update_order_status(session: Session, order_id: int, status: OrderStatus) ->
     }
     if status not in allowed.get(order.status, {order.status}):
         raise ValueError(f"订单状态不能从 {order.status.value} 直接变更为 {status.value}")
-    if status == OrderStatus.shipped and (not order.logistics_company or not order.tracking_no):
+    if status == OrderStatus.shipped and order.fulfillment_type != "pickup" and (not order.logistics_company or not order.tracking_no):
         raise ValueError("发货前必须填写物流公司和运单号")
     now = datetime.now(timezone.utc)
     if status == OrderStatus.cancelled and order.status == OrderStatus.pending_payment:

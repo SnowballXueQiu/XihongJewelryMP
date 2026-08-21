@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -10,6 +11,9 @@ class StoreConfigRead(BaseModel):
     company_name_en: str
     shipping_fee_cents: int
     free_shipping_threshold_cents: int
+    pickup_store_name: str
+    pickup_store_address: str
+    pickup_store_phone: str
 
 
 class ProductRead(BaseModel):
@@ -98,6 +102,12 @@ class CreateOrderRequest(BaseModel):
     address_id: int | None = None
     coupon_id: int | None = None
     buyer_note: str = Field(default="", max_length=200)
+    fulfillment_type: Literal["delivery", "pickup"] = "delivery"
+    pickup_slot: str = Field(default="", max_length=80)
+    invoice_type: Literal["none", "personal", "company"] = "none"
+    invoice_title: str = Field(default="", max_length=100)
+    invoice_tax_number: str = Field(default="", max_length=40)
+    invoice_email: str = Field(default="", max_length=100)
 
 
 class OrderStatusUpdate(BaseModel):
@@ -140,6 +150,13 @@ class OrderRead(BaseModel):
     receiver_phone: str = ""
     receiver_address: str = ""
     buyer_note: str = ""
+    fulfillment_type: str = "delivery"
+    pickup_slot: str = ""
+    pickup_code: str = ""
+    invoice_type: str = "none"
+    invoice_title: str = ""
+    invoice_tax_number: str = ""
+    invoice_email: str = ""
     logistics_company: str = ""
     tracking_no: str = ""
     can_pay: bool = False

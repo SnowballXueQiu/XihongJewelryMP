@@ -85,6 +85,13 @@ export interface Order {
   receiver_phone: string
   receiver_address: string
   buyer_note: string
+  fulfillment_type: 'delivery' | 'pickup'
+  pickup_slot: string
+  pickup_code: string
+  invoice_type: 'none' | 'personal' | 'company'
+  invoice_title: string
+  invoice_tax_number: string
+  invoice_email: string
   logistics_company: string
   tracking_no: string
   can_pay: boolean
@@ -176,4 +183,7 @@ export interface StoreConfig {
   company_name_en: string
   shipping_fee_cents: number
   free_shipping_threshold_cents: number
+  pickup_store_name: string
+  pickup_store_address: string
+  pickup_store_phone: string
 }

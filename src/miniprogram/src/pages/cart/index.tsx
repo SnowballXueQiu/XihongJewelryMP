@@ -13,7 +13,7 @@ export default function CartPage() {
   const [selectedIds, setSelectedIds] = useState<number[]>([])
   const [loadingId, setLoadingId] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
-  const [storeConfig, setStoreConfig] = useState<StoreConfig>({ company_name_zh: '', company_name_en: '', shipping_fee_cents: 1500, free_shipping_threshold_cents: 100000 })
+  const [storeConfig, setStoreConfig] = useState<StoreConfig>({ company_name_zh: '', company_name_en: '', shipping_fee_cents: 1500, free_shipping_threshold_cents: 100000, pickup_store_name: '', pickup_store_address: '', pickup_store_phone: '' })
   const selectedItems = useMemo(() => items.filter((item) => selectedIds.includes(item.id)), [items, selectedIds])
   const total = useMemo(() => selectedItems.reduce((sum, item) => sum + item.subtotal_cents, 0), [selectedItems])
   const pieceCount = useMemo(() => selectedItems.reduce((sum, item) => sum + item.quantity, 0), [selectedItems])

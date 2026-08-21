@@ -162,7 +162,7 @@ export async function fetchStoreConfig(): Promise<StoreConfig> {
   try {
     return await request<StoreConfig>('/api/store/config', {}, false)
   } catch {
-    return { company_name_zh: '天津玺鸿珠宝贸易有限公司', company_name_en: 'Xihong Jewelry', shipping_fee_cents: 1500, free_shipping_threshold_cents: 100000 }
+    return { company_name_zh: '天津玺鸿珠宝贸易有限公司', company_name_en: 'Xihong Jewelry', shipping_fee_cents: 1500, free_shipping_threshold_cents: 100000, pickup_store_name: '玺鸿珠宝天津店', pickup_store_address: '天津市和平区南京路 219 号', pickup_store_phone: '16622515550' }
   }
 }
 
@@ -185,9 +185,15 @@ export const claimCoupon = (couponId: number) => request<Coupon>(`/api/coupons/$
 
 export const createOrder = (payload: {
   items: Array<{ product_id: number; quantity: number }>
-  address_id: number
+  address_id?: number | null
   coupon_id?: number | null
   buyer_note?: string
+  fulfillment_type?: 'delivery' | 'pickup'
+  pickup_slot?: string
+  invoice_type?: 'none' | 'personal' | 'company'
+  invoice_title?: string
+  invoice_tax_number?: string
+  invoice_email?: string
 }) => request<Order>('/api/orders', { method: 'POST', data: payload })
 
 export const startOrderPayment = (orderId: number) => request<PaymentParams>(`/api/orders/${orderId}/pay`, { method: 'POST' })

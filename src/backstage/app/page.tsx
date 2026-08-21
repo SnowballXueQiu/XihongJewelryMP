@@ -72,6 +72,13 @@ type Order = {
   receiver_phone: string
   receiver_address: string
   buyer_note: string
+  fulfillment_type: 'delivery' | 'pickup'
+  pickup_slot: string
+  pickup_code: string
+  invoice_type: 'none' | 'personal' | 'company'
+  invoice_title: string
+  invoice_tax_number: string
+  invoice_email: string
   logistics_company: string
   tracking_no: string
   created_at?: string | null
@@ -663,8 +670,8 @@ export default function BackstagePage() {
               const draft = logisticsDraft[order.id] || { company: order.logistics_company || '', tracking: order.tracking_no || '' }
               return <article className="admin-order" key={order.id}>
                 <header><div><strong>{order.order_no}</strong><small>{order.created_at ? new Date(order.created_at).toLocaleString('zh-CN') : ''}</small></div><span className={`status-pill ${order.status}`}>{orderStatusText[order.status]}</span><b>{money(order.total_cents)}</b></header>
-                <div className="order-summary"><div><span>收货人</span><strong>{order.receiver_name} · {order.receiver_phone}</strong><small>{order.receiver_address}</small></div><div><span>商品</span><strong>{order.items.reduce((sum, item) => sum + item.quantity, 0)} 件作品</strong><small>{order.items.map((item) => `${item.product_name} ×${item.quantity}`).join('、')}</small></div><div><span>优惠 / 配送</span><strong>-{money(order.discount_cents)} / {money(order.shipping_fee_cents)}</strong><small>{order.buyer_note ? `备注：${order.buyer_note}` : '无买家备注'}</small></div></div>
-                <div className="fulfillment"><input value={draft.company} onChange={(event) => setLogisticsDraft((current) => ({ ...current, [order.id]: { ...draft, company: event.target.value } }))} placeholder="物流公司（发货时必填）" /><input value={draft.tracking} onChange={(event) => setLogisticsDraft((current) => ({ ...current, [order.id]: { ...draft, tracking: event.target.value } }))} placeholder="运单号（发货时必填）" /><select value={order.status} onChange={(event) => updateOrderStatus(order, event.target.value as Order['status']).catch((error) => setMessage(error.message))}>{orderTransitions[order.status].map((value) => <option value={value} key={value}>{orderStatusText[value]}</option>)}</select>{(['paid', 'preparing', 'shipped', 'completed'] as Order['status'][]).includes(order.status) && <button className="refund-button" onClick={() => requestRefund(order).catch((error) => setMessage(error.message))}>原路退款</button>}</div>
+                <div className="order-summary"><div><span>{order.fulfillment_type === 'pickup' ? '到店自提' : '收货人'}</span><strong>{order.receiver_name} · {order.receiver_phone}</strong><small>{order.fulfillment_type === 'pickup' ? `${order.pickup_slot} · 口令 ${order.pickup_code}` : order.receiver_address}</small></div><div><span>商品</span><strong>{order.items.reduce((sum, item) => sum + item.quantity, 0)} 件作品</strong><small>{order.items.map((item) => `${item.product_name} ×${item.quantity}`).join('、')}</small></div><div><span>发票 / 优惠</span><strong>{order.invoice_type === 'none' ? '不开发票' : `${order.invoice_type === 'company' ? '企业' : '个人'} · ${order.invoice_title}`}</strong><small>{order.invoice_tax_number ? `税号 ${order.invoice_tax_number}` : order.buyer_note ? `备注：${order.buyer_note}` : `优惠 -${money(order.discount_cents)}`}</small></div></div>
+                <div className="fulfillment">{order.fulfillment_type === 'delivery' && <><input value={draft.company} onChange={(event) => setLogisticsDraft((current) => ({ ...current, [order.id]: { ...draft, company: event.target.value } }))} placeholder="物流公司（发货时必填）" /><input value={draft.tracking} onChange={(event) => setLogisticsDraft((current) => ({ ...current, [order.id]: { ...draft, tracking: event.target.value } }))} placeholder="运单号（发货时必填）" /></>}<select value={order.status} onChange={(event) => updateOrderStatus(order, event.target.value as Order['status']).catch((error) => setMessage(error.message))}>{orderTransitions[order.status].map((value) => <option value={value} key={value}>{orderStatusText[value]}</option>)}</select>{(['paid', 'preparing', 'shipped', 'completed'] as Order['status'][]).includes(order.status) && <button className="refund-button" onClick={() => requestRefund(order).catch((error) => setMessage(error.message))}>原路退款</button>}</div>
               </article>
             })}{!visibleOrders.length && <Empty text="没有符合条件的订单" />}</div>
             {filteredOrders.length > 8 && <div className="pagination"><button disabled={orderPage <= 1} onClick={() => setOrderPage((page) => Math.max(1, page - 1))}>上一页</button><span>{orderPage} / {orderPageCount}</span><button disabled={orderPage >= orderPageCount} onClick={() => setOrderPage((page) => Math.min(orderPageCount, page + 1))}>下一页</button></div>}

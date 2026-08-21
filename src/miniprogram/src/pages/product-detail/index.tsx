@@ -14,7 +14,7 @@ export default function ProductDetailPage() {
   const [quantity, setQuantity] = useState(1)
   const [favorite, setFavorite] = useState(false)
   const [adding, setAdding] = useState(false)
-  const [storeConfig, setStoreConfig] = useState<StoreConfig>({ company_name_zh: '', company_name_en: '', shipping_fee_cents: 1500, free_shipping_threshold_cents: 100000 })
+  const [storeConfig, setStoreConfig] = useState<StoreConfig>({ company_name_zh: '', company_name_en: '', shipping_fee_cents: 1500, free_shipping_threshold_cents: 100000, pickup_store_name: '', pickup_store_address: '', pickup_store_phone: '' })
   const pageAnimation = usePageEntranceAnimation()
 
   useEffect(() => {
@@ -120,7 +120,7 @@ export default function ProductDetailPage() {
       </View>
 
       <View className='detail-actions'>
-        <Button className='bag-shortcut' hoverClass='button-press' onClick={() => Taro.navigateTo({ url: '/pages/cart/index' })}>购物袋</Button>
+        <Button className='bag-shortcut' hoverClass='button-press' onClick={() => Taro.switchTab({ url: '/pages/cart/index' })}>购物袋</Button>
         <Button className='add-action' loading={adding} disabled={product.stock <= 0} hoverClass='button-press' onClick={handleAddCart}>加入购物袋</Button>
         <Button className='buy-action' disabled={product.stock <= 0} hoverClass='button-press' onClick={buyNow}>{product.stock > 0 ? '立即购买' : '暂时售罄'}</Button>
       </View>

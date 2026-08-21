@@ -1,4 +1,4 @@
-.detail-page { padding: 0 0 170px; background: #f7f1e9; }
+.detail-page { padding: 0 0 calc(236px + env(safe-area-inset-bottom)); background: #f7f1e9; }
 .detail-visual-wrap { position: relative; }
 .detail-visual-wrap .jewelry-visual { min-height: 760px; }
 .detail-favorite { position: absolute; top: 28px; right: 28px; z-index: 3; display: flex; width: 74px; height: 74px; align-items: center; justify-content: center; border: 1px solid rgba(255,255,255,.74); border-radius: 50%; background: rgba(255,253,249,.72); color: #542328; font-size: 36px; backdrop-filter: blur(12px); }
@@ -28,11 +28,11 @@
 .quantity-stepper { display: grid; width: 220px; height: 66px; align-items: center; border: 1px solid #cdbdb2; grid-template-columns: 1fr 1fr 1fr; text-align: center; }
 .quantity-stepper button, .quantity-stepper text { display: flex; height: 64px; align-items: center; justify-content: center; color: #4c3935; font-family: sans-serif; font-size: 24px; }
 .quantity-stepper button:disabled { opacity: .32; }
-.detail-note { margin: 0 32px; padding: 28px; background: #e9ded4; }
+.detail-note { margin: 0 32px 54px; padding: 28px; border-radius: 14px; background: #e9ded4; }
 .detail-note text:first-child { display: block; color: #856f66; font-family: sans-serif; font-size: 14px; letter-spacing: 4px; }
 .detail-note text:last-child { display: block; margin-top: 14px; color: #6f5b55; font-family: "PingFang SC", sans-serif; font-size: 18px; line-height: 1.7; }
 .detail-actions { position: fixed; right: 0; bottom: 0; left: 0; z-index: 20; display: grid; gap: 10px; padding: 12px 18px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid #d0c2b7; background: rgba(250,246,240,.96); grid-template-columns: 128px 1fr 1fr; backdrop-filter: blur(16px); }
-.detail-actions button { display: flex; height: 82px; align-items: center; justify-content: center; border-radius: 12px; font-family: "PingFang SC", sans-serif; font-size: 21px; }
+.detail-actions button { display: flex !important; height: 82px; align-items: center !important; justify-content: center !important; border-radius: 12px; font-family: "PingFang SC", sans-serif; font-size: 21px; line-height: 1.2 !important; }
 .bag-shortcut { color: #604943; font-size: 18px !important; }
 .bag-shortcut { border: 1px solid #d0c2b7; }
 .add-action { background: #eee3d9; color: #4c302d; }

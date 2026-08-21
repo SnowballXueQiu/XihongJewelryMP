@@ -31,6 +31,7 @@ export default defineAppConfig({
     list: [
       { pagePath: 'pages/home/index', text: '首页', iconPath: 'assets/tabbar/home.png', selectedIconPath: 'assets/tabbar/home-active.png' },
       { pagePath: 'pages/products/index', text: '商品', iconPath: 'assets/tabbar/products.png', selectedIconPath: 'assets/tabbar/products-active.png' },
+      { pagePath: 'pages/cart/index', text: '购物袋', iconPath: 'assets/tabbar/cart.png', selectedIconPath: 'assets/tabbar/cart-active.png' },
       { pagePath: 'pages/profile/index', text: '个人', iconPath: 'assets/tabbar/profile.png', selectedIconPath: 'assets/tabbar/profile-active.png' }
     ]
   },

@@ -59,6 +59,7 @@ from app.services import (
     cancel_order,
     clear_cart_for_user,
     create_order_from_items,
+    current_pending_order_amounts,
     get_mock_user,
     get_commerce_rules,
     mark_order_paid,
@@ -118,6 +119,9 @@ def store_config(session: Session = Depends(get_session)) -> StoreConfigRead:
         company_name_en=settings.company_name_en,
         shipping_fee_cents=shipping_fee_cents,
         free_shipping_threshold_cents=free_shipping_threshold_cents,
+        pickup_store_name=values.get("pickup_store_name") or "玺鸿珠宝天津店",
+        pickup_store_address=values.get("pickup_store_address") or "天津市和平区南京路 219 号",
+        pickup_store_phone=values.get("pickup_store_phone") or "16622515550",
     )
 
 
@@ -441,6 +445,7 @@ def claim_coupon(
 
 def serialize_order(order: Order, session: Session, include_payment: bool = False) -> OrderRead:
     items = session.exec(select(OrderItem).where(OrderItem.order_id == order.id)).all()
+    display_shipping, display_total = current_pending_order_amounts(session, order)
     payment = None
     if include_payment:
         intent = session.exec(
@@ -461,15 +466,22 @@ def serialize_order(order: Order, session: Session, include_payment: bool = Fals
         id=order.id or 0,
         order_no=order.order_no or f"XH{order.id or 0:010d}",
         status=order.status,
-        total_cents=order.total_cents,
+        total_cents=display_total,
         subtotal_cents=order.subtotal_cents or order.total_cents,
-        shipping_fee_cents=order.shipping_fee_cents,
+        shipping_fee_cents=display_shipping,
         discount_cents=order.discount_cents,
         coupon_id=order.coupon_id,
         receiver_name=order.receiver_name,
         receiver_phone=order.receiver_phone,
         receiver_address=order.receiver_address,
         buyer_note=order.buyer_note,
+        fulfillment_type=order.fulfillment_type,
+        pickup_slot=order.pickup_slot,
+        pickup_code=order.pickup_code,
+        invoice_type=order.invoice_type,
+        invoice_title=order.invoice_title,
+        invoice_tax_number=order.invoice_tax_number,
+        invoice_email=order.invoice_email,
         logistics_company=order.logistics_company,
         tracking_no=order.tracking_no,
         created_at=order.created_at,
@@ -498,21 +510,31 @@ def create_order(
     session: Session = Depends(get_session),
 ) -> OrderRead:
     address_id = payload.address_id
-    if address_id is None:
+    if payload.fulfillment_type == "delivery" and address_id is None:
         default_address = session.exec(
             select(Address).where(Address.user_id == user.id).order_by(col(Address.is_default).desc(), col(Address.updated_at).desc())
         ).first()
         if not default_address:
             raise HTTPException(status_code=400, detail="请先添加收货地址")
         address_id = default_address.id
+    config_values = {row.key: row.value for row in session.exec(select(SiteSetting)).all()}
     try:
         order = create_order_from_items(
             session,
             user.id or 0,
             [(item.product_id, item.quantity) for item in payload.items],
-            address_id or 0,
+            address_id,
             payload.coupon_id,
             payload.buyer_note,
+            payload.fulfillment_type,
+            payload.pickup_slot,
+            payload.invoice_type,
+            payload.invoice_title,
+            payload.invoice_tax_number,
+            payload.invoice_email,
+            config_values.get("pickup_store_name") or "玺鸿珠宝天津店",
+            config_values.get("pickup_store_address") or "天津市和平区南京路 219 号",
+            config_values.get("pickup_store_phone") or "16622515550",
         )
     except ValueError as error:
         session.rollback()

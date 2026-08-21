@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 from datetime import datetime, timedelta, timezone
+import re
 
 from app.main import app
 
@@ -79,6 +80,43 @@ def test_addresses_favorites_and_coupons():
 
         coupons = client.get("/api/coupons").json()
         assert coupons and coupons[0]["amount_cents"] > 0
+
+
+def test_pickup_and_invoice_order_flow():
+    with client:
+        product = client.get("/api/products").json()[0]
+        pickup = client.post(
+            "/api/orders",
+            json={
+                "items": [{"product_id": product["id"], "quantity": 1}],
+                "fulfillment_type": "pickup",
+                "pickup_slot": "8月23日 周日 14:00–16:00",
+                "invoice_type": "company",
+                "invoice_title": "天津玺鸿珠宝贸易有限公司",
+                "invoice_tax_number": "91120101TEST123456",
+                "invoice_email": "invoice@example.com",
+            },
+        )
+        assert pickup.status_code == 200
+        order = pickup.json()
+        assert order["fulfillment_type"] == "pickup"
+        assert order["shipping_fee_cents"] == 0
+        assert order["pickup_slot"] == "8月23日 周日 14:00–16:00"
+        assert re.match(r"^\d{3}\. .+", order["pickup_code"])
+        assert order["invoice_type"] == "company"
+        assert order["invoice_tax_number"] == "91120101TEST123456"
+
+        missing_company_tax = client.post(
+            "/api/orders",
+            json={
+                "items": [{"product_id": product["id"], "quantity": 1}],
+                "fulfillment_type": "pickup",
+                "pickup_slot": "8月23日 周日 17:00–19:00",
+                "invoice_type": "company",
+                "invoice_title": "缺少税号的公司",
+            },
+        )
+        assert missing_company_tax.status_code == 400
 
 
 def test_admin_product_and_banner_flow():

@@ -89,7 +89,7 @@ export default function ProductsPage() {
     <View className='page products-page' animation={pageAnimation}>
       <View className='catalog-head'>
         <View><Text className='catalog-eyebrow'>THE COLLECTION</Text><Text className='catalog-title'>臻选珠宝</Text></View>
-        <Button className='catalog-bag' hoverClass='round-press' ariaLabel='购物袋' onClick={() => Taro.navigateTo({ url: '/pages/cart/index' })}><IconFont name='cart' /></Button>
+        <Button className='catalog-bag' hoverClass='round-press' ariaLabel='购物袋' onClick={() => Taro.switchTab({ url: '/pages/cart/index' })}><IconFont name='cart' /></Button>
       </View>
 
       <View className='search-shell'>

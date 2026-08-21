@@ -3,6 +3,7 @@ import Taro, { useDidShow, usePullDownRefresh } from '@tarojs/taro'
 import { Button, Text, View } from '@tarojs/components'
 import { claimCoupon, fetchCoupons, formatMoney } from '@/services/api'
 import { Coupon } from '@/types/domain'
+import IconFont from '@/components/IconFont'
 import './index.scss'
 
 export default function CouponsPage() {
@@ -31,7 +32,7 @@ export default function CouponsPage() {
   }
 
   return <View className='coupons-page'>
-    <View className='coupon-head'><Text>PRIVATE BENEFITS</Text><Text>会员礼券</Text><Text>每一份礼遇，都为重要时刻而来。</Text></View>
+    <View className='coupon-head'><View><Text>PRIVATE BENEFITS</Text><Text>会员礼券</Text><Text>每一份礼遇，都为重要时刻而来。</Text></View><IconFont name='gift' /></View>
     <View className='coupon-tabs'><Button className={tab === 'available' ? 'active' : ''} onClick={() => setTab('available')}>可使用</Button><Button className={tab === 'used' ? 'active' : ''} onClick={() => setTab('used')}>已失效</Button></View>
     <View className='coupon-list'>
       {loading && [0, 1].map((item) => <View className='coupon-skeleton' key={item} />)}
@@ -41,7 +42,7 @@ export default function CouponsPage() {
         <View className='coupon-edge' />
         {tab === 'available' && <Button disabled={coupon.claimed || claiming === coupon.id} loading={claiming === coupon.id} onClick={() => claim(coupon)}>{coupon.claimed ? '已领取' : '领取'}</Button>}
       </View>)}
-      {!loading && !visible.length && <View className='coupon-empty'><Text>暂无{tab === 'available' ? '可用' : '失效'}礼券</Text><Text>关注会员活动，新礼遇会在这里出现</Text></View>}
+      {!loading && !visible.length && <View className='coupon-empty'><View><IconFont name='gift' /></View><Text>暂无{tab === 'available' ? '可用' : '失效'}礼券</Text><Text>关注会员活动，新礼遇会在这里出现</Text></View>}
     </View>
     <View className='coupon-rules'><Text>使用说明</Text><Text>礼券须在有效期内使用，每笔订单仅限使用一张；取消未支付订单后礼券会自动退回。具体适用范围以结算页为准。</Text></View>
   </View>
