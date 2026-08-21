@@ -3,6 +3,7 @@ import Taro, { useDidShow, useRouter } from '@tarojs/taro'
 import { Button, Text, View } from '@tarojs/components'
 import { fetchAddresses } from '@/services/api'
 import { Address } from '@/types/domain'
+import IconFont from '@/components/IconFont'
 import './index.scss'
 
 export default function AddressesPage() {
@@ -41,7 +42,7 @@ export default function AddressesPage() {
       ) : (
         <View className='address-empty'><Text>还没有收货地址</Text><Text>添加常用地址，结算会更快一些。</Text></View>
       )}
-      <Button className='add-address' hoverClass='button-press' onClick={() => Taro.navigateTo({ url: '/pages/address-edit/index' })}>＋ 新增收货地址</Button>
+      <Button className='add-address' hoverClass='button-press' onClick={() => Taro.navigateTo({ url: '/pages/address-edit/index' })}><IconFont name='plus' />新增收货地址</Button>
     </View>
   )
 }

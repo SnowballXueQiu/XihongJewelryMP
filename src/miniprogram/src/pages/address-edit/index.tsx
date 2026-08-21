@@ -3,6 +3,7 @@ import Taro, { useRouter } from '@tarojs/taro'
 import { Button, Input, Picker, Switch, Text, View } from '@tarojs/components'
 import { createAddress, deleteAddress, fetchAddresses, updateAddress } from '@/services/api'
 import { AddressPayload } from '@/types/domain'
+import IconFont from '@/components/IconFont'
 import './index.scss'
 
 const emptyAddress: AddressPayload = {
@@ -72,7 +73,7 @@ export default function AddressEditPage() {
           const [province, city, district] = event.detail.value as string[]
           setForm((current) => ({ ...current, province, city, district }))
         }}>
-          <View className='form-field region-field'><Text>所在地区</Text><Text>{form.province ? `${form.province} ${form.city} ${form.district}` : '请选择省 / 市 / 区 〉'}</Text></View>
+          <View className='form-field region-field'><Text>所在地区</Text><View className='region-value'><Text>{form.province ? `${form.province} ${form.city} ${form.district}` : '请选择省 / 市 / 区'}</Text><IconFont name='chevronRight' /></View></View>
         </Picker>
         <View className='form-field detail-field'><Text>详细地址</Text><Input value={form.detail} maxlength={100} placeholder='街道、楼牌号等' onInput={(event) => setField('detail', String(event.detail.value))} /></View>
         <View className='form-field'><Text>邮政编码</Text><Input type='number' value={form.postal_code} maxlength={12} placeholder='选填' onInput={(event) => setField('postal_code', String(event.detail.value))} /></View>

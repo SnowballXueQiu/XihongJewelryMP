@@ -2,8 +2,9 @@ import { useState } from 'react'
 import Taro, { useDidShow, useRouter } from '@tarojs/taro'
 import { Button, Text, View } from '@tarojs/components'
 import { cancelOrder, completeOrder, fetchOrder, formatMoney, orderStatusLabel } from '@/services/api'
-import { performOrderPayment } from '@/services/payment'
+import { performOrderPayment, presentPaymentError } from '@/services/payment'
 import { Order } from '@/types/domain'
+import IconFont from '@/components/IconFont'
 import './index.scss'
 
 const statusCopy: Record<string, string> = {
@@ -29,7 +30,7 @@ export default function OrderDetailPage() {
     try {
       const result = await performOrderPayment(order.id)
       if (result !== 'cancelled') Taro.redirectTo({ url: `/pages/payment-result/index?orderId=${order.id}&result=${result}` })
-    } catch (error) { Taro.showToast({ title: error instanceof Error ? error.message : '支付发起失败', icon: 'none' }) }
+    } catch (error) { await presentPaymentError(error) }
     finally { setActing(false) }
   }
 
@@ -58,7 +59,7 @@ export default function OrderDetailPage() {
     <View className='order-detail-page'>
       <View className={`status-hero hero-${order.status}`}><Text>ORDER STATUS</Text><Text>{orderStatusLabel[order.status]}</Text><Text>{statusCopy[order.status]}</Text><View className='status-ring' /></View>
       {order.logistics_company && <View className='detail-block logistics' onClick={() => order.tracking_no && Taro.setClipboardData({ data: order.tracking_no })}>
-        <View className='block-title'><Text>物流进度</Text><Text>复制单号 〉</Text></View><Text>{order.logistics_company}</Text><Text>{order.tracking_no}</Text>
+        <View className='block-title'><Text>物流进度</Text><View className='copy-action'><Text>复制单号</Text><IconFont name='chevronRight' /></View></View><Text>{order.logistics_company}</Text><Text>{order.tracking_no}</Text>
       </View>}
       <View className='detail-block address'><View className='block-title'><Text>收货信息</Text><Text>DELIVERY</Text></View><Text>{order.receiver_name} · {order.receiver_phone}</Text><Text>{order.receiver_address}</Text></View>
       <View className='detail-block'><View className='block-title'><Text>作品清单</Text><Text>{order.items.length} 款</Text></View>

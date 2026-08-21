@@ -2,17 +2,17 @@
 .catalog-head { display: flex; align-items: flex-end; justify-content: space-between; padding: 8px 8px 36px; }
 .catalog-eyebrow, .sheet-kicker { display: block; color: #8c786d; font-family: sans-serif; font-size: 15px; letter-spacing: 4px; }
 .catalog-title { display: block; margin-top: 10px; color: #291d1a; font-size: 58px; letter-spacing: 3px; }
-.catalog-bag { display: flex; width: 74px; height: 74px; align-items: center; justify-content: center; border: 1px solid #6c5752; border-radius: 50%; color: #543a36; font-size: 24px; }
+.catalog-bag { display: flex; width: 74px; height: 74px; align-items: center; justify-content: center; border: 1px solid #6c5752; border-radius: 50%; color: #543a36; font-size: 31px; }
 .search-shell { display: flex; height: 88px; align-items: center; border-top: 1px solid #cfc1b7; border-bottom: 1px solid #cfc1b7; }
 .search-icon { width: 60px; color: #6c4a47; font-size: 36px; text-align: center; }
 .search-input { height: 88px; flex: 1; color: #2b201d; font-family: "PingFang SC", sans-serif; font-size: 22px; }
-.search-clear { width: 62px; color: #89736b; font-size: 32px; }
+.search-clear { display: flex; width: 62px; height: 62px; align-items: center; justify-content: center; border-radius: 50%; color: #89736b; font-size: 27px; }
 .category-scroll { width: 100%; margin-top: 22px; white-space: nowrap; }
-.category-track { display: inline-flex; gap: 12px; padding: 0 2px 12px; }
+.category-track { display: inline-flex; gap: 12px; margin: 0 2px 12px; }
 .category-chip { display: inline-flex; min-width: 104px; height: 62px; align-items: center; justify-content: center; padding: 0 24px; border: 1px solid #cabcb2; border-radius: 32px; color: #725d56; font-family: "PingFang SC", sans-serif; font-size: 19px; }
 .category-chip.active { border-color: #572b2e; background: #572b2e; color: #fff8ed; }
 .catalog-toolbar { display: grid; align-items: center; margin: 22px 2px 26px; grid-template-columns: 1fr auto 1fr; }
-.sort-trigger, .filter-trigger { color: #4c3834; font-family: "PingFang SC", sans-serif; font-size: 19px; }
+.sort-trigger, .filter-trigger { display: flex; align-items: center; gap: 7px; color: #4c3834; font-family: "PingFang SC", sans-serif; font-size: 19px; }
 .result-count { color: #9a877e; font-family: "PingFang SC", sans-serif; font-size: 17px; text-align: center; }
 .filter-trigger { justify-self: end; }
 .filter-trigger.has-filter { color: #812f38; font-weight: 600; }
@@ -22,13 +22,14 @@
 .empty-ring { width: 130px; height: 130px; border: 5px solid #b69563; border-radius: 50%; box-shadow: 18px 14px 0 rgba(122,38,48,.14); }
 .empty-title { margin-top: 40px; color: #382522; font-size: 34px; }
 .empty-copy { margin-top: 18px; color: #88736b; font-family: "PingFang SC", sans-serif; font-size: 20px; line-height: 1.7; }
-.empty-action { display: flex; width: 230px; height: 70px; align-items: center; justify-content: center; margin-top: 32px; border: 1px solid #55302e; color: #55302e; font-size: 20px; }
+.empty-action { display: flex; width: 230px; height: 70px; align-items: center; justify-content: center; margin-top: 32px; border: 1px solid #55302e; border-radius: 12px; color: #55302e; font-size: 20px; }
 .filter-layer { position: fixed; z-index: 30; inset: 0; }
 .filter-backdrop { position: absolute; inset: 0; background: rgba(30,20,18,.42); animation: fade-in 180ms ease-out; }
-.filter-sheet { position: absolute; right: 0; bottom: 0; left: 0; padding: 34px 30px calc(26px + env(safe-area-inset-bottom)); background: #fbf6ef; animation: sheet-up 260ms cubic-bezier(.2,.8,.2,1); }
+.filter-sheet { position: absolute; right: 0; bottom: 0; left: 0; padding: 34px 30px calc(26px + env(safe-area-inset-bottom)); border-radius: 28px 28px 0 0; background: #fbf6ef; animation: sheet-up 260ms cubic-bezier(.2,.8,.2,1); }
 .sheet-head { display: flex; align-items: flex-start; justify-content: space-between; padding-bottom: 32px; border-bottom: 1px solid #d8cbc0; }
 .sheet-title { display: block; margin-top: 10px; color: #2d201d; font-size: 44px; }
-.sheet-close { color: #5e4943; font-size: 44px; }
+.sheet-close { display: flex; width: 64px; height: 64px; align-items: center; justify-content: center; border-radius: 50%; background: #f0e6dc; color: #5e4943; font-size: 29px; }
+.row-value { display: flex; align-items: center; gap: 8px; }
 .filter-row { display: flex; min-height: 104px; align-items: center; justify-content: space-between; border-bottom: 1px solid #dfd3c9; color: #493633; font-family: "PingFang SC", sans-serif; font-size: 21px; }
 .filter-block { padding: 28px 0; border-bottom: 1px solid #dfd3c9; }
 .filter-label, .filter-main { display: block; color: #493633; font-family: "PingFang SC", sans-serif; font-size: 21px; }
@@ -38,7 +39,7 @@
 .price-field input { flex: 1; font-size: 20px; }
 .price-divider { color: #9d8980; }
 .sheet-actions { display: grid; gap: 14px; margin-top: 30px; grid-template-columns: .8fr 1.2fr; }
-.reset-action, .apply-action { display: flex; height: 82px; align-items: center; justify-content: center; font-family: "PingFang SC", sans-serif; font-size: 21px; }
+.reset-action, .apply-action { display: flex; height: 82px; align-items: center; justify-content: center; border-radius: 12px; font-family: "PingFang SC", sans-serif; font-size: 21px; }
 .reset-action { border: 1px solid #8c756a; color: #634c47; }
 .apply-action { background: #572b2e; color: #fff9ee; }
 @keyframes catalog-shimmer { to { background-position: -200% 0; } }

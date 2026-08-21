@@ -1,6 +1,7 @@
 import Taro from '@tarojs/taro'
 import { Button, Text, View } from '@tarojs/components'
 import JewelryVisual from '@/components/JewelryVisual'
+import IconFont from '@/components/IconFont'
 import { formatMoney } from '@/services/api'
 import { Product } from '@/types/domain'
 import './index.scss'
@@ -26,7 +27,7 @@ export default function ProductCard({ product, index = 0, onFavorite, favorite =
             onFavorite(product)
           }}
         >
-          {favorite ? '♥' : '♡'}
+          <IconFont name={favorite ? 'heartFilled' : 'heart'} />
         </Button>
       )}
       <View className='catalog-copy'>

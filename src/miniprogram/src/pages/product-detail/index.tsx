@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Taro, { useRouter, useShareAppMessage } from '@tarojs/taro'
 import { Button, Text, View } from '@tarojs/components'
 import JewelryVisual from '@/components/JewelryVisual'
+import IconFont from '@/components/IconFont'
 import { addToCart, fetchFavorites, fetchProduct, fetchStoreConfig, formatMoney, toggleFavorite } from '@/services/api'
 import { usePageEntranceAnimation } from '@/hooks/useSubtleAnimation'
 import { Product, StoreConfig } from '@/types/domain'
@@ -72,7 +73,7 @@ export default function ProductDetailPage() {
     <View className='page detail-page' animation={pageAnimation}>
       <View className='detail-visual-wrap'>
         <JewelryVisual product={product} showLabel />
-        <Button className={`detail-favorite ${favorite ? 'active' : ''}`} hoverClass='favorite-press' onClick={favoriteProduct}>{favorite ? '♥' : '♡'}</Button>
+        <Button className={`detail-favorite ${favorite ? 'active' : ''}`} hoverClass='favorite-press' onClick={favoriteProduct}><IconFont name={favorite ? 'heartFilled' : 'heart'} /></Button>
         <Text className='visual-count'>01 / {Math.max(1, (product.gallery_urls?.length || 0) + 1)}</Text>
       </View>
 
@@ -100,16 +101,16 @@ export default function ProductDetailPage() {
       <View className='detail-specs'>
         <View className='spec-row'><Text>材质</Text><Text>{product.material}</Text></View>
         <View className='spec-row'><Text>库存</Text><Text>{product.stock > 5 ? '现货，可即刻发出' : product.stock > 0 ? `仅余 ${product.stock} 件` : '暂时售罄'}</Text></View>
-        <View className='spec-row'><Text>配送</Text><Text>顺丰保价 · 满 {formatMoney(storeConfig.free_shipping_threshold_cents)} 包邮</Text></View>
+        <View className='spec-row'><Text>配送</Text><Text>{product.free_shipping ? '顺丰保价 · 此商品包邮' : `顺丰保价 · 满 ${formatMoney(storeConfig.free_shipping_threshold_cents)} 包邮`}</Text></View>
         <View className='spec-row'><Text>售后</Text><Text>七日无理由 · 终身保养</Text></View>
       </View>
 
       <View className='quantity-section'>
         <View><Text className='quantity-title'>购买数量</Text><Text className='quantity-hint'>每件作品均附独立首饰盒</Text></View>
         <View className='quantity-stepper'>
-          <Button disabled={quantity <= 1} onClick={() => setQuantity((value) => Math.max(1, value - 1))}>−</Button>
+          <Button disabled={quantity <= 1} onClick={() => setQuantity((value) => Math.max(1, value - 1))}><IconFont name='minus' /></Button>
           <Text>{quantity}</Text>
-          <Button disabled={quantity >= product.stock} onClick={() => setQuantity((value) => Math.min(product.stock, value + 1))}>＋</Button>
+          <Button disabled={quantity >= product.stock} onClick={() => setQuantity((value) => Math.min(product.stock, value + 1))}><IconFont name='plus' /></Button>
         </View>
       </View>
 

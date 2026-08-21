@@ -24,6 +24,7 @@ class ProductRead(BaseModel):
     stock: int
     sales: int = 0
     is_featured: bool = False
+    free_shipping: bool = False
     tags: list[str] = Field(default_factory=list)
     image_color: str
     supports_ar: bool
@@ -49,6 +50,7 @@ class ProductWrite(BaseModel):
     stock: int = Field(ge=0)
     sales: int = Field(default=0, ge=0)
     is_featured: bool = False
+    free_shipping: bool = False
     tags: list[str] = Field(default_factory=list)
     image_color: str = "#D8B46A"
     supports_ar: bool = False

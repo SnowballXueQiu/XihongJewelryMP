@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Taro, { usePullDownRefresh } from '@tarojs/taro'
 import { Button, Text, View } from '@tarojs/components'
 import ProductCard from '@/components/ProductCard'
+import IconFont from '@/components/IconFont'
 import { fetchBanners, fetchProducts } from '@/services/api'
 import { usePageEntranceAnimation } from '@/hooks/useSubtleAnimation'
 import { Banner, Product } from '@/types/domain'
@@ -55,7 +56,7 @@ export default function HomePage() {
           <Text className='masthead-name'>玺鸿珠宝</Text>
         </View>
         <Button className='masthead-cart' hoverClass='round-press' onClick={() => Taro.navigateTo({ url: '/pages/cart/index' })}>
-          购物袋
+          <IconFont name='cart' />购物袋
         </Button>
       </View>
 
@@ -66,7 +67,7 @@ export default function HomePage() {
           <Text className='hero-title'>{hero?.title || '珠宝，成为日常的标点'}</Text>
           <Text className='hero-subtitle'>{hero?.subtitle || '克制的线条、温润的材质，以及只属于你的光。'}</Text>
           <Button className='hero-action' hoverClass='hero-action-press' onClick={() => Taro.switchTab({ url: '/pages/products/index' })}>
-            浏览本季精选 <Text className='hero-arrow'>↗</Text>
+            浏览本季精选 <IconFont name='chevronRight' className='hero-arrow' />
           </Button>
         </View>
         <View className='hero-object'>
@@ -104,7 +105,7 @@ export default function HomePage() {
               <Text className='category-name'>{item.name}</Text>
               <Text className='category-en'>{item.en}</Text>
             </View>
-            <Text className='category-arrow'>→</Text>
+            <IconFont name='chevronRight' className='category-arrow' />
           </Button>
         ))}
       </View>
@@ -133,7 +134,7 @@ export default function HomePage() {
             <Text className='arrival-kicker'>NEW ARRIVAL</Text>
             <Text className='arrival-title'>{newest.name}</Text>
             <Text className='arrival-subtitle'>{newest.description}</Text>
-            <Text className='arrival-link'>阅读珠宝故事 →</Text>
+            <View className='arrival-link'><Text>阅读珠宝故事</Text><IconFont name='chevronRight' /></View>
           </View>
           <View className='arrival-medallion' style={{ backgroundColor: newest.image_color }}>
             <View className='medallion-ring' />

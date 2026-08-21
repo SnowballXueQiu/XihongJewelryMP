@@ -87,6 +87,7 @@ def serialize_product(product: Product) -> ProductRead:
         stock=product.stock,
         sales=product.sales,
         is_featured=product.is_featured,
+        free_shipping=product.free_shipping,
         tags=tags if isinstance(tags, list) else [],
         image_color=product.image_color,
         supports_ar=product.supports_ar,
@@ -286,7 +287,8 @@ def create_order_from_items(
 
     subtotal = sum(products[product_id].price_cents * quantity for product_id, quantity in merged.items())
     shipping_fee_cents, free_shipping_threshold_cents = get_commerce_rules(session)
-    shipping = 0 if subtotal >= free_shipping_threshold_cents else shipping_fee_cents
+    all_items_free_shipping = all(products[product_id].free_shipping for product_id in merged)
+    shipping = 0 if all_items_free_shipping or subtotal >= free_shipping_threshold_cents else shipping_fee_cents
     discount = 0
     user_coupon = None
     if coupon_id is not None:

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import Taro, { useDidShow } from '@tarojs/taro'
 import { Button, Checkbox, Text, View } from '@tarojs/components'
 import JewelryVisual from '@/components/JewelryVisual'
+import IconFont from '@/components/IconFont'
 import { clearCart, deleteCartItem, fetchCart, fetchStoreConfig, formatMoney, updateCartItem } from '@/services/api'
 import { usePageEntranceAnimation } from '@/hooks/useSubtleAnimation'
 import { CartItem, StoreConfig } from '@/types/domain'
@@ -16,6 +17,7 @@ export default function CartPage() {
   const selectedItems = useMemo(() => items.filter((item) => selectedIds.includes(item.id)), [items, selectedIds])
   const total = useMemo(() => selectedItems.reduce((sum, item) => sum + item.subtotal_cents, 0), [selectedItems])
   const pieceCount = useMemo(() => selectedItems.reduce((sum, item) => sum + item.quantity, 0), [selectedItems])
+  const selectedFreeShipping = selectedItems.length > 0 && selectedItems.every((item) => item.product.free_shipping)
   const allSelected = items.length > 0 && selectedIds.length === items.length
   const pageAnimation = usePageEntranceAnimation()
 
@@ -101,8 +103,8 @@ export default function CartPage() {
 
       {!loading && items.length > 0 && (
         <View className='shipping-card'>
-          <Text>{total >= storeConfig.free_shipping_threshold_cents ? '已享顺丰保价包邮' : `再选 ${formatMoney(storeConfig.free_shipping_threshold_cents - total)} 即享包邮`}</Text>
-          <View className='shipping-track'><View className='shipping-progress' style={{ width: `${Math.min(100, total / Math.max(1, storeConfig.free_shipping_threshold_cents) * 100)}%` }} /></View>
+          <Text>{selectedFreeShipping || total >= storeConfig.free_shipping_threshold_cents ? '已享顺丰保价包邮' : `再选 ${formatMoney(storeConfig.free_shipping_threshold_cents - total)} 即享包邮`}</Text>
+          <View className='shipping-track'><View className='shipping-progress' style={{ width: `${selectedFreeShipping ? 100 : Math.min(100, total / Math.max(1, storeConfig.free_shipping_threshold_cents) * 100)}%` }} /></View>
         </View>
       )}
 
@@ -110,7 +112,7 @@ export default function CartPage() {
         <View className='cart-loading'><View /><View /></View>
       ) : items.length === 0 ? (
         <View className='cart-empty'>
-          <View className='empty-bag'><View className='empty-handle' /></View>
+          <View className='empty-bag'><IconFont name='cart' /></View>
           <Text className='empty-title'>购物袋还是空的</Text>
           <Text className='empty-copy'>慢慢挑选。值得珍藏的作品，也值得一次从容的相遇。</Text>
           <Button className='empty-action' hoverClass='button-press' onClick={() => Taro.switchTab({ url: '/pages/products/index' })}>探索珠宝</Button>
@@ -130,9 +132,9 @@ export default function CartPage() {
                 <Text className='cart-price'>{formatMoney(item.product.price_cents)}</Text>
                 <View className='item-actions'>
                   <View className='quantity-row'>
-                    <Button disabled={loadingId === item.id || item.quantity <= 1} onClick={() => changeQuantity(item, item.quantity - 1)}>−</Button>
+                    <Button disabled={loadingId === item.id || item.quantity <= 1} onClick={() => changeQuantity(item, item.quantity - 1)}><IconFont name='minus' /></Button>
                     <Text>{item.quantity}</Text>
-                    <Button disabled={loadingId === item.id || item.quantity >= item.product.stock} onClick={() => changeQuantity(item, item.quantity + 1)}>＋</Button>
+                    <Button disabled={loadingId === item.id || item.quantity >= item.product.stock} onClick={() => changeQuantity(item, item.quantity + 1)}><IconFont name='plus' /></Button>
                   </View>
                   <Button className='remove-btn' disabled={loadingId === item.id} onClick={() => removeItem(item.id)}>移出</Button>
                 </View>

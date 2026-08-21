@@ -31,10 +31,11 @@
 .detail-note { margin: 0 32px; padding: 28px; background: #e9ded4; }
 .detail-note text:first-child { display: block; color: #856f66; font-family: sans-serif; font-size: 14px; letter-spacing: 4px; }
 .detail-note text:last-child { display: block; margin-top: 14px; color: #6f5b55; font-family: "PingFang SC", sans-serif; font-size: 18px; line-height: 1.7; }
-.detail-actions { position: fixed; right: 0; bottom: 0; left: 0; z-index: 20; display: grid; gap: 0; padding-bottom: env(safe-area-inset-bottom); border-top: 1px solid #d0c2b7; background: rgba(250,246,240,.96); grid-template-columns: 128px 1fr 1fr; backdrop-filter: blur(16px); }
-.detail-actions button { display: flex; height: 96px; align-items: center; justify-content: center; font-family: "PingFang SC", sans-serif; font-size: 21px; }
+.detail-actions { position: fixed; right: 0; bottom: 0; left: 0; z-index: 20; display: grid; gap: 10px; padding: 12px 18px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid #d0c2b7; background: rgba(250,246,240,.96); grid-template-columns: 128px 1fr 1fr; backdrop-filter: blur(16px); }
+.detail-actions button { display: flex; height: 82px; align-items: center; justify-content: center; border-radius: 12px; font-family: "PingFang SC", sans-serif; font-size: 21px; }
 .bag-shortcut { color: #604943; font-size: 18px !important; }
-.add-action { border-left: 1px solid #d0c2b7; background: #eee3d9; color: #4c302d; }
+.bag-shortcut { border: 1px solid #d0c2b7; }
+.add-action { background: #eee3d9; color: #4c302d; }
 .buy-action { background: #57272c; color: #fff9ef; }
 .detail-actions button:disabled { opacity: .48; }
 .detail-loading { padding: 24px; }

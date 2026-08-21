@@ -32,6 +32,7 @@ type Product = {
   stock: number
   sales: number
   is_featured: boolean
+  free_shipping: boolean
   tags: string[]
   image_color: string
   supports_ar: boolean
@@ -205,6 +206,7 @@ const emptyProduct: Omit<Product, 'id'> = {
   stock: 0,
   sales: 0,
   is_featured: false,
+  free_shipping: false,
   tags: [],
   image_color: '#B89A63',
   supports_ar: false,
@@ -604,6 +606,7 @@ export default function BackstagePage() {
               <label>状态<select value={productForm.status} onChange={(e) => setProductForm({ ...productForm, status: e.target.value as Product['status'] })}><option value="draft">草稿</option><option value="active">上架</option><option value="inactive">下架</option></select></label>
               <label>封面 URL<input value={productForm.cover_url} onChange={(e) => setProductForm({ ...productForm, cover_url: e.target.value })} /></label>
               <label className="check"><input type="checkbox" checked={productForm.is_featured} onChange={(e) => setProductForm({ ...productForm, is_featured: e.target.checked })} /> 首页重点陈列</label>
+              <label className="check"><input type="checkbox" checked={productForm.free_shipping} onChange={(e) => setProductForm({ ...productForm, free_shipping: e.target.checked })} /> 此商品单独结算免运费</label>
               <label>详情<textarea value={productForm.description} onChange={(e) => setProductForm({ ...productForm, description: e.target.value })} /></label>
               <button className="primary" type="submit">保存商品</button>
             </form>
@@ -612,7 +615,7 @@ export default function BackstagePage() {
               {products.map((item) => (
                 <div className="row" key={item.id}>
                   <span className="swatch" style={{ background: item.image_color }} />
-                  <div><strong>{item.name}</strong><small>{item.category_slug} · {item.material} · 库存 {item.stock} · 已售 {item.sales}</small></div>
+                  <div><strong>{item.name}</strong><small>{item.category_slug} · {item.material} · 库存 {item.stock} · 已售 {item.sales}{item.free_shipping ? ' · 单品包邮' : ''}</small></div>
                   <b>{money(item.price_cents)}</b>
                   <button onClick={() => { setProductForm({ ...item }); setEditingProductId(item.id) }}>编辑</button>
                   <button onClick={() => removeProduct(item.id)}>删除</button>

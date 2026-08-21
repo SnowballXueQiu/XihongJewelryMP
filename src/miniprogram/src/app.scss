@@ -1,3 +1,5 @@
+@use "./styles/iconfont";
+
 page {
   min-height: 100%;
   background: #fbfaf7;
@@ -20,7 +22,8 @@ button {
   background: transparent;
   color: inherit;
   font: inherit;
-  line-height: 1;
+  line-height: 1.2;
+  text-align: center;
 }
 
 button::after {
@@ -50,11 +53,12 @@ button::after {
   justify-content: center;
   min-height: 78px;
   padding: 0 34px;
-  border-radius: 0;
+  border-radius: 12px;
   font-family: "PingFang SC", "Helvetica Neue", Arial, sans-serif;
   font-size: 24px;
   font-weight: 500;
   letter-spacing: 0;
+  line-height: 1.2;
 }
 
 .primary-btn {
@@ -73,6 +77,10 @@ button::after {
   border: 1px solid #d8d2c6;
   background: transparent;
   color: #111111;
+}
+
+button[disabled] {
+  opacity: 0.5;
 }
 
 .card {

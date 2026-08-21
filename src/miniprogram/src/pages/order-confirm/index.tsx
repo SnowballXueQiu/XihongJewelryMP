@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import Taro, { useDidShow, useRouter } from '@tarojs/taro'
 import { Button, Input, Picker, Text, View } from '@tarojs/components'
 import JewelryVisual from '@/components/JewelryVisual'
+import IconFont from '@/components/IconFont'
 import {
   createOrder,
   fetchAddresses,
@@ -10,7 +11,7 @@ import {
   fetchStoreConfig,
   formatMoney
 } from '@/services/api'
-import { performOrderPayment } from '@/services/payment'
+import { performOrderPayment, presentPaymentError } from '@/services/payment'
 import { usePageEntranceAnimation } from '@/hooks/useSubtleAnimation'
 import { Address, Coupon, Product, StoreConfig } from '@/types/domain'
 import './index.scss'
@@ -58,7 +59,8 @@ export default function OrderConfirmPage() {
 
   const address = addresses.find((item) => item.id === addressId)
   const subtotal = lines.reduce((sum, item) => sum + (item.product?.price_cents || 0) * item.quantity, 0)
-  const shipping = subtotal >= storeConfig.free_shipping_threshold_cents ? 0 : storeConfig.shipping_fee_cents
+  const allItemsFreeShipping = lines.length > 0 && lines.every((item) => item.product?.free_shipping)
+  const shipping = allItemsFreeShipping || subtotal >= storeConfig.free_shipping_threshold_cents ? 0 : storeConfig.shipping_fee_cents
   const eligibleCoupons = useMemo(() => [null, ...coupons.filter((item) => subtotal >= item.minimum_cents)] as Array<Coupon | null>, [coupons, subtotal])
   const selectedCoupon = eligibleCoupons[couponIndex] || null
   const discount = selectedCoupon ? Math.min(selectedCoupon.amount_cents, subtotal) : 0
@@ -72,6 +74,7 @@ export default function OrderConfirmPage() {
       return
     }
     setSubmitting(true)
+    let createdOrderId = 0
     try {
       const order = await createOrder({
         items: lines.map((item) => ({ product_id: item.product_id, quantity: item.quantity })),
@@ -79,11 +82,13 @@ export default function OrderConfirmPage() {
         coupon_id: selectedCoupon?.id || null,
         buyer_note: buyerNote.trim()
       })
+      createdOrderId = order.id
       const result = await performOrderPayment(order.id)
       if (result === 'cancelled') Taro.redirectTo({ url: `/pages/order-detail/index?id=${order.id}` })
       else Taro.redirectTo({ url: `/pages/payment-result/index?orderId=${order.id}&result=${result}` })
     } catch (error) {
-      Taro.showToast({ title: error instanceof Error ? error.message : '订单提交失败', icon: 'none', duration: 2600 })
+      if (createdOrderId) await presentPaymentError(error, createdOrderId)
+      else Taro.showToast({ title: error instanceof Error ? error.message : '订单提交失败', icon: 'none', duration: 2600 })
     } finally {
       setSubmitting(false)
     }
@@ -94,14 +99,14 @@ export default function OrderConfirmPage() {
       <View className='checkout-head'><Text className='checkout-kicker'>CHECKOUT</Text><Text className='checkout-title'>确认订单</Text></View>
 
       <Button className='address-card' hoverClass='card-press' onClick={() => Taro.navigateTo({ url: '/pages/addresses/index?select=1' })}>
-        <View className='block-heading'><Text>01</Text><Text>配送地址</Text><Text>更换 〉</Text></View>
+        <View className='block-heading'><Text>01</Text><Text>配送地址</Text><View className='heading-action'><Text>更换</Text><IconFont name='chevronRight' /></View></View>
         {address ? (
           <View className='address-content'>
             <Text className='address-person'>{address.receiver_name} · {address.phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')}</Text>
             <Text className='address-line'>{address.province} {address.city} {address.district} {address.detail}</Text>
             {address.is_default && <Text className='default-badge'>默认地址</Text>}
           </View>
-        ) : <Text className='address-empty'>＋ 添加收货地址</Text>}
+        ) : <View className='address-empty'><IconFont name='plus' /><Text>添加收货地址</Text></View>}
       </Button>
 
       <View className='checkout-block'>
@@ -113,6 +118,7 @@ export default function OrderConfirmPage() {
               <Text className='line-material'>{item.product.material}</Text>
               <Text className='line-name'>{item.product.name}</Text>
               <Text className='line-sub'>{item.product.subtitle}</Text>
+              {item.product.free_shipping && <Text className='line-shipping'>此商品包邮</Text>}
               <View className='line-price'><Text>{formatMoney(item.product.price_cents)}</Text><Text>× {item.quantity}</Text></View>
             </View>
           </View>
@@ -122,7 +128,7 @@ export default function OrderConfirmPage() {
       <View className='checkout-block options-block'>
         <View className='block-heading'><Text>03</Text><Text>优惠与备注</Text><Text /></View>
         <Picker mode='selector' range={couponLabels} value={couponIndex} onChange={(event) => setCouponIndex(Number(event.detail.value))}>
-          <View className='option-row'><Text>优惠券</Text><Text className={selectedCoupon ? 'accent' : ''}>{couponLabels[couponIndex] || '暂无可用'} 〉</Text></View>
+          <View className='option-row'><Text>优惠券</Text><View className={selectedCoupon ? 'option-value accent' : 'option-value'}><Text>{couponLabels[couponIndex] || '暂无可用'}</Text><IconFont name='chevronRight' /></View></View>
         </Picker>
         <View className='note-row'><Text>订单备注</Text><Input value={buyerNote} maxlength={200} placeholder='选填，给店员留言' onInput={(event) => setBuyerNote(String(event.detail.value))} /></View>
       </View>

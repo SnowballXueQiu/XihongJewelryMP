@@ -29,9 +29,9 @@ export default defineAppConfig({
     backgroundColor: '#FFFDF8',
     borderStyle: 'black',
     list: [
-      { pagePath: 'pages/home/index', text: '首页' },
-      { pagePath: 'pages/products/index', text: '商品' },
-      { pagePath: 'pages/profile/index', text: '个人' }
+      { pagePath: 'pages/home/index', text: '首页', iconPath: 'assets/tabbar/home.png', selectedIconPath: 'assets/tabbar/home-active.png' },
+      { pagePath: 'pages/products/index', text: '商品', iconPath: 'assets/tabbar/products.png', selectedIconPath: 'assets/tabbar/products-active.png' },
+      { pagePath: 'pages/profile/index', text: '个人', iconPath: 'assets/tabbar/profile.png', selectedIconPath: 'assets/tabbar/profile-active.png' }
     ]
   },
   lazyCodeLoading: 'requiredComponents'

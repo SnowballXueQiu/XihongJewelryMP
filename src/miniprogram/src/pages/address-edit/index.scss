@@ -13,3 +13,5 @@
 .default-row text:last-child { display: block; margin-top: 8px; color: #948078; font-family: "PingFang SC", sans-serif; font-size: 16px; }
 .save-address { display: flex; height: 82px; align-items: center; justify-content: center; margin-top: 44px; background: #572b2e; color: #fff9ef; font-family: "PingFang SC", sans-serif; font-size: 21px; }
 .delete-address { display: flex; height: 72px; align-items: center; justify-content: center; margin-top: 18px; color: #8b333a; font-family: "PingFang SC", sans-serif; font-size: 19px; text-decoration: underline; }
+.region-value { display: flex; min-width: 0; align-items: center; justify-content: flex-end; gap: 8px; color: #7f6c65; }
+.region-value > text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

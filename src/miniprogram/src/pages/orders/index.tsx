@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import Taro, { useDidShow, usePullDownRefresh, useRouter } from '@tarojs/taro'
 import { Button, ScrollView, Text, View } from '@tarojs/components'
 import { cancelOrder, completeOrder, fetchOrders, formatMoney, orderStatusLabel } from '@/services/api'
-import { performOrderPayment } from '@/services/payment'
+import { performOrderPayment, presentPaymentError } from '@/services/payment'
 import { Order, OrderStatus } from '@/types/domain'
 import './index.scss'
 
@@ -52,7 +52,7 @@ export default function OrdersPage() {
       const result = await performOrderPayment(order.id)
       if (result !== 'cancelled') Taro.navigateTo({ url: `/pages/payment-result/index?orderId=${order.id}&result=${result}` })
     } catch (error) {
-      Taro.showToast({ title: error instanceof Error ? error.message : '支付发起失败', icon: 'none' })
+      await presentPaymentError(error)
     } finally { setActing(0) }
   }
 

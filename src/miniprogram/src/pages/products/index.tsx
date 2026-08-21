@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Taro, { useDidShow, usePullDownRefresh } from '@tarojs/taro'
 import { Button, Input, Picker, ScrollView, Switch, Text, View } from '@tarojs/components'
 import ProductCard from '@/components/ProductCard'
+import IconFont from '@/components/IconFont'
 import { fetchCategories, fetchFavorites, fetchProducts, toggleFavorite } from '@/services/api'
 import { useContentRefreshAnimation, usePageEntranceAnimation } from '@/hooks/useSubtleAnimation'
 import { Category, Product } from '@/types/domain'
@@ -88,13 +89,13 @@ export default function ProductsPage() {
     <View className='page products-page' animation={pageAnimation}>
       <View className='catalog-head'>
         <View><Text className='catalog-eyebrow'>THE COLLECTION</Text><Text className='catalog-title'>臻选珠宝</Text></View>
-        <Button className='catalog-bag' hoverClass='round-press' onClick={() => Taro.navigateTo({ url: '/pages/cart/index' })}>袋</Button>
+        <Button className='catalog-bag' hoverClass='round-press' ariaLabel='购物袋' onClick={() => Taro.navigateTo({ url: '/pages/cart/index' })}><IconFont name='cart' /></Button>
       </View>
 
       <View className='search-shell'>
-        <Text className='search-icon'>⌕</Text>
+        <IconFont name='search' className='search-icon' />
         <Input className='search-input' value={q} placeholder='搜索款式、材质或灵感' confirmType='search' onInput={(event) => setQ(String(event.detail.value))} />
-        {q && <Button className='search-clear' onClick={() => setQ('')}>×</Button>}
+        {q && <Button className='search-clear' ariaLabel='清空搜索' onClick={() => setQ('')}><IconFont name='close' /></Button>}
       </View>
 
       <ScrollView className='category-scroll' scrollX enhanced showScrollbar={false}>
@@ -109,11 +110,11 @@ export default function ProductsPage() {
 
       <View className='catalog-toolbar'>
         <Picker mode='selector' range={sortLabels} value={sortIndex} onChange={(event) => setSortIndex(Number(event.detail.value))}>
-          <View className='sort-trigger'>{sortLabels[sortIndex]} <Text>⌄</Text></View>
+          <View className='sort-trigger'>{sortLabels[sortIndex]} <IconFont name='chevronDown' /></View>
         </Picker>
         <Text className='result-count'>{loading ? '正在策展…' : `${products.length} 件作品`}</Text>
         <Button className={`filter-trigger ${activeFilters ? 'has-filter' : ''}`} onClick={() => setShowFilters(true)}>
-          筛选{activeFilters ? ` · ${activeFilters}` : ''}
+          <IconFont name='filter' /> 筛选{activeFilters ? ` · ${activeFilters}` : ''}
         </Button>
       </View>
 
@@ -138,10 +139,10 @@ export default function ProductsPage() {
           <View className='filter-sheet'>
             <View className='sheet-head'>
               <View><Text className='sheet-kicker'>REFINE</Text><Text className='sheet-title'>筛选作品</Text></View>
-              <Button className='sheet-close' onClick={() => setShowFilters(false)}>×</Button>
+              <Button className='sheet-close' ariaLabel='关闭筛选' onClick={() => setShowFilters(false)}><IconFont name='close' /></Button>
             </View>
             <Picker mode='selector' range={materialLabels} value={materialIndex} onChange={(event) => setMaterialIndex(Number(event.detail.value))}>
-              <View className='filter-row'><Text>材质</Text><Text>{materialLabels[materialIndex]} 〉</Text></View>
+              <View className='filter-row'><Text>材质</Text><View className='row-value'><Text>{materialLabels[materialIndex]}</Text><IconFont name='chevronRight' /></View></View>
             </Picker>
             <View className='filter-block'>
               <Text className='filter-label'>价格区间</Text>

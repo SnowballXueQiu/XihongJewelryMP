@@ -104,6 +104,7 @@ def test_admin_product_and_banner_flow():
             "price_cents": 1000,
             "stock": 5,
             "image_color": "#B89A63",
+            "free_shipping": True,
             "supports_ar": False,
             "status": "draft",
             "gallery_urls": [],
@@ -115,6 +116,14 @@ def test_admin_product_and_banner_flow():
         product_payload["status"] = "active"
         updated = client.put(f"/api/admin/products/{product['id']}", headers=headers, json=product_payload).json()
         assert updated["status"] == "active"
+        assert updated["free_shipping"] is True
+
+        free_shipping_order = client.post(
+            "/api/orders",
+            json={"items": [{"product_id": product["id"], "quantity": 1}]},
+        ).json()
+        assert free_shipping_order["shipping_fee_cents"] == 0
+        assert free_shipping_order["total_cents"] == product_payload["price_cents"]
 
         banner = client.post(
             "/api/admin/banners",

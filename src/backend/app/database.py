@@ -48,6 +48,7 @@ def _ensure_sqlite_columns() -> None:
             "original_price_cents": ("INTEGER", 0),
             "sales": ("INTEGER", 0),
             "is_featured": ("BOOLEAN", False),
+            "free_shipping": ("BOOLEAN", False),
             "tags": ("VARCHAR", "[]"),
         },
         "category": {

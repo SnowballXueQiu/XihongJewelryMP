@@ -67,6 +67,7 @@ class Product(SQLModel, table=True):
     stock: int = 0
     sales: int = 0
     is_featured: bool = False
+    free_shipping: bool = False
     tags: str = "[]"
     image_color: str = "#D8B46A"
     supports_ar: bool = False

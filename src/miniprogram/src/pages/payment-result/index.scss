@@ -1,7 +1,7 @@
-.payment-result { display: flex; min-height: 100vh; flex-direction: column; align-items: center; padding: 170px 64px 70px; background: #74252d; color: #fff7eb; text-align: center; }
-.result-mark { position: relative; display: flex; width: 250px; height: 250px; align-items: center; justify-content: center; margin-bottom: 70px; }
+.payment-result { display: flex; min-height: 100vh; flex-direction: column; align-items: center; padding: 120px 48px calc(52px + env(safe-area-inset-bottom)); background: #74252d; color: #fff7eb; text-align: center; }
+.result-mark { position: relative; display: flex; width: 250px; height: 250px; flex: 0 0 auto; align-items: center; justify-content: center; margin-bottom: 54px; }
 .result-ring { position: relative; z-index: 2; display: flex; width: 118px; height: 118px; align-items: center; justify-content: center; border: 2px solid #d5b77b; border-radius: 50%; }
-.result-ring text { font-family: Arial,sans-serif; font-size: 55px; font-weight: 200; }
+.result-ring .xh-icon { font-size: 50px; }
 .orbit { position: absolute; border: 1px solid rgba(255,247,235,.18); border-radius: 50%; animation: orbit 7s linear infinite; }
 .orbit::after { position: absolute; top: -5px; left: 50%; width: 10px; height: 10px; border-radius: 50%; background: #d5b77b; content: ""; }
 .orbit-one { width: 185px; height: 185px; }
@@ -10,10 +10,11 @@
 .result-kicker { font-family: Arial,sans-serif; font-size: 18px; letter-spacing: 5px; opacity: .62; }
 .result-title { margin-top: 20px; font-size: 58px; }
 .result-copy { max-width: 550px; margin-top: 28px; font-family: "PingFang SC",sans-serif; font-size: 24px; line-height: 1.8; opacity: .78; }
-.result-actions { width: 100%; margin-top: 60px; }
-.result-actions button { height: 84px; margin-top: 18px; border: 1px solid #d5b77b; color: #fff7eb; font-size: 25px; }
+.result-actions { display: flex; width: 100%; flex-direction: column; gap: 16px; margin-top: 54px; }
+.result-actions button { display: flex; width: 100%; min-height: 84px; flex: 0 0 auto; align-items: center; justify-content: center; gap: 12px; margin: 0; border: 1px solid #d5b77b; border-radius: 14px; color: #fff7eb; font-size: 23px; line-height: 1.2; }
+.result-actions .query-action .xh-icon { font-size: 25px; }
 .result-actions .light { background: #fff7eb; color: #74252d; }
-.result-actions .text-btn { border: 0; color: rgba(255,247,235,.72); }
+.result-actions .text-btn { min-height: 64px; border: 0; color: rgba(255,247,235,.72); }
 .security-note { margin-top: auto; padding-top: 70px; font-family: "PingFang SC",sans-serif; font-size: 19px; opacity: .45; }
 @keyframes orbit { to { transform: rotate(360deg); } }
 @keyframes pulse { 50% { transform: scale(.65); opacity: .45; } }

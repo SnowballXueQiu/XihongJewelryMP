@@ -18,6 +18,7 @@ export interface Product {
   stock: number
   sales: number
   is_featured: boolean
+  free_shipping?: boolean
   tags: string[]
   image_color: string
   supports_ar: boolean

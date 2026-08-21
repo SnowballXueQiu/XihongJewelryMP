@@ -7,8 +7,8 @@
 .favorites-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 42px 18px; padding: 28px 20px; }
 .favorite-skeleton { height: 470px; background: linear-gradient(90deg,#e8e1d7,#f8f4ee,#e8e1d7); background-size: 300% 100%; animation: shine 1.2s infinite; }
 .favorite-empty { display: flex; min-height: 680px; flex-direction: column; align-items: center; justify-content: center; padding: 40px; text-align: center; }
-.heart-line { color: #b89a63; font-family: Arial,sans-serif; font-size: 100px; font-weight: 200; }
+.heart-line { display: flex; width: 138px; height: 138px; align-items: center; justify-content: center; border: 1px solid #d6c5ae; border-radius: 50%; color: #b89a63; font-size: 72px; }
 .favorite-empty text { font-size: 34px; }
 .favorite-empty text + text { margin-top: 14px; color: #8a8178; font-family: "PingFang SC",sans-serif; font-size: 22px; }
-.favorite-empty button { height: 74px; margin-top: 35px; padding: 0 42px; background: #74252d; color: white; font-size: 24px; }
+.favorite-empty button { display: flex; height: 74px; align-items: center; justify-content: center; margin-top: 35px; padding: 0 42px; border-radius: 12px; background: #74252d; color: white; font-size: 24px; }
 @keyframes shine { to { background-position: -150% 0; } }
