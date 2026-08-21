@@ -1,4 +1,4 @@
-FROM node:22-alpine AS builder
+FROM node:22-alpine AS dependencies
 
 WORKDIR /app
 
@@ -7,7 +7,9 @@ RUN corepack enable && npm config set registry https://registry.npmmirror.com
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY src/backstage/package.json ./src/backstage/package.json
 
-RUN pnpm install --frozen-lockfile --ignore-scripts --filter @xihong/backstage...
+RUN pnpm install --frozen-lockfile --ignore-scripts --prod=false --filter @xihong/backstage
+
+FROM dependencies AS builder
 
 COPY src/backstage ./src/backstage
 

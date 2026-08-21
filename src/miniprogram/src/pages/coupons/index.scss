@@ -1,0 +1,31 @@
+.coupons-page { min-height: 100vh; padding-bottom: 80px; background: #f7f3ec; }
+.coupon-head { padding: 58px 30px 38px; background: #171615; color: #fff8ed; }
+.coupon-head text { display: block; }
+.coupon-head text:first-child { color: #d2b575; font-family: Arial,sans-serif; font-size: 18px; letter-spacing: 5px; }
+.coupon-head text:nth-child(2) { margin-top: 16px; font-size: 52px; }
+.coupon-head text:last-child { margin-top: 12px; font-family: "PingFang SC",sans-serif; font-size: 22px; opacity: .62; }
+.coupon-tabs { display: grid; grid-template-columns: 1fr 1fr; height: 90px; border-bottom: 1px solid #d9d0c4; }
+.coupon-tabs button { position: relative; color: #8b8279; font-family: "PingFang SC",sans-serif; font-size: 24px; }
+.coupon-tabs button.active { color: #74252d; font-weight: 600; }
+.coupon-tabs button.active::after { position: absolute; right: 90px; bottom: 0; left: 90px; height: 4px; background: #74252d; content: ""; }
+.coupon-list { padding: 28px 24px; }
+.coupon-card { position: relative; display: grid; grid-template-columns: 190px 1fr 105px; min-height: 190px; margin-bottom: 22px; overflow: hidden; border: 1px solid #d9cdbd; background: #fffdf8; }
+.coupon-value { display: flex; align-content: center; align-items: baseline; justify-content: center; flex-wrap: wrap; padding: 34px 16px; background: #74252d; color: #fff8ec; }
+.coupon-value text:first-child { font-family: Georgia,serif; font-size: 60px; }
+.coupon-value text:nth-child(2) { margin-left: 5px; font-size: 22px; }
+.coupon-value text:last-child { width: 100%; margin-top: 8px; font-family: "PingFang SC",sans-serif; font-size: 18px; text-align: center; opacity: .72; }
+.coupon-copy { display: flex; flex-direction: column; justify-content: center; padding: 25px; }
+.coupon-copy text { display: block; }
+.coupon-copy text:first-child { font-size: 29px; }
+.coupon-copy text:nth-child(2) { margin-top: 9px; color: #786f67; font-family: "PingFang SC",sans-serif; font-size: 20px; }
+.coupon-copy text:last-child { margin-top: 17px; color: #9b9288; font-family: Arial,"PingFang SC",sans-serif; font-size: 17px; }
+.coupon-card > button { align-self: center; width: 76px; height: 76px; margin-right: 18px; border: 1px solid #74252d; border-radius: 50%; color: #74252d; font-size: 21px; }
+.coupon-edge { position: absolute; top: -12px; bottom: -12px; left: 178px; width: 24px; background: radial-gradient(circle at center, #f7f3ec 0 8px, transparent 9px) center/24px 28px repeat-y; }
+.coupon-card.disabled { filter: grayscale(1); opacity: .55; }
+.coupon-skeleton { height: 190px; margin-bottom: 22px; background: #e9e2d8; }
+.coupon-empty { padding: 190px 20px; text-align: center; }
+.coupon-empty text { display: block; font-size: 32px; }
+.coupon-empty text:last-child { margin-top: 14px; color: #8b8279; font-family: "PingFang SC",sans-serif; font-size: 22px; }
+.coupon-rules { margin: 20px 24px; padding: 30px 0; border-top: 1px solid #d9d0c4; }
+.coupon-rules text { display: block; font-size: 27px; }
+.coupon-rules text:last-child { margin-top: 14px; color: #80776f; font-family: "PingFang SC",sans-serif; font-size: 20px; line-height: 1.7; }

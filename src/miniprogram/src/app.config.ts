@@ -6,6 +6,13 @@ export default defineAppConfig({
     'pages/product-detail/index',
     'pages/cart/index',
     'pages/order-confirm/index',
+    'pages/orders/index',
+    'pages/order-detail/index',
+    'pages/payment-result/index',
+    'pages/addresses/index',
+    'pages/address-edit/index',
+    'pages/favorites/index',
+    'pages/coupons/index',
     'pages/ar-try-on/index',
     'pages/ar-mediapipe/index'
   ],

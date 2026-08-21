@@ -2,6 +2,7 @@ import { defineConfig } from '@tarojs/cli'
 import path from 'path'
 
 export default defineConfig(async (merge) => {
+  const apiBase = process.env.TARO_APP_API_BASE || (process.env.NODE_ENV === 'production' ? 'https://api.xihongzhubao.com' : 'http://127.0.0.1:8000')
   const baseConfig = {
     projectName: 'XihongJewelryMP',
     date: '2026-05-09',
@@ -14,7 +15,9 @@ export default defineConfig(async (merge) => {
     sourceRoot: 'src',
     outputRoot: 'dist',
     plugins: ['@tarojs/plugin-framework-react'],
-    defineConstants: {},
+    defineConstants: {
+      __API_BASE__: JSON.stringify(apiBase)
+    },
     copy: {
       patterns: [],
       options: {}

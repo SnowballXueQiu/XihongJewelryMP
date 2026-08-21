@@ -1,76 +1,152 @@
-import { useEffect, useState } from 'react'
-import Taro from '@tarojs/taro'
-import { View, Text, Button } from '@tarojs/components'
-import { fetchBanners, fetchProducts, formatMoney } from '@/services/api'
+import { useCallback, useEffect, useState } from 'react'
+import Taro, { usePullDownRefresh } from '@tarojs/taro'
+import { Button, Text, View } from '@tarojs/components'
+import ProductCard from '@/components/ProductCard'
+import { fetchBanners, fetchProducts } from '@/services/api'
 import { usePageEntranceAnimation } from '@/hooks/useSubtleAnimation'
 import { Banner, Product } from '@/types/domain'
 import './index.scss'
 
+const categories = [
+  { name: '戒指', en: 'RINGS', slug: 'rings', mark: '01' },
+  { name: '手链', en: 'BRACELETS', slug: 'bracelets', mark: '02' },
+  { name: '项链', en: 'NECKLACES', slug: 'necklaces', mark: '03' },
+  { name: '耳饰', en: 'EARRINGS', slug: 'earrings', mark: '04' }
+]
+
 export default function HomePage() {
   const [featured, setFeatured] = useState<Product[]>([])
+  const [newest, setNewest] = useState<Product | null>(null)
   const [hero, setHero] = useState<Banner | null>(null)
+  const [loading, setLoading] = useState(true)
   const pageAnimation = usePageEntranceAnimation()
 
-  useEffect(() => {
-    fetchProducts({ arOnly: true }).then((items) => setFeatured(items.slice(0, 2)))
-    fetchBanners('home_hero').then((items) => setHero(items[0] || null))
+  const load = useCallback(async () => {
+    setLoading(true)
+    const [featuredItems, newestItems, banners] = await Promise.all([
+      fetchProducts({ featured: true, sort: 'recommended' }),
+      fetchProducts({ sort: 'newest' }),
+      fetchBanners('home_hero')
+    ])
+    setFeatured(featuredItems.slice(0, 4))
+    setNewest(newestItems[0] || null)
+    setHero(banners[0] || null)
+    setLoading(false)
   }, [])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  usePullDownRefresh(() => {
+    load().finally(() => Taro.stopPullDownRefresh())
+  })
+
+  function openCategory(slug: string) {
+    Taro.setStorageSync('catalog_category', slug)
+    Taro.switchTab({ url: '/pages/products/index' })
+  }
 
   return (
     <View className='page home-page' animation={pageAnimation}>
-      <View className='hero' style={{ background: hero?.image_color || '#111111' }}>
+      <View className='home-masthead'>
+        <View>
+          <Text className='masthead-eyebrow'>XIHONG · TIANJIN</Text>
+          <Text className='masthead-name'>玺鸿珠宝</Text>
+        </View>
+        <Button className='masthead-cart' hoverClass='round-press' onClick={() => Taro.navigateTo({ url: '/pages/cart/index' })}>
+          购物袋
+        </Button>
+      </View>
+
+      <View className='editorial-hero' style={{ backgroundColor: hero?.image_color || '#55272c' }}>
+        <View className='hero-noise' />
         <View className='hero-copy'>
-          <Text className='hero-title'>{hero?.title || '玺鸿珠宝'}</Text>
-          <Text className='hero-subtitle'>{hero?.subtitle || '为戒指、手链与日常轻珠宝打造可试戴的线上门店。'}</Text>
-          <Button className='primary-btn hero-btn' onClick={() => Taro.switchTab({ url: '/pages/products/index' })}>选购珠宝</Button>
+          <Text className='hero-index'>ISSUE / 01</Text>
+          <Text className='hero-title'>{hero?.title || '珠宝，成为日常的标点'}</Text>
+          <Text className='hero-subtitle'>{hero?.subtitle || '克制的线条、温润的材质，以及只属于你的光。'}</Text>
+          <Button className='hero-action' hoverClass='hero-action-press' onClick={() => Taro.switchTab({ url: '/pages/products/index' })}>
+            浏览本季精选 <Text className='hero-arrow'>↗</Text>
+          </Button>
         </View>
-        <View className='hero-gem'>
-          <View className='gem-core' />
-        </View>
-      </View>
-
-      <View className='promo-row'>
-        <View className='promo-card'>
-          <Text className='promo-title'>AR 试戴</Text>
-          <Text className='promo-desc'>支持手部追踪，模型参数已预留。</Text>
-        </View>
-        <View className='promo-card dark'>
-          <Text className='promo-title'>会员宠物</Text>
-          <Text className='promo-desc'>互动成长，兑换真实权益。</Text>
+        <View className='hero-object'>
+          <View className='hero-ring ring-back' />
+          <View className='hero-ring ring-front' />
+          <View className='hero-jewel' />
+          <Text className='hero-seal'>XH</Text>
         </View>
       </View>
 
-      <Text className='section-title'>热门分类</Text>
-      <View className='category-grid'>
-        {[
-          ['戒指', 'rings'],
-          ['手链手环', 'bracelets'],
-          ['项链', 'necklaces'],
-          ['耳饰', 'earrings']
-        ].map(([name, slug]) => (
+      <View className='service-ribbon'>
+        <Text>顺丰保价</Text><Text className='ribbon-dot'>◆</Text>
+        <Text>七日无理由</Text><Text className='ribbon-dot'>◆</Text>
+        <Text>终身保养</Text>
+      </View>
+
+      <View className='section-heading'>
+        <View>
+          <Text className='section-kicker'>SHOP BY FORM</Text>
+          <Text className='section-title'>按形制探索</Text>
+        </View>
+        <Text className='section-counter'>01 — 04</Text>
+      </View>
+
+      <View className='category-editorial'>
+        {categories.map((item, index) => (
           <Button
-            key={slug}
-            className='category-tile'
-            hoverClass='button-press'
-            onClick={() => Taro.switchTab({ url: '/pages/products/index' })}
+            key={item.slug}
+            className={`category-line category-line-${index + 1}`}
+            hoverClass='category-line-press'
+            onClick={() => openCategory(item.slug)}
           >
-            {name}
+            <Text className='category-number'>{item.mark}</Text>
+            <View className='category-copy'>
+              <Text className='category-name'>{item.name}</Text>
+              <Text className='category-en'>{item.en}</Text>
+            </View>
+            <Text className='category-arrow'>→</Text>
           </Button>
         ))}
       </View>
 
-      <Text className='section-title'>推荐试戴</Text>
-      <View className='featured-list'>
-        {featured.map((product) => (
-          <View key={product.id} className='featured-card card pressable' hoverClass='button-press' onClick={() => Taro.navigateTo({ url: `/pages/product-detail/index?id=${product.id}` })}>
-            <View className='product-swatch' style={{ background: product.image_color }} />
-            <View className='featured-info'>
-              <Text className='featured-name'>{product.name}</Text>
-              <Text className='featured-subtitle'>{product.subtitle}</Text>
-              <Text className='featured-price'>{formatMoney(product.price_cents)}</Text>
-            </View>
+      <View className='section-heading featured-heading'>
+        <View>
+          <Text className='section-kicker'>CURATOR&apos;S EDIT</Text>
+          <Text className='section-title'>主理人精选</Text>
+        </View>
+        <Button className='text-link' onClick={() => Taro.switchTab({ url: '/pages/products/index' })}>查看全部</Button>
+      </View>
+
+      {loading ? (
+        <View className='home-skeleton-grid'>
+          <View className='home-skeleton' /><View className='home-skeleton' />
+        </View>
+      ) : (
+        <View className='home-product-grid'>
+          {featured.map((product, index) => <ProductCard key={product.id} product={product} index={index} />)}
+        </View>
+      )}
+
+      {newest && (
+        <View className='new-arrival' onClick={() => Taro.navigateTo({ url: `/pages/product-detail/index?id=${newest.id}` })}>
+          <View className='arrival-copy'>
+            <Text className='arrival-kicker'>NEW ARRIVAL</Text>
+            <Text className='arrival-title'>{newest.name}</Text>
+            <Text className='arrival-subtitle'>{newest.description}</Text>
+            <Text className='arrival-link'>阅读珠宝故事 →</Text>
           </View>
-        ))}
+          <View className='arrival-medallion' style={{ backgroundColor: newest.image_color }}>
+            <View className='medallion-ring' />
+            <View className='medallion-gem' />
+          </View>
+        </View>
+      )}
+
+      <View className='member-story'>
+        <Text className='member-kicker'>XIHONG CLUB</Text>
+        <Text className='member-title'>让每一次心动，都有回响</Text>
+        <Text className='member-copy'>收藏、签到与购买都会积累成长值，解锁保养、包邮与生日礼遇。</Text>
+        <Button className='member-action' hoverClass='button-press' onClick={() => Taro.switchTab({ url: '/pages/profile/index' })}>进入会员花园</Button>
       </View>
     </View>
   )

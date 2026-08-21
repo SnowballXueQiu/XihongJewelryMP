@@ -13,6 +13,7 @@ services:
     volumes:
       - backend_data:/app/data
       - backend_uploads:/app/uploads
+      - ${WX_PAY_CERT_DIR:-./secrets/wechatpay}:/run/secrets/wechatpay:ro
     expose:
       - "8000"
 

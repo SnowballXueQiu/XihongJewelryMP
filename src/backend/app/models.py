@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Optional
 
+from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 
@@ -12,7 +13,12 @@ def utc_now() -> datetime:
 class OrderStatus(StrEnum):
     pending_payment = "pending_payment"
     paid = "paid"
+    preparing = "preparing"
+    shipped = "shipped"
+    completed = "completed"
     cancelled = "cancelled"
+    refunding = "refunding"
+    refunded = "refunded"
     failed = "failed"
 
 
@@ -21,6 +27,8 @@ class PaymentStatus(StrEnum):
     pending = "pending"
     succeeded = "succeeded"
     failed = "failed"
+    closed = "closed"
+    refunded = "refunded"
 
 
 class ProductStatus(StrEnum):
@@ -55,7 +63,11 @@ class Product(SQLModel, table=True):
     category_slug: str = Field(index=True)
     material: str = Field(index=True)
     price_cents: int
+    original_price_cents: int = 0
     stock: int = 0
+    sales: int = 0
+    is_featured: bool = False
+    tags: str = "[]"
     image_color: str = "#D8B46A"
     supports_ar: bool = False
     ar_model_url: str | None = None
@@ -80,6 +92,54 @@ class User(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utc_now)
 
 
+class Address(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(index=True, foreign_key="user.id")
+    receiver_name: str
+    phone: str
+    province: str = ""
+    city: str = ""
+    district: str = ""
+    detail: str
+    postal_code: str = ""
+    is_default: bool = False
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class Favorite(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(index=True, foreign_key="user.id")
+    product_id: int = Field(index=True, foreign_key="product.id")
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class Coupon(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    code: str = Field(index=True, unique=True)
+    name: str
+    description: str = ""
+    amount_cents: int = 0
+    minimum_cents: int = 0
+    total_quantity: int = 0
+    claimed_quantity: int = 0
+    valid_from: datetime = Field(default_factory=utc_now)
+    valid_until: datetime | None = None
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class UserCoupon(SQLModel, table=True):
+    __table_args__ = (UniqueConstraint("user_id", "coupon_id", name="uq_user_coupon"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(index=True, foreign_key="user.id")
+    coupon_id: int = Field(index=True, foreign_key="coupon.id")
+    used_order_id: int | None = Field(default=None, index=True, foreign_key="order.id")
+    claimed_at: datetime = Field(default_factory=utc_now)
+    used_at: datetime | None = None
+
+
 class CartItem(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(index=True, foreign_key="user.id")
@@ -90,13 +150,27 @@ class CartItem(SQLModel, table=True):
 
 class Order(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
+    order_no: str = Field(default="", index=True)
     user_id: int = Field(index=True, foreign_key="user.id")
     status: OrderStatus = Field(default=OrderStatus.pending_payment, index=True)
     total_cents: int = 0
+    subtotal_cents: int = 0
+    shipping_fee_cents: int = 0
+    discount_cents: int = 0
+    coupon_id: int | None = Field(default=None, foreign_key="coupon.id")
     receiver_name: str = ""
     receiver_phone: str = ""
     receiver_address: str = ""
+    buyer_note: str = ""
+    logistics_company: str = ""
+    tracking_no: str = ""
     created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+    paid_at: datetime | None = None
+    shipped_at: datetime | None = None
+    completed_at: datetime | None = None
+    cancelled_at: datetime | None = None
+    cancellation_reason: str = ""
 
 
 class OrderItem(SQLModel, table=True):
@@ -134,12 +208,31 @@ class PaymentIntent(SQLModel, table=True):
     order_id: int = Field(index=True, foreign_key="order.id")
     provider: str = "wechat_pay"
     status: PaymentStatus = Field(default=PaymentStatus.created, index=True)
-    prepay_id: str
-    nonce_str: str
-    package: str
-    pay_sign: str
-    time_stamp: str
+    out_trade_no: str = Field(default="", index=True)
+    transaction_id: str = ""
+    prepay_id: str = ""
+    nonce_str: str = ""
+    package: str = ""
+    pay_sign: str = ""
+    time_stamp: str = ""
+    failure_reason: str = ""
     created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+    expires_at: datetime | None = None
+    notified_at: datetime | None = None
+
+
+class Refund(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    order_id: int = Field(index=True, foreign_key="order.id")
+    out_refund_no: str = Field(index=True, unique=True)
+    refund_id: str = ""
+    amount_cents: int
+    reason: str = ""
+    previous_status: str = "paid"
+    status: str = Field(default="processing", index=True)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
 
 
 class AdminUser(SQLModel, table=True):

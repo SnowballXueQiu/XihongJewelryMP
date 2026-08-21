@@ -1,70 +1,82 @@
-import { useEffect, useMemo, useState } from 'react'
-import Taro from '@tarojs/taro'
+import { useMemo, useState } from 'react'
+import Taro, { useDidShow } from '@tarojs/taro'
 import { Button, Text, View } from '@tarojs/components'
-import { fetchPet, fetchUser, petAction } from '@/services/api'
+import { fetchCoupons, fetchFavorites, fetchOrders, fetchPet, fetchUser, petAction } from '@/services/api'
 import { useContentRefreshAnimation, usePageEntranceAnimation } from '@/hooks/useSubtleAnimation'
-import { Pet, User } from '@/types/domain'
+import { Order, Pet, User } from '@/types/domain'
 import './index.scss'
 
 export default function ProfilePage() {
   const [user, setUser] = useState<User | null>(null)
   const [pet, setPet] = useState<Pet | null>(null)
+  const [orders, setOrders] = useState<Order[]>([])
+  const [favoriteCount, setFavoriteCount] = useState(0)
+  const [couponCount, setCouponCount] = useState(0)
+  const [petBusy, setPetBusy] = useState(false)
   const pageAnimation = usePageEntranceAnimation()
   const petAnimation = useContentRefreshAnimation([pet?.exp, pet?.mood, pet?.hunger, pet?.level])
-  const progress = useMemo(() => {
-    if (!pet) return 0
-    return Math.min(100, Math.round((pet.exp / pet.next_level_exp) * 100))
-  }, [pet])
+  const progress = useMemo(() => pet ? Math.min(100, Math.round((pet.exp / Math.max(pet.next_level_exp, 1)) * 100)) : 0, [pet])
 
-  useEffect(() => {
-    fetchUser().then(setUser)
-    fetchPet().then(setPet)
-  }, [])
+  useDidShow(() => {
+    Promise.allSettled([fetchUser(), fetchPet(), fetchOrders(), fetchFavorites(), fetchCoupons()]).then(([userResult, petResult, orderResult, favoriteResult, couponResult]) => {
+      if (userResult.status === 'fulfilled') setUser(userResult.value)
+      if (petResult.status === 'fulfilled') setPet(petResult.value)
+      if (orderResult.status === 'fulfilled') setOrders(orderResult.value)
+      if (favoriteResult.status === 'fulfilled') setFavoriteCount(favoriteResult.value.length)
+      if (couponResult.status === 'fulfilled') setCouponCount(couponResult.value.filter((coupon) => coupon.claimed && coupon.available && !coupon.used).length)
+    })
+  })
 
   async function interact(action: 'feed' | 'pet' | 'checkin') {
-    const next = await petAction(action)
-    setPet(next)
-    Taro.showToast({ title: '成长值已增加', icon: 'success' })
+    if (petBusy) return
+    setPetBusy(true)
+    try {
+      setPet(await petAction(action))
+      Taro.vibrateShort({ type: 'light' }).catch(() => undefined)
+      Taro.showToast({ title: action === 'checkin' ? '今日签到成功' : '成长值已增加', icon: 'success' })
+    } catch (error) { Taro.showToast({ title: error instanceof Error ? error.message : '互动失败', icon: 'none' }) }
+    finally { setPetBusy(false) }
   }
 
+  const orderCount = (statuses: string[]) => orders.filter((order) => statuses.includes(order.status)).length
+  const menu = [
+    { label: '收货地址', copy: '管理常用收件人', value: '', url: '/pages/addresses/index' },
+    { label: '心选收藏', copy: '重温心动作品', value: String(favoriteCount || ''), url: '/pages/favorites/index' },
+    { label: '优惠礼券', copy: '查看会员专属礼遇', value: String(couponCount || ''), url: '/pages/coupons/index' },
+    { label: '购物袋', copy: '继续未完成的挑选', value: '', url: '/pages/cart/index' }
+  ]
+
   return (
-    <View className='page profile-page' animation={pageAnimation}>
-      <View className='member card'>
-        <View className='avatar' style={{ background: user?.avatar_color || '#913F5F' }} />
-        <View className='member-info'>
-          <Text className='nickname'>{user?.nickname || '玺鸿会员'}</Text>
-          <Text className='member-sub'>积分 {user?.points ?? 0} · 微信 openid 待接入</Text>
-        </View>
+    <View className='profile-page' animation={pageAnimation}>
+      <View className='profile-hero'>
+        <Text className='profile-kicker'>XIHONG PRIVILEGE</Text>
+        <View className='member-row'><View className='avatar' style={{ background: user?.avatar_color || '#74252D' }}><Text>{(user?.nickname || '玺').slice(0, 1)}</Text></View><View><Text className='nickname'>{user?.nickname || '玺鸿会员'}</Text><Text className='member-tier'>珍藏会员 · MEMBER</Text></View></View>
+        <View className='member-stats'><View><Text>{user?.points ?? 0}</Text><Text>会员积分</Text></View><View><Text>{orders.length}</Text><Text>珍藏订单</Text></View><View><Text>{favoriteCount}</Text><Text>心选作品</Text></View></View>
+        <View className='member-number'><Text>MEMBER SINCE 2026</Text><Text>NO. {String(user?.id || 1).padStart(6, '0')}</Text></View>
       </View>
 
-      <Text className='section-title'>会员成长宠物</Text>
-      <View className='pet-card card' animation={petAnimation}>
-        <View className='pet-stage'>
-          <View className='pet-body'>
-            <View className='pet-gem' />
-          </View>
+      <View className='profile-content'>
+        <View className='section-head'><Text>订单中心</Text><Button onClick={() => Taro.navigateTo({ url: '/pages/orders/index' })}>全部订单 〉</Button></View>
+        <View className='order-shortcuts'>
+          <Button onClick={() => Taro.navigateTo({ url: '/pages/orders/index?status=pending_payment' })}><View className='shortcut-icon'>¥</View><Text>待支付</Text>{orderCount(['pending_payment']) > 0 && <Text className='count'>{orderCount(['pending_payment'])}</Text>}</Button>
+          <Button onClick={() => Taro.navigateTo({ url: '/pages/orders/index?status=processing' })}><View className='shortcut-icon box-icon' /><Text>待发货</Text>{orderCount(['paid', 'preparing']) > 0 && <Text className='count'>{orderCount(['paid', 'preparing'])}</Text>}</Button>
+          <Button onClick={() => Taro.navigateTo({ url: '/pages/orders/index?status=shipped' })}><View className='shortcut-icon truck-icon'>→</View><Text>待收货</Text>{orderCount(['shipped']) > 0 && <Text className='count'>{orderCount(['shipped'])}</Text>}</Button>
+          <Button openType='contact'><View className='shortcut-icon'>⋯</View><Text>售后咨询</Text></Button>
         </View>
-        <View className='pet-info'>
-          <Text className='pet-name'>{pet?.name || '玺宝'} · Lv{pet?.level || 1}</Text>
-          <Text className='pet-state'>心情 {pet?.mood || 0} · 饥饿 {pet?.hunger || 0}</Text>
-          <View className='progress-track'>
-            <View className='progress-bar' style={{ width: `${progress}%` }} />
-          </View>
-          <Text className='reward'>当前权益：{pet?.reward || '新人清洁布'}</Text>
-        </View>
-        <View className='pet-actions'>
-          <Button className='ghost-btn pet-action' hoverClass='button-press' onClick={() => interact('feed')}>喂养</Button>
-          <Button className='ghost-btn pet-action' hoverClass='button-press' onClick={() => interact('pet')}>抚摸</Button>
-          <Button className='primary-btn pet-action' hoverClass='button-press' onClick={() => interact('checkin')}>签到</Button>
-        </View>
-      </View>
 
-      <Text className='section-title'>个人管理</Text>
-      <View className='menu card'>
-        <Button className='menu-item' hoverClass='menu-item-press'>资料管理</Button>
-        <Button className='menu-item' hoverClass='menu-item-press'>收货地址</Button>
-        <Button className='menu-item' hoverClass='menu-item-press' onClick={() => Taro.navigateTo({ url: '/pages/cart/index' })}>购物车</Button>
-        <Button className='menu-item' hoverClass='menu-item-press'>订单记录</Button>
+        <View className='section-head pet-heading'><View><Text>会员守护灵</Text><Text>每天互动，积累专属礼遇</Text></View><Text>Lv.{pet?.level || 1}</Text></View>
+        <View className='pet-card' animation={petAnimation}>
+          <View className='pet-stage'><View className='pet-halo halo-one' /><View className='pet-halo halo-two' /><View className='pet-gem'><View /></View><Text>{pet?.name || '玺宝'}</Text></View>
+          <View className='pet-panel'>
+            <View className='pet-status'><Text>成长进度</Text><Text>{pet?.exp || 0} / {pet?.next_level_exp || 100}</Text></View><View className='progress-track'><View className='progress-bar' style={{ width: `${progress}%` }} /></View>
+            <View className='pet-vitals'><Text>心情 {pet?.mood || 0}</Text><Text>饱腹 {pet?.hunger || 0}</Text><Text>{pet?.reward || '新人礼遇'}</Text></View>
+            <View className='pet-actions'><Button disabled={petBusy} onClick={() => interact('feed')}>喂养</Button><Button disabled={petBusy} onClick={() => interact('pet')}>抚摸</Button><Button className='checkin' disabled={petBusy} onClick={() => interact('checkin')}>每日签到</Button></View>
+          </View>
+        </View>
+
+        <View className='section-head'><Text>我的服务</Text><Text /></View>
+        <View className='service-menu'>{menu.map((item, index) => <Button key={item.label} hoverClass='menu-press' onClick={() => Taro.navigateTo({ url: item.url })}><Text className='menu-index'>0{index + 1}</Text><View><Text>{item.label}</Text><Text>{item.copy}</Text></View>{item.value && <Text className='menu-value'>{item.value}</Text>}<Text className='arrow'>〉</Text></Button>)}</View>
+        <View className='profile-assurance'><Text>终身保养 · 正品承诺 · 专属顾问</Text><Text>XIHONG JEWELRY</Text></View>
       </View>
     </View>
   )

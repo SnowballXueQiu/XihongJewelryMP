@@ -16,7 +16,16 @@ class Settings(BaseSettings):
     wx_pay_api_v3_key: str = ""
     wx_pay_serial_no: str = ""
     wx_pay_private_key_path: str = ""
+    wx_pay_public_key_id: str = ""
+    wx_pay_public_key_path: str = ""
     wx_pay_notify_url: str = "http://127.0.0.1:8000/api/payments/wechat/notify"
+    wx_pay_refund_notify_url: str = "http://127.0.0.1:8000/api/payments/wechat/refund-notify"
+    wx_pay_mock: bool = True
+    user_token_secret: str = "dev-change-this-user-secret"
+    allow_mock_user: bool = True
+    shipping_fee_cents: int = 1500
+    free_shipping_threshold_cents: int = 100000
+    low_stock_threshold: int = 5
     admin_jwt_secret: str = "dev-change-this-admin-secret"
     admin_bootstrap_email: str = "admin@xihong.local"
     admin_bootstrap_password: str = "XihongAdmin123!"

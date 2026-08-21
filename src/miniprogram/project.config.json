@@ -4,7 +4,7 @@
   "description": "天津玺鸿珠宝贸易有限公司微信小程序 MVP",
   "appid": "wx8469c45d32e0a628",
   "setting": {
-    "urlCheck": false,
+    "urlCheck": true,
     "es6": false,
     "postcss": false,
     "minified": true,

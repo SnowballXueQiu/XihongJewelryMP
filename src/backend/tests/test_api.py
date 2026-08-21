@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+from datetime import datetime, timedelta, timezone
 
 from app.main import app
 
@@ -16,7 +17,7 @@ def test_products_and_pet_flow():
         assert pet["exp"] >= 0
 
 
-def test_order_creates_payment_skeleton():
+def test_order_payment_and_query_flow():
     with client:
         product = client.get("/api/products").json()[0]
         order = client.post(
@@ -24,8 +25,17 @@ def test_order_creates_payment_skeleton():
             json={"items": [{"product_id": product["id"], "quantity": 1}]},
         ).json()
         assert order["status"] == "pending_payment"
-        assert order["payment"]["provider"] == "wechat_pay"
-        assert order["payment"]["mock"] is True
+        assert order["order_no"].startswith("XH")
+        assert order["payment"] is None
+
+        payment = client.post(f"/api/orders/{order['id']}/pay").json()
+        assert payment["provider"] == "wechat_pay"
+        assert payment["mock"] is True
+
+        paid = client.post(f"/api/orders/{order['id']}/mock-pay").json()
+        assert paid["status"] == "paid"
+        status = client.get(f"/api/orders/{order['id']}/payment-status").json()
+        assert status["order_status"] == "paid"
 
 
 def test_cart_crud_flow():
@@ -43,6 +53,21 @@ def test_cart_crud_flow():
 
         cart = client.delete(f"/api/cart/{cart[0]['id']}").json()
         assert cart == []
+
+
+def test_addresses_favorites_and_coupons():
+    with client:
+        addresses = client.get("/api/addresses").json()
+        assert addresses and addresses[0]["is_default"] is True
+
+        product = client.get("/api/products").json()[0]
+        favorite = client.put(f"/api/favorites/{product['id']}").json()
+        assert "active" in favorite
+        listed = client.get("/api/favorites").json()
+        assert isinstance(listed, list)
+
+        coupons = client.get("/api/coupons").json()
+        assert coupons and coupons[0]["amount_cents"] > 0
 
 
 def test_admin_product_and_banner_flow():
@@ -89,3 +114,82 @@ def test_admin_product_and_banner_flow():
 
         public_banners = client.get("/api/banners?placement=home_hero").json()
         assert any(item["title"] == "后台轮播" for item in public_banners)
+
+
+def test_admin_fulfillment_coupon_and_refund_flow():
+    with client:
+        login = client.post(
+            "/api/admin/auth/login",
+            json={"email": "admin@xihong.local", "password": "XihongAdmin123!"},
+        )
+        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+        dashboard = client.get("/api/admin/dashboard", headers=headers)
+        assert dashboard.status_code == 200
+        assert "today_revenue_cents" in dashboard.json()
+
+        now = datetime.now(timezone.utc)
+        coupon = client.post(
+            "/api/admin/coupons",
+            headers=headers,
+            json={
+                "code": f"TEST{int(now.timestamp())}",
+                "name": "自动化测试礼券",
+                "description": "后台优惠券流程",
+                "amount_cents": 100,
+                "minimum_cents": 1000,
+                "total_quantity": 20,
+                "valid_from": now.isoformat(),
+                "valid_until": (now + timedelta(days=7)).isoformat(),
+                "is_active": True,
+            },
+        )
+        assert coupon.status_code == 200
+        assert coupon.json()["total_quantity"] == 20
+        store_config = client.get("/api/store/config")
+        assert store_config.status_code == 200
+        assert store_config.json()["free_shipping_threshold_cents"] > 0
+        first_claim = client.post(f"/api/coupons/{coupon.json()['id']}/claim")
+        assert first_claim.status_code == 200
+        duplicate_claim = client.post(f"/api/coupons/{coupon.json()['id']}/claim")
+        assert duplicate_claim.status_code == 400
+
+        product = client.get("/api/products").json()[0]
+        order = client.post("/api/orders", json={"items": [{"product_id": product["id"], "quantity": 1}]}).json()
+        invalid = client.put(
+            f"/api/admin/orders/{order['id']}/status",
+            headers=headers,
+            json={"status": "preparing"},
+        )
+        assert invalid.status_code == 400
+
+        client.post(f"/api/orders/{order['id']}/pay")
+        paid = client.post(f"/api/orders/{order['id']}/mock-pay").json()
+        preparing = client.put(
+            f"/api/admin/orders/{paid['id']}/status",
+            headers=headers,
+            json={"status": "preparing"},
+        )
+        assert preparing.status_code == 200
+        no_tracking = client.put(
+            f"/api/admin/orders/{paid['id']}/status",
+            headers=headers,
+            json={"status": "shipped"},
+        )
+        assert no_tracking.status_code == 400
+        shipped = client.put(
+            f"/api/admin/orders/{paid['id']}/status",
+            headers=headers,
+            json={"status": "shipped", "logistics_company": "顺丰速运", "tracking_no": "SF123456789"},
+        )
+        assert shipped.status_code == 200
+        assert shipped.json()["tracking_no"] == "SF123456789"
+
+        refund = client.post(
+            f"/api/admin/orders/{paid['id']}/refund",
+            headers=headers,
+            json={"reason": "自动化退款验证"},
+        )
+        assert refund.status_code == 200
+        assert refund.json()["status"] == "success"
+        refunded = client.get(f"/api/orders/{paid['id']}").json()
+        assert refunded["status"] == "refunded"

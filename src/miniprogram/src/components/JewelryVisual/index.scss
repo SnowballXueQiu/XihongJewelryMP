@@ -1,0 +1,155 @@
+.jewelry-visual {
+  position: relative;
+  display: flex;
+  overflow: hidden;
+  min-height: 360px;
+  align-items: center;
+  justify-content: center;
+  background: #b88f88;
+}
+
+.jewelry-visual.is-compact {
+  min-height: 172px;
+}
+
+.jewelry-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.visual-grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.18;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.55) 0.8px, transparent 0.8px);
+  background-size: 8px 8px;
+  pointer-events: none;
+}
+
+.visual-label {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.46);
+  background: rgba(255, 255, 255, 0.74);
+  color: #4d2025;
+  font-family: "PingFang SC", sans-serif;
+  font-size: 18px;
+  letter-spacing: 2px;
+}
+
+.jewelry-art {
+  position: relative;
+  width: 64%;
+  height: 64%;
+  filter: drop-shadow(0 24px 26px rgba(51, 20, 24, 0.2));
+  transform: rotate(-9deg);
+}
+
+.art-orbit,
+.art-chain,
+.art-stone {
+  position: absolute;
+  box-sizing: border-box;
+}
+
+.art-orbit {
+  top: 50%;
+  left: 50%;
+  width: 72%;
+  height: 72%;
+  border: 8px solid #e6c98a;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.orbit-two {
+  width: 56%;
+  height: 56%;
+  border-width: 2px;
+  opacity: 0.78;
+}
+
+.art-stone {
+  top: 10%;
+  left: 50%;
+  width: 56px;
+  height: 56px;
+  border: 5px solid #edd9a7;
+  background: rgba(110, 35, 48, 0.88);
+  box-shadow: inset 9px 8px 0 rgba(255, 255, 255, 0.18);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.art-chain {
+  display: none;
+}
+
+.art-bracelets .art-orbit {
+  width: 86%;
+  height: 58%;
+  border-width: 9px;
+}
+
+.art-bracelets .orbit-two {
+  width: 70%;
+  height: 42%;
+  border-width: 2px;
+}
+
+.art-bracelets .art-stone {
+  top: 20%;
+}
+
+.art-necklaces .art-orbit {
+  top: 42%;
+  width: 92%;
+  height: 92%;
+  border-width: 2px;
+  border-top-color: transparent;
+}
+
+.art-necklaces .orbit-two {
+  display: none;
+}
+
+.art-necklaces .art-stone {
+  top: 66%;
+  width: 48px;
+  height: 48px;
+}
+
+.art-earrings .art-orbit {
+  left: 36%;
+  width: 35%;
+  height: 70%;
+  border-width: 4px;
+}
+
+.art-earrings .orbit-two {
+  left: 66%;
+}
+
+.art-earrings .art-stone {
+  top: 62%;
+}
+
+.is-compact .art-orbit {
+  border-width: 4px;
+}
+
+.is-compact .art-stone {
+  width: 28px;
+  height: 28px;
+  border-width: 3px;
+}
+
+.is-compact .visual-label {
+  top: 10px;
+  left: 10px;
+  padding: 5px 8px;
+  font-size: 14px;
+}

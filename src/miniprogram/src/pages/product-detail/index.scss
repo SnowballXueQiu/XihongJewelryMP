@@ -1,104 +1,44 @@
-.detail-image {
-  position: relative;
-  height: 690px;
-  border: 1px solid #e8e2d8;
-}
-
-.ar-tag {
-  position: absolute;
-  right: 22px;
-  bottom: 22px;
-  padding: 11px 16px;
-  border: 1px solid rgba(17, 17, 17, 0.52);
-  background: rgba(251, 250, 247, 0.78);
-  color: #111111;
-  font-family: "PingFang SC", "Helvetica Neue", Arial, sans-serif;
-  font-size: 21px;
-}
-
-.detail-main {
-  padding: 38px 0 46px;
-  border-bottom: 1px solid #e8e2d8;
-}
-
-.name,
-.subtitle,
-.price,
-.description {
-  display: block;
-}
-
-.name {
-  color: #111111;
-  font-size: 48px;
-  font-weight: 400;
-  line-height: 1.18;
-}
-
-.subtitle {
-  margin-top: 16px;
-  color: #77716a;
-  font-family: "PingFang SC", "Helvetica Neue", Arial, sans-serif;
-  font-size: 24px;
-}
-
-.price {
-  margin-top: 28px;
-  color: #b89a63;
-  font-family: "PingFang SC", "Helvetica Neue", Arial, sans-serif;
-  font-size: 34px;
-  font-weight: 500;
-}
-
-.meta-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0;
-  margin-top: 42px;
-  border-top: 1px solid #e8e2d8;
-  border-left: 1px solid #e8e2d8;
-}
-
-.meta-item {
-  display: flex;
-  min-height: 112px;
-  flex-direction: column;
-  justify-content: center;
-  padding: 0 22px;
-  border-right: 1px solid #e8e2d8;
-  border-bottom: 1px solid #e8e2d8;
-  background: transparent;
-  color: #77716a;
-  font-family: "PingFang SC", "Helvetica Neue", Arial, sans-serif;
-  font-size: 21px;
-}
-
-.meta-item text:last-child {
-  margin-top: 10px;
-  color: #111111;
-  font-size: 27px;
-  font-weight: 400;
-}
-
-.description {
-  margin-top: 36px;
-  color: #4b4740;
-  font-family: "PingFang SC", "Helvetica Neue", Arial, sans-serif;
-  font-size: 26px;
-  line-height: 1.75;
-}
-
-.wide {
-  width: 100%;
-  margin: 38px 0 16px;
-}
-
-.action-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-
-.action {
-  width: 100%;
-}
+.detail-page { padding: 0 0 170px; background: #f7f1e9; }
+.detail-visual-wrap { position: relative; }
+.detail-visual-wrap .jewelry-visual { min-height: 760px; }
+.detail-favorite { position: absolute; top: 28px; right: 28px; z-index: 3; display: flex; width: 74px; height: 74px; align-items: center; justify-content: center; border: 1px solid rgba(255,255,255,.74); border-radius: 50%; background: rgba(255,253,249,.72); color: #542328; font-size: 36px; backdrop-filter: blur(12px); }
+.detail-favorite.active { color: #8e3039; animation: detail-heart .25s ease-out; }
+.visual-count { position: absolute; right: 28px; bottom: 24px; z-index: 2; color: rgba(255,255,255,.86); font-family: sans-serif; font-size: 16px; letter-spacing: 3px; }
+.detail-main { padding: 46px 32px 40px; }
+.detail-kicker { display: block; color: #937d72; font-family: sans-serif; font-size: 15px; letter-spacing: 4px; }
+.name { display: block; margin-top: 18px; color: #2a1d1b; font-size: 54px; line-height: 1.2; letter-spacing: 2px; }
+.subtitle { display: block; margin-top: 12px; color: #7e6962; font-family: "PingFang SC", sans-serif; font-size: 22px; }
+.price-line { display: flex; align-items: baseline; gap: 16px; margin-top: 30px; }
+.price { color: #7a2630; font-family: "PingFang SC", sans-serif; font-size: 38px; font-weight: 600; }
+.original-price { color: #a79389; font-family: sans-serif; font-size: 20px; text-decoration: line-through; }
+.saving { padding: 6px 10px; background: #eaded1; color: #7a2630; font-family: sans-serif; font-size: 16px; }
+.tag-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
+.detail-tag { padding: 9px 14px; border: 1px solid #d7c9be; border-radius: 28px; color: #725d56; font-family: "PingFang SC", sans-serif; font-size: 17px; }
+.detail-divider { height: 1px; margin: 0 32px; background: #d9ccc1; }
+.detail-description { display: grid; gap: 24px; padding: 42px 32px; grid-template-columns: 52px 1fr; }
+.block-index { color: #a3897e; font-family: sans-serif; font-size: 17px; }
+.block-title { display: block; color: #352521; font-size: 32px; }
+.description { display: block; margin-top: 18px; color: #76645e; font-family: "PingFang SC", sans-serif; font-size: 21px; line-height: 1.9; }
+.detail-specs { margin: 0 32px; border-top: 1px solid #d9ccc1; }
+.spec-row { display: grid; min-height: 90px; align-items: center; border-bottom: 1px solid #d9ccc1; color: #493733; font-family: "PingFang SC", sans-serif; font-size: 19px; grid-template-columns: 130px 1fr; }
+.spec-row text:last-child { color: #806e67; text-align: right; }
+.quantity-section { display: flex; align-items: center; justify-content: space-between; padding: 42px 32px; }
+.quantity-title { display: block; color: #473431; font-size: 28px; }
+.quantity-hint { display: block; margin-top: 8px; color: #9b8880; font-family: "PingFang SC", sans-serif; font-size: 16px; }
+.quantity-stepper { display: grid; width: 220px; height: 66px; align-items: center; border: 1px solid #cdbdb2; grid-template-columns: 1fr 1fr 1fr; text-align: center; }
+.quantity-stepper button, .quantity-stepper text { display: flex; height: 64px; align-items: center; justify-content: center; color: #4c3935; font-family: sans-serif; font-size: 24px; }
+.quantity-stepper button:disabled { opacity: .32; }
+.detail-note { margin: 0 32px; padding: 28px; background: #e9ded4; }
+.detail-note text:first-child { display: block; color: #856f66; font-family: sans-serif; font-size: 14px; letter-spacing: 4px; }
+.detail-note text:last-child { display: block; margin-top: 14px; color: #6f5b55; font-family: "PingFang SC", sans-serif; font-size: 18px; line-height: 1.7; }
+.detail-actions { position: fixed; right: 0; bottom: 0; left: 0; z-index: 20; display: grid; gap: 0; padding-bottom: env(safe-area-inset-bottom); border-top: 1px solid #d0c2b7; background: rgba(250,246,240,.96); grid-template-columns: 128px 1fr 1fr; backdrop-filter: blur(16px); }
+.detail-actions button { display: flex; height: 96px; align-items: center; justify-content: center; font-family: "PingFang SC", sans-serif; font-size: 21px; }
+.bag-shortcut { color: #604943; font-size: 18px !important; }
+.add-action { border-left: 1px solid #d0c2b7; background: #eee3d9; color: #4c302d; }
+.buy-action { background: #57272c; color: #fff9ef; }
+.detail-actions button:disabled { opacity: .48; }
+.detail-loading { padding: 24px; }
+.detail-skeleton { height: 720px; background: #e5d9cf; animation: detail-pulse 1s infinite alternate; }
+.detail-copy-skeleton { width: 80%; height: 190px; margin-top: 36px; background: #e5d9cf; animation: detail-pulse 1s .15s infinite alternate; }
+@keyframes detail-heart { 50% { transform: scale(1.2); } }
+@keyframes detail-pulse { to { opacity: .52; } }

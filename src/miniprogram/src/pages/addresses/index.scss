@@ -1,0 +1,18 @@
+.addresses-page { padding: 48px 26px 150px; background: #f6f0e8; }
+.addresses-head { padding: 0 6px 42px; }
+.addresses-kicker { display: block; color: #927b70; font-family: sans-serif; font-size: 15px; letter-spacing: 4px; }
+.addresses-title { display: block; margin-top: 12px; color: #2d201d; font-size: 52px; }
+.address-list { border-top: 1px solid #d3c5bb; }
+.address-item { display: grid; min-height: 210px; align-items: start; border-bottom: 1px solid #d3c5bb; padding: 30px 0; grid-template-columns: 88px 1fr 70px; animation: address-in 340ms ease both; }
+.address-index text:first-child { display: block; color: #9a8379; font-family: sans-serif; font-size: 17px; }
+.address-index text:last-child { display: block; margin-top: 16px; color: #7a2831; font-family: sans-serif; font-size: 11px; letter-spacing: 1px; writing-mode: vertical-rl; }
+.address-person { display: block; color: #382724; font-family: "PingFang SC", sans-serif; font-size: 23px; font-weight: 600; }
+.address-detail { display: block; margin-top: 16px; color: #7e6962; font-family: "PingFang SC", sans-serif; font-size: 19px; line-height: 1.75; white-space: pre-line; }
+.edit-address { color: #8c746b; font-family: "PingFang SC", sans-serif; font-size: 17px; text-decoration: underline; }
+.add-address { position: fixed; right: 26px; bottom: calc(30px + env(safe-area-inset-bottom)); left: 26px; z-index: 10; display: flex; height: 82px; align-items: center; justify-content: center; background: #572b2e; color: #fff9ef; font-family: "PingFang SC", sans-serif; font-size: 21px; }
+.address-empty { display: flex; min-height: 600px; align-items: center; flex-direction: column; justify-content: center; text-align: center; }
+.address-empty text:first-child { color: #3d2b27; font-size: 32px; }
+.address-empty text:last-child { margin-top: 14px; color: #907b72; font-family: "PingFang SC", sans-serif; font-size: 19px; }
+.address-skeleton { height: 220px; background: #e4d8ce; animation: address-pulse 1s infinite alternate; }
+@keyframes address-in { from { opacity: 0; transform: translateY(12px); } }
+@keyframes address-pulse { to { opacity: .5; } }

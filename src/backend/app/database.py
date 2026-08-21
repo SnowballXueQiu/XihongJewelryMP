@@ -1,10 +1,11 @@
 from pathlib import Path
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import inspect, text
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from app.models import AdminRole, AdminUser, Banner, Category, PetProfile, Product, SiteSetting, User
+from app.models import Address, AdminRole, AdminUser, Banner, Category, Coupon, PetProfile, Product, SiteSetting, User, UserCoupon
 from app.security import hash_password
 from app.settings import settings
 
@@ -23,6 +24,8 @@ def get_session():
 
 
 def _quote_default(value: Any) -> str:
+    if value is None:
+        return "NULL"
     if isinstance(value, bool):
         return "1" if value else "0"
     if isinstance(value, int):
@@ -42,9 +45,40 @@ def _ensure_sqlite_columns() -> None:
             "cover_url": ("VARCHAR", ""),
             "gallery_urls": ("VARCHAR", "[]"),
             "sort_order": ("INTEGER", 0),
+            "original_price_cents": ("INTEGER", 0),
+            "sales": ("INTEGER", 0),
+            "is_featured": ("BOOLEAN", False),
+            "tags": ("VARCHAR", "[]"),
         },
         "category": {
             "is_active": ("BOOLEAN", True),
+        },
+        "order": {
+            "order_no": ("VARCHAR", ""),
+            "subtotal_cents": ("INTEGER", 0),
+            "shipping_fee_cents": ("INTEGER", 0),
+            "discount_cents": ("INTEGER", 0),
+            "coupon_id": ("INTEGER", None),
+            "buyer_note": ("VARCHAR", ""),
+            "logistics_company": ("VARCHAR", ""),
+            "tracking_no": ("VARCHAR", ""),
+            "updated_at": ("DATETIME", None),
+            "paid_at": ("DATETIME", None),
+            "shipped_at": ("DATETIME", None),
+            "completed_at": ("DATETIME", None),
+            "cancelled_at": ("DATETIME", None),
+            "cancellation_reason": ("VARCHAR", ""),
+        },
+        "paymentintent": {
+            "out_trade_no": ("VARCHAR", ""),
+            "transaction_id": ("VARCHAR", ""),
+            "failure_reason": ("VARCHAR", ""),
+            "updated_at": ("DATETIME", None),
+            "expires_at": ("DATETIME", None),
+            "notified_at": ("DATETIME", None),
+        },
+        "refund": {
+            "previous_status": ("VARCHAR", "paid"),
         },
     }
 
@@ -55,7 +89,18 @@ def _ensure_sqlite_columns() -> None:
             existing_columns = {column["name"] for column in inspector.get_columns(table)}
             for column_name, (column_type, default) in columns.items():
                 if column_name not in existing_columns:
-                    connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {column_name} {column_type} DEFAULT {_quote_default(default)}"))
+                    connection.execute(
+                        text(
+                            f'ALTER TABLE "{table}" ADD COLUMN "{column_name}" '
+                            f"{column_type} DEFAULT {_quote_default(default)}"
+                        )
+                    )
+        if "usercoupon" in existing_tables:
+            duplicate_count = connection.execute(
+                text("SELECT COUNT(*) FROM (SELECT user_id, coupon_id FROM usercoupon GROUP BY user_id, coupon_id HAVING COUNT(*) > 1)")
+            ).scalar_one()
+            if duplicate_count == 0:
+                connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_user_coupon ON usercoupon (user_id, coupon_id)"))
 
 
 def create_db_and_seed() -> None:
@@ -65,10 +110,6 @@ def create_db_and_seed() -> None:
         user = session.get(User, 1)
         if not user:
             user = User(id=1, nickname="玺鸿会员", phone="13800000000", points=120)
-            session.add(user)
-        else:
-            user.nickname = "玺鸿会员"
-            user.avatar_color = "#B89A63"
             session.add(user)
         if not session.exec(select(PetProfile).where(PetProfile.user_id == 1)).first():
             session.add(PetProfile(user_id=1, exp=120, level=2, mood=78, hunger=28))
@@ -87,7 +128,11 @@ def create_db_and_seed() -> None:
                 category_slug="rings",
                 material="18K金",
                 price_cents=268000,
+                original_price_cents=298000,
                 stock=12,
+                sales=86,
+                is_featured=True,
+                tags='["主理人推荐", "叠戴"]',
                 image_color="#B98B85",
                 cover_url="",
                 gallery_urls="[]",
@@ -105,7 +150,11 @@ def create_db_and_seed() -> None:
                 category_slug="bracelets",
                 material="珍珠",
                 price_cents=98000,
+                original_price_cents=118000,
                 stock=24,
+                sales=132,
+                is_featured=True,
+                tags='["珍珠", "轻复古"]',
                 image_color="#E6D8BF",
                 cover_url="",
                 gallery_urls="[]",
@@ -122,7 +171,10 @@ def create_db_and_seed() -> None:
                 category_slug="necklaces",
                 material="包金",
                 price_cents=76000,
+                original_price_cents=88000,
                 stock=18,
+                sales=64,
+                tags='["通勤", "极简"]',
                 image_color="#C7AD76",
                 cover_url="",
                 gallery_urls="[]",
@@ -135,11 +187,68 @@ def create_db_and_seed() -> None:
                 category_slug="earrings",
                 material="银",
                 price_cents=42000,
+                original_price_cents=52000,
                 stock=36,
+                sales=208,
+                tags='["低敏", "礼赠"]',
                 image_color="#B8B4AA",
                 cover_url="",
                 gallery_urls="[]",
                 supports_ar=False,
+            ),
+            Product(
+                name="鸢尾方糖戒指",
+                subtitle="18K 金 / 紫晶 / 白钻",
+                description="几何切割紫晶置于细窄戒臂之上，侧面镂空让光线穿过主石，适合单戴或与素圈叠戴。",
+                category_slug="rings",
+                material="18K金",
+                price_cents=328000,
+                original_price_cents=358000,
+                stock=8,
+                sales=41,
+                is_featured=True,
+                tags='["限量", "彩宝"]',
+                image_color="#6E596B",
+            ),
+            Product(
+                name="山茶金珠手链",
+                subtitle="足金 / 黑玛瑙",
+                description="以抛光金珠和哑光黑玛瑙交替编排，保留东方首饰的秩序感，日常佩戴不挑衣着。",
+                category_slug="bracelets",
+                material="足金",
+                price_cents=186000,
+                original_price_cents=198000,
+                stock=6,
+                sales=57,
+                is_featured=True,
+                tags='["东方", "足金"]',
+                image_color="#A87B43",
+            ),
+            Product(
+                name="晨露钻石锁骨链",
+                subtitle="18K 白金 / 培育钻石",
+                description="单颗明亮式切割钻石悬于锁骨中央，链节轻盈，适合作为每天都能佩戴的第一条钻石项链。",
+                category_slug="necklaces",
+                material="18K白金",
+                price_cents=218000,
+                original_price_cents=248000,
+                stock=10,
+                sales=75,
+                tags='["钻石", "经典"]',
+                image_color="#C9CDD0",
+            ),
+            Product(
+                name="流苏红玉耳线",
+                subtitle="14K 金 / 红玛瑙",
+                description="纤细耳线连接一颗深红玛瑙，走动时产生克制的摆动，让东方红成为造型里的点睛色。",
+                category_slug="earrings",
+                material="14K金",
+                price_cents=68000,
+                original_price_cents=76000,
+                stock=20,
+                sales=119,
+                tags='["新中式", "红玛瑙"]',
+                image_color="#8B3338",
             ),
         ]
         for category in categories:
@@ -155,11 +264,41 @@ def create_db_and_seed() -> None:
         for product in products:
             existing_product = session.exec(select(Product).where(Product.name == product.name)).first()
             if existing_product:
-                for field, value in product.model_dump(exclude={"id", "created_at"}).items():
-                    setattr(existing_product, field, value)
-                session.add(existing_product)
+                continue
             else:
                 session.add(product)
+
+        if not session.exec(select(Address).where(Address.user_id == 1)).first():
+            session.add(
+                Address(
+                    user_id=1,
+                    receiver_name="玺鸿会员",
+                    phone="13800000000",
+                    province="天津市",
+                    city="天津市",
+                    district="和平区",
+                    detail="南京路 219 号玺鸿珠宝体验店",
+                    is_default=True,
+                )
+            )
+
+        coupon = session.exec(select(Coupon).where(Coupon.code == "WELCOME88")).first()
+        if not coupon:
+            coupon = Coupon(
+                code="WELCOME88",
+                name="新客礼遇",
+                description="满 800 元减 88 元",
+                amount_cents=8800,
+                minimum_cents=80000,
+                total_quantity=10000,
+                claimed_quantity=1,
+                valid_from=datetime.now(timezone.utc) - timedelta(days=1),
+                valid_until=datetime.now(timezone.utc) + timedelta(days=365),
+            )
+            session.add(coupon)
+            session.flush()
+        if coupon.id and not session.exec(select(UserCoupon).where(UserCoupon.user_id == 1, UserCoupon.coupon_id == coupon.id)).first():
+            session.add(UserCoupon(user_id=1, coupon_id=coupon.id))
 
         if not session.exec(select(Banner)).first():
             session.add(
@@ -178,6 +317,8 @@ def create_db_and_seed() -> None:
             SiteSetting(key="store_name", value="玺鸿珠宝", label="门店名称", group="general"),
             SiteSetting(key="company_name", value=settings.company_name_zh, label="公司名称", group="general"),
             SiteSetting(key="contact_email", value=settings.contact_email, label="联系邮箱", group="general"),
+            SiteSetting(key="shipping_fee_cents", value=str(settings.shipping_fee_cents), label="配送费（分）", group="commerce"),
+            SiteSetting(key="free_shipping_threshold_cents", value=str(settings.free_shipping_threshold_cents), label="包邮门槛（分）", group="commerce"),
             SiteSetting(key="wechat_appid", value=settings.wechat_appid, label="微信 AppID", group="wechat"),
             SiteSetting(key="wechat_mch_id", value=settings.wx_pay_mch_id, label="微信支付商户号", group="payment"),
         ]
