@@ -19,6 +19,7 @@ from app.models import (
     Category,
     Coupon,
     Favorite,
+    InvoiceTitle,
     Order,
     OrderItem,
     OrderStatus,
@@ -42,6 +43,8 @@ from app.schemas import (
     CouponRead,
     CreateOrderRequest,
     FavoriteRead,
+    InvoiceTitleRead,
+    InvoiceTitleWrite,
     OrderItemRead,
     OrderRead,
     PaymentParams,
@@ -352,6 +355,99 @@ def delete_address(
     return {"ok": True}
 
 
+def _set_default_invoice_title(session: Session, user_id: int, invoice_title_id: int) -> None:
+    titles = session.exec(select(InvoiceTitle).where(InvoiceTitle.user_id == user_id)).all()
+    for title in titles:
+        title.is_default = title.id == invoice_title_id
+        session.add(title)
+
+
+@app.get("/api/invoice-titles", response_model=list[InvoiceTitleRead])
+def list_invoice_titles(
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> list[InvoiceTitle]:
+    return list(
+        session.exec(
+            select(InvoiceTitle)
+            .where(InvoiceTitle.user_id == user.id)
+            .order_by(col(InvoiceTitle.is_default).desc(), col(InvoiceTitle.updated_at).desc())
+        )
+    )
+
+
+@app.post("/api/invoice-titles", response_model=InvoiceTitleRead)
+def create_invoice_title(
+    payload: InvoiceTitleWrite,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> InvoiceTitle:
+    if payload.invoice_type == "company" and not payload.tax_number.strip():
+        raise HTTPException(status_code=400, detail="企业抬头需要填写纳税人识别号")
+    has_titles = bool(session.exec(select(InvoiceTitle).where(InvoiceTitle.user_id == user.id)).first())
+    title = InvoiceTitle(
+        user_id=user.id or 0,
+        **payload.model_dump(exclude={"is_default"}),
+        is_default=payload.is_default or not has_titles,
+    )
+    session.add(title)
+    session.flush()
+    if title.is_default:
+        _set_default_invoice_title(session, user.id or 0, title.id or 0)
+    session.commit()
+    session.refresh(title)
+    return title
+
+
+@app.put("/api/invoice-titles/{invoice_title_id}", response_model=InvoiceTitleRead)
+def update_invoice_title(
+    invoice_title_id: int,
+    payload: InvoiceTitleWrite,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> InvoiceTitle:
+    title = session.get(InvoiceTitle, invoice_title_id)
+    if not title or title.user_id != user.id:
+        raise HTTPException(status_code=404, detail="发票抬头不存在")
+    if payload.invoice_type == "company" and not payload.tax_number.strip():
+        raise HTTPException(status_code=400, detail="企业抬头需要填写纳税人识别号")
+    was_default = title.is_default
+    for field, value in payload.model_dump().items():
+        setattr(title, field, value)
+    title.updated_at = datetime.now(timezone.utc)
+    session.add(title)
+    if payload.is_default:
+        _set_default_invoice_title(session, user.id or 0, title.id or 0)
+    elif was_default:
+        title.is_default = True
+        session.add(title)
+    session.commit()
+    session.refresh(title)
+    return title
+
+
+@app.delete("/api/invoice-titles/{invoice_title_id}")
+def delete_invoice_title(
+    invoice_title_id: int,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, bool]:
+    title = session.get(InvoiceTitle, invoice_title_id)
+    if not title or title.user_id != user.id:
+        raise HTTPException(status_code=404, detail="发票抬头不存在")
+    was_default = title.is_default
+    session.delete(title)
+    session.commit()
+    if was_default:
+        next_title = session.exec(
+            select(InvoiceTitle).where(InvoiceTitle.user_id == user.id).order_by(col(InvoiceTitle.updated_at).desc())
+        ).first()
+        if next_title:
+            _set_default_invoice_title(session, user.id or 0, next_title.id or 0)
+            session.commit()
+    return {"ok": True}
+
+
 @app.get("/api/favorites", response_model=list[FavoriteRead])
 def list_favorites(user: User = Depends(get_current_user), session: Session = Depends(get_session)) -> list[FavoriteRead]:
     favorites = session.exec(
@@ -509,6 +605,15 @@ def create_order(
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> OrderRead:
+    if payload.client_request_id:
+        existing = session.exec(
+            select(Order).where(
+                Order.user_id == user.id,
+                Order.client_request_id == payload.client_request_id,
+            )
+        ).first()
+        if existing:
+            return serialize_order(existing, session)
     address_id = payload.address_id
     if payload.fulfillment_type == "delivery" and address_id is None:
         default_address = session.exec(
@@ -535,7 +640,19 @@ def create_order(
             config_values.get("pickup_store_name") or "玺鸿珠宝天津店",
             config_values.get("pickup_store_address") or "天津市和平区南京路 219 号",
             config_values.get("pickup_store_phone") or "16622515550",
+            payload.client_request_id,
         )
+    except IntegrityError as error:
+        session.rollback()
+        existing = session.exec(
+            select(Order).where(
+                Order.user_id == user.id,
+                Order.client_request_id == payload.client_request_id,
+            )
+        ).first()
+        if existing:
+            return serialize_order(existing, session)
+        raise HTTPException(status_code=409, detail="订单正在创建，请到订单中心查看") from error
     except ValueError as error:
         session.rollback()
         raise HTTPException(status_code=400, detail=str(error)) from error

@@ -1,12 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import Taro, { useDidShow, useRouter } from '@tarojs/taro'
 import { Button, Input, Picker, Text, View } from '@tarojs/components'
 import JewelryVisual from '@/components/JewelryVisual'
 import IconFont from '@/components/IconFont'
-import { createAddress, createOrder, fetchAddresses, fetchCoupons, fetchProduct, fetchStoreConfig, formatMoney } from '@/services/api'
+import { createAddress, createOrder, fetchAddresses, fetchCoupons, fetchInvoiceTitles, fetchOrder, fetchProduct, fetchStoreConfig, formatMoney } from '@/services/api'
 import { performOrderPayment, presentPaymentError } from '@/services/payment'
 import { usePageEntranceAnimation } from '@/hooks/useSubtleAnimation'
-import { Address, Coupon, Product, StoreConfig } from '@/types/domain'
+import { Address, Coupon, InvoiceTitle, Product, StoreConfig } from '@/types/domain'
 import './index.scss'
 
 interface CheckoutLine { product_id: number; quantity: number; product?: Product }
@@ -37,9 +37,8 @@ export default function OrderConfirmPage() {
   const [fulfillmentType, setFulfillmentType] = useState<FulfillmentType>('delivery')
   const [pickupIndex, setPickupIndex] = useState(0)
   const [invoiceType, setInvoiceType] = useState<InvoiceType>('none')
-  const [invoiceTitle, setInvoiceTitle] = useState('')
-  const [invoiceTaxNumber, setInvoiceTaxNumber] = useState('')
-  const [invoiceEmail, setInvoiceEmail] = useState('')
+  const [invoiceTitles, setInvoiceTitles] = useState<InvoiceTitle[]>([])
+  const [invoiceTitleId, setInvoiceTitleId] = useState<number | null>(null)
   const [coupons, setCoupons] = useState<Coupon[]>([])
   const [couponIndex, setCouponIndex] = useState(0)
   const [buyerNote, setBuyerNote] = useState('')
@@ -48,6 +47,8 @@ export default function OrderConfirmPage() {
   const [storeConfig, setStoreConfig] = useState<StoreConfig>(defaultStore)
   const pickupSlots = useMemo(buildPickupSlots, [])
   const pageAnimation = usePageEntranceAnimation()
+  const clientRequestId = useRef(`checkout_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`).current
+  const createdOrderId = useRef(0)
 
   const rawItems = useMemo(() => {
     try { return JSON.parse(decodeURIComponent(String(router.params.items || '[]'))) as Array<{ product_id: number; quantity: number }> }
@@ -57,27 +58,42 @@ export default function OrderConfirmPage() {
   useDidShow(() => {
     Promise.all([
       Promise.all(rawItems.map(async (item) => ({ ...item, product: await fetchProduct(item.product_id) }))),
-      fetchAddresses(), fetchCoupons(), fetchStoreConfig()
-    ]).then(([nextLines, nextAddresses, nextCoupons, nextStoreConfig]) => {
+      fetchAddresses(), fetchCoupons(), fetchStoreConfig(), fetchInvoiceTitles()
+    ]).then(([nextLines, nextAddresses, nextCoupons, nextStoreConfig, nextInvoiceTitles]) => {
       const selectedAddressId = Number(Taro.getStorageSync('selected_address_id') || 0)
+      const selectedInvoiceTitleId = Number(Taro.getStorageSync('selected_invoice_title_id') || 0)
       Taro.removeStorageSync('selected_address_id')
+      Taro.removeStorageSync('selected_invoice_title_id')
       setLines(nextLines)
       setAddresses(nextAddresses)
       setAddressId((current) => selectedAddressId || current || nextAddresses.find((item) => item.is_default)?.id || nextAddresses[0]?.id || null)
       setCoupons(nextCoupons.filter((item) => item.claimed && item.available))
       setStoreConfig(nextStoreConfig)
+      setInvoiceTitles(nextInvoiceTitles)
+      if (selectedInvoiceTitleId) {
+        const selected = nextInvoiceTitles.find((item) => item.id === selectedInvoiceTitleId)
+        if (selected) {
+          setInvoiceTitleId(selected.id)
+          setInvoiceType(selected.invoice_type)
+        }
+      } else {
+        setInvoiceTitleId((current) => current && nextInvoiceTitles.some((item) => item.id === current)
+          ? current
+          : nextInvoiceTitles.find((item) => item.is_default)?.id || nextInvoiceTitles[0]?.id || null)
+      }
     }).catch((error) => Taro.showToast({ title: error instanceof Error ? error.message : '结算信息加载失败', icon: 'none' }))
       .finally(() => setLoading(false))
   })
 
   const address = addresses.find((item) => item.id === addressId)
+  const selectedInvoiceTitle = invoiceTitles.find((item) => item.id === invoiceTitleId && item.invoice_type === invoiceType)
   const subtotal = lines.reduce((sum, item) => sum + (item.product?.price_cents || 0) * item.quantity, 0)
   const allItemsFreeShipping = lines.length > 0 && lines.every((item) => item.product?.free_shipping)
   const shipping = fulfillmentType === 'pickup' || allItemsFreeShipping || subtotal >= storeConfig.free_shipping_threshold_cents ? 0 : storeConfig.shipping_fee_cents
   const eligibleCoupons = useMemo(() => [null, ...coupons.filter((item) => subtotal >= item.minimum_cents)] as Array<Coupon | null>, [coupons, subtotal])
   const selectedCoupon = eligibleCoupons[couponIndex] || null
   const discount = selectedCoupon ? Math.min(selectedCoupon.amount_cents, subtotal) : 0
-  const total = Math.max(1, subtotal + shipping - discount)
+  const total = Math.max(0, subtotal + shipping - discount)
   const couponLabels = eligibleCoupons.map((item) => item ? `${item.name}  -${formatMoney(item.amount_cents)}` : '暂不使用优惠券')
 
   async function importWechatAddress() {
@@ -98,41 +114,43 @@ export default function OrderConfirmPage() {
     }
   }
 
-  async function importInvoiceTitle() {
-    try {
-      const result = await Taro.chooseInvoiceTitle()
-      const type = String(result.type) === '0' ? 'company' : 'personal'
-      setInvoiceType(type)
-      setInvoiceTitle(result.title || (type === 'personal' ? '个人' : ''))
-      setInvoiceTaxNumber(result.taxNumber || '')
-      Taro.showToast({ title: '发票抬头已导入', icon: 'success' })
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String((error as { errMsg?: string })?.errMsg || '')
-      if (!message.includes('cancel')) Taro.showToast({ title: '暂时无法读取，请手动填写发票抬头', icon: 'none' })
-    }
+  function chooseInvoiceType(type: InvoiceType) {
+    setInvoiceType(type)
+    if (type === 'none') return
+    const current = invoiceTitles.find((item) => item.id === invoiceTitleId && item.invoice_type === type)
+    if (!current) setInvoiceTitleId(invoiceTitles.find((item) => item.invoice_type === type && item.is_default)?.id || invoiceTitles.find((item) => item.invoice_type === type)?.id || null)
   }
 
   async function submitOrder() {
     if (submitting) return
     if (!lines.length) return Taro.showToast({ title: '没有可结算商品', icon: 'none' })
     if (fulfillmentType === 'delivery' && !addressId) return Taro.showToast({ title: '请先添加收货地址', icon: 'none' })
-    if (invoiceType === 'company' && (!invoiceTitle.trim() || !invoiceTaxNumber.trim())) return Taro.showToast({ title: '请填写企业抬头和税号', icon: 'none' })
+    if (invoiceType !== 'none' && !selectedInvoiceTitle) return Taro.showToast({ title: '请先选择发票抬头', icon: 'none' })
     setSubmitting(true)
-    let createdOrderId = 0
     try {
-      const order = await createOrder({
+      const payload = {
         items: lines.map((item) => ({ product_id: item.product_id, quantity: item.quantity })),
         address_id: fulfillmentType === 'delivery' ? addressId : null, coupon_id: selectedCoupon?.id || null, buyer_note: buyerNote.trim(),
         fulfillment_type: fulfillmentType, pickup_slot: fulfillmentType === 'pickup' ? pickupSlots[pickupIndex] : '',
-        invoice_type: invoiceType, invoice_title: invoiceTitle.trim(), invoice_tax_number: invoiceTaxNumber.trim(), invoice_email: invoiceEmail.trim()
-      })
-      createdOrderId = order.id
+        invoice_type: invoiceType,
+        invoice_title: selectedInvoiceTitle?.title || '',
+        invoice_tax_number: selectedInvoiceTitle?.tax_number || '',
+        invoice_email: selectedInvoiceTitle?.email || '',
+        client_request_id: clientRequestId
+      } as const
+      const order = createdOrderId.current ? await fetchOrder(createdOrderId.current) : await createOrder(payload)
+      createdOrderId.current = order.id
+      if (order.status !== 'pending_payment') {
+        Taro.redirectTo({ url: `/pages/payment-result/index?orderId=${order.id}&result=success` })
+        return
+      }
       const result = await performOrderPayment(order.id)
-      if (result === 'cancelled') Taro.redirectTo({ url: `/pages/order-detail/index?id=${order.id}` })
+      if (result === 'cancelled') Taro.redirectTo({ url: '/pages/orders/index?status=pending_payment' })
       else Taro.redirectTo({ url: `/pages/payment-result/index?orderId=${order.id}&result=${result}` })
     } catch (error) {
-      if (createdOrderId) await presentPaymentError(error, createdOrderId)
-      else Taro.showToast({ title: error instanceof Error ? error.message : '订单提交失败', icon: 'none', duration: 2600 })
+      if (createdOrderId.current) await presentPaymentError(error)
+      else await Taro.showModal({ title: '订单未完成', content: error instanceof Error ? error.message : '订单提交状态未知，请到订单中心查看。', showCancel: false, confirmText: '查看订单', confirmColor: '#74252D' })
+      await Taro.redirectTo({ url: `/pages/orders/index?status=${createdOrderId.current ? 'pending_payment' : 'all'}` })
     } finally { setSubmitting(false) }
   }
 
@@ -173,19 +191,20 @@ export default function OrderConfirmPage() {
 
     <View className='checkout-block options-block'>
       <View className='block-heading'><Text>03</Text><Text>发票与优惠</Text><Text /></View>
-      <View className='invoice-tabs'>{(['none', 'personal', 'company'] as InvoiceType[]).map((type) => <Button key={type} className={invoiceType === type ? 'active' : ''} onClick={() => { setInvoiceType(type); if (type === 'personal' && !invoiceTitle) setInvoiceTitle('个人') }}>{type === 'none' ? '不开发票' : type === 'personal' ? '个人' : '企业'}</Button>)}</View>
+      <View className='invoice-tabs'>{(['none', 'personal', 'company'] as InvoiceType[]).map((type) => <Button key={type} className={invoiceType === type ? 'active' : ''} onClick={() => chooseInvoiceType(type)}>{type === 'none' ? '不开发票' : type === 'personal' ? '个人' : '企业'}</Button>)}</View>
       {invoiceType !== 'none' && <View className='invoice-fields'>
-        <View className='invoice-field'><Text>发票抬头</Text><Input value={invoiceTitle} placeholder={invoiceType === 'personal' ? '个人' : '企业名称'} onInput={(event) => setInvoiceTitle(String(event.detail.value))} /></View>
-        {invoiceType === 'company' && <View className='invoice-field'><Text>纳税人识别号</Text><Input value={invoiceTaxNumber} placeholder='企业税号' onInput={(event) => setInvoiceTaxNumber(String(event.detail.value))} /></View>}
-        <View className='invoice-field'><Text>接收邮箱</Text><Input value={invoiceEmail} type='text' placeholder='选填，用于接收电子发票' onInput={(event) => setInvoiceEmail(String(event.detail.value))} /></View>
-        <Button className='wechat-import invoice-import' onClick={importInvoiceTitle}>从微信发票抬头导入</Button>
+        <View className='invoice-book-row' onClick={() => Taro.navigateTo({ url: `/pages/invoice-titles/index?select=1&type=${invoiceType}` })}>
+          <IconFont name='order' />
+          {selectedInvoiceTitle ? <View><Text>{selectedInvoiceTitle.title}</Text><Text>{selectedInvoiceTitle.invoice_type === 'company' ? `税号 ${selectedInvoiceTitle.tax_number}` : '个人发票抬头'}{selectedInvoiceTitle.email ? ` · ${selectedInvoiceTitle.email}` : ''}</Text></View> : <View><Text>选择或新增发票抬头</Text><Text>保存一次，之后结算可直接选择</Text></View>}
+          <IconFont name='chevronRight' />
+        </View>
       </View>}
       <Picker mode='selector' range={couponLabels} value={couponIndex} onChange={(event) => setCouponIndex(Number(event.detail.value))}><View className='option-row'><Text>优惠券</Text><View className={selectedCoupon ? 'option-value accent' : 'option-value'}><Text>{couponLabels[couponIndex] || '暂无可用'}</Text><IconFont name='chevronRight' /></View></View></Picker>
       <View className='note-row'><Text>订单备注</Text><Input value={buyerNote} maxlength={200} placeholder='选填，给店员留言' onInput={(event) => setBuyerNote(String(event.detail.value))} /></View>
     </View>
 
     <View className='price-summary'><View><Text>商品小计</Text><Text>{formatMoney(subtotal)}</Text></View><View><Text>{fulfillmentType === 'pickup' ? '到店自提' : '顺丰保价配送'}</Text><Text>{shipping ? formatMoney(shipping) : fulfillmentType === 'pickup' ? '免配送费' : '包邮'}</Text></View><View><Text>优惠</Text><Text className='discount'>{discount ? `-${formatMoney(discount)}` : '¥0'}</Text></View><View className='summary-total'><Text>应付合计</Text><Text>{formatMoney(total)}</Text></View></View>
-    <View className='payment-assurance'><IconFont name='wallet' /><View><Text>微信支付</Text><Text>支付信息由微信安全加密处理</Text></View></View>
-    <View className='checkout-footer'><View><Text>应付</Text><Text>{formatMoney(total)}</Text></View><Button loading={submitting} disabled={submitDisabled} hoverClass='button-press' onClick={submitOrder}>微信支付</Button></View>
+    <View className='payment-assurance'><IconFont name='wallet' /><View><Text>{total === 0 ? '免支付订单' : '微信支付'}</Text><Text>{total === 0 ? '零元测试订单不会唤起微信收银台或产生扣款' : '支付信息由微信安全加密处理'}</Text></View></View>
+    <View className='checkout-footer'><View><Text>应付</Text><Text>{formatMoney(total)}</Text></View><Button loading={submitting} disabled={submitDisabled} hoverClass='button-press' onClick={submitOrder}>{total === 0 ? '确认免支付订单' : createdOrderId.current ? '继续支付' : '微信支付'}</Button></View>
   </View>
 }

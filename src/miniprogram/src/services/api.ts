@@ -7,6 +7,8 @@ import {
   Category,
   Coupon,
   Favorite,
+  InvoiceTitle,
+  InvoiceTitlePayload,
   Order,
   OrderStatus,
   PaymentParams,
@@ -177,6 +179,11 @@ export const createAddress = (payload: AddressPayload) => request<Address>('/api
 export const updateAddress = (id: number, payload: AddressPayload) => request<Address>(`/api/addresses/${id}`, { method: 'PUT', data: payload })
 export const deleteAddress = (id: number) => request<{ ok: boolean }>(`/api/addresses/${id}`, { method: 'DELETE' })
 
+export const fetchInvoiceTitles = () => request<InvoiceTitle[]>('/api/invoice-titles')
+export const createInvoiceTitle = (payload: InvoiceTitlePayload) => request<InvoiceTitle>('/api/invoice-titles', { method: 'POST', data: payload })
+export const updateInvoiceTitle = (id: number, payload: InvoiceTitlePayload) => request<InvoiceTitle>(`/api/invoice-titles/${id}`, { method: 'PUT', data: payload })
+export const deleteInvoiceTitle = (id: number) => request<{ ok: boolean }>(`/api/invoice-titles/${id}`, { method: 'DELETE' })
+
 export const fetchFavorites = () => request<Favorite[]>('/api/favorites')
 export const toggleFavorite = (productId: number) => request<{ active: boolean }>(`/api/favorites/${productId}`, { method: 'PUT' })
 
@@ -194,6 +201,7 @@ export const createOrder = (payload: {
   invoice_title?: string
   invoice_tax_number?: string
   invoice_email?: string
+  client_request_id?: string
 }) => request<Order>('/api/orders', { method: 'POST', data: payload })
 
 export const startOrderPayment = (orderId: number) => request<PaymentParams>(`/api/orders/${orderId}/pay`, { method: 'POST' })

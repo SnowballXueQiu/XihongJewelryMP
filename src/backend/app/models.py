@@ -108,6 +108,18 @@ class Address(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utc_now)
 
 
+class InvoiceTitle(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(index=True, foreign_key="user.id")
+    invoice_type: str = Field(default="personal", index=True)
+    title: str
+    tax_number: str = ""
+    email: str = ""
+    is_default: bool = False
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
 class Favorite(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(index=True, foreign_key="user.id")
@@ -152,6 +164,7 @@ class CartItem(SQLModel, table=True):
 class Order(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     order_no: str = Field(default="", index=True)
+    client_request_id: str = Field(default="", index=True)
     user_id: int = Field(index=True, foreign_key="user.id")
     status: OrderStatus = Field(default=OrderStatus.pending_payment, index=True)
     total_cents: int = 0
@@ -172,6 +185,7 @@ class Order(SQLModel, table=True):
     invoice_email: str = ""
     logistics_company: str = ""
     tracking_no: str = ""
+    platform_shipping_uploaded_at: datetime | None = None
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
     paid_at: datetime | None = None

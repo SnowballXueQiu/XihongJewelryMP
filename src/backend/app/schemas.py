@@ -108,6 +108,7 @@ class CreateOrderRequest(BaseModel):
     invoice_title: str = Field(default="", max_length=100)
     invoice_tax_number: str = Field(default="", max_length=40)
     invoice_email: str = Field(default="", max_length=100)
+    client_request_id: str = Field(default="", max_length=64, pattern=r"^[A-Za-z0-9_-]*$")
 
 
 class OrderStatusUpdate(BaseModel):
@@ -187,6 +188,23 @@ class AddressWrite(BaseModel):
     district: str = Field(min_length=1, max_length=30)
     detail: str = Field(min_length=2, max_length=100)
     postal_code: str = Field(default="", max_length=12)
+    is_default: bool = False
+
+
+class InvoiceTitleRead(BaseModel):
+    id: int
+    invoice_type: Literal["personal", "company"]
+    title: str
+    tax_number: str
+    email: str
+    is_default: bool
+
+
+class InvoiceTitleWrite(BaseModel):
+    invoice_type: Literal["personal", "company"]
+    title: str = Field(min_length=1, max_length=100)
+    tax_number: str = Field(default="", max_length=40)
+    email: str = Field(default="", max_length=100)
     is_default: bool = False
 
 

@@ -8,6 +8,7 @@ from sqlmodel import Session, col, select
 from app.auth import create_admin_token, get_admin_by_email, get_current_admin, require_super_admin
 from app.database import get_session
 from app import wechat_pay
+from app import wechat_platform
 from app.models import AdminUser, Asset, Banner, Category, Coupon, Order, OrderStatus, PaymentIntent, PaymentStatus, PetProfile, Product, ProductStatus, Refund, SiteSetting, User
 from app.schemas import (
     AdminLoginRequest,
@@ -304,8 +305,11 @@ def update_admin_order_status(order_id: int, payload: OrderStatusUpdate, session
         order.tracking_no = payload.tracking_no
     session.add(order)
     try:
+        if payload.status == OrderStatus.shipped and order.status != OrderStatus.shipped:
+            wechat_platform.upload_order_shipping(session, order)
         order = update_order_status(session, order_id, payload.status)
-    except ValueError as error:
+    except (ValueError, wechat_platform.WechatPlatformError) as error:
+        session.rollback()
         raise HTTPException(status_code=400, detail=str(error)) from error
     write_audit_log(session, admin, "update_status", "order", str(order.id or ""), payload.status)
     session.commit()

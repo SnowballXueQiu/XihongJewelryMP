@@ -133,6 +133,17 @@ export interface Address {
 
 export type AddressPayload = Omit<Address, 'id'>
 
+export interface InvoiceTitle {
+  id: number
+  invoice_type: 'personal' | 'company'
+  title: string
+  tax_number: string
+  email: string
+  is_default: boolean
+}
+
+export type InvoiceTitlePayload = Omit<InvoiceTitle, 'id'>
+
 export interface Favorite {
   id: number
   product: Product

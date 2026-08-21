@@ -77,7 +77,7 @@ export default function OrdersPage() {
 
   return (
     <View className='orders-page'>
-      <View className='orders-head'><View><Text>ORDER ARCHIVE</Text><Text>我的订单</Text></View><IconFont name='order' /></View>
+      <View className='orders-head'><View><Text>ORDER ARCHIVE</Text><Text>我的订单</Text></View><View className='orders-mark'><IconFont name='order' /></View></View>
       <ScrollView scrollX className='order-tabs' showScrollbar={false}>
         <View className='tabs-inner'>{tabs.map((tab) => (
           <Button key={tab.key} className={active === tab.key ? 'tab active' : 'tab'} onClick={() => setActive(tab.key)}>{tab.label}</Button>

@@ -1,0 +1,41 @@
+.invoice-book-page { min-height: 100vh; padding: 46px 26px 150px; background: #f5efe7; }
+.invoice-book-head { padding: 0 6px 34px; }
+.invoice-book-head text { display: block; }
+.invoice-book-head text:first-child { color: #927b70; font-family: Arial,sans-serif; font-size: 14px; letter-spacing: 4px; }
+.invoice-book-head text:nth-child(2) { margin-top: 12px; color: #2d201d; font-size: 46px; }
+.invoice-book-head text:last-child { margin-top: 12px; color: #8a756d; font-family: "PingFang SC",sans-serif; font-size: 18px; }
+.invoice-book-actions { display: grid; gap: 12px; margin-bottom: 28px; grid-template-columns: 1fr 1fr; }
+.invoice-book-actions button { display: flex; height: 72px; align-items: center; justify-content: center; gap: 8px; border: 1px solid #cdbdb1; border-radius: 12px; color: #702832; font-size: 19px; line-height: 1.2; }
+.invoice-book-actions .primary { border-color: #572b2e; background: #572b2e; color: #fff9ef; }
+.invoice-title-list { border-top: 1px solid #d2c4b9; }
+.invoice-title-card { display: grid; min-height: 190px; gap: 16px; align-items: start; padding: 28px 2px; border-bottom: 1px solid #d2c4b9; grid-template-columns: 72px 1fr 74px; }
+.invoice-title-number text { display: block; color: #9b8479; font-family: Arial,sans-serif; font-size: 16px; }
+.invoice-title-number text:last-child { margin-top: 13px; color: #702832; font-family: "PingFang SC",sans-serif; font-size: 15px; }
+.invoice-title-copy > view { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.invoice-title-copy > view > text:first-child { color: #352522; font-size: 25px; }
+.default-tag { padding: 4px 8px; border-radius: 10px; background: #eadbd1; color: #702832; font-size: 13px; }
+.invoice-title-copy > text { display: block; overflow-wrap: anywhere; margin-top: 13px; color: #836f67; font-family: Arial,"PingFang SC",sans-serif; font-size: 17px; line-height: 1.45; }
+.invoice-title-ops button { min-height: 48px; color: #88736b; font-size: 16px; text-decoration: underline; }
+.invoice-book-empty { display: flex; min-height: 520px; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.invoice-book-empty text:first-child { color: #3b2925; font-size: 30px; }
+.invoice-book-empty text:last-child { max-width: 480px; margin-top: 14px; color: #907b72; font-family: "PingFang SC",sans-serif; font-size: 18px; line-height: 1.6; }
+.invoice-book-skeleton { height: 190px; border-radius: 16px; background: #e3d7cc; animation: invoice-pulse 1s infinite alternate; }
+.invoice-editor-mask { position: fixed; z-index: 80; inset: 0; display: flex; align-items: flex-end; background: rgba(30,21,19,.48); }
+.invoice-editor { width: 100%; padding: 30px 26px calc(30px + env(safe-area-inset-bottom)); border-radius: 28px 28px 0 0; background: #fffaf4; box-shadow: 0 -18px 60px rgba(40,25,20,.2); animation: editor-up 260ms ease both; }
+.editor-head { display: flex; align-items: flex-start; justify-content: space-between; padding-bottom: 22px; }
+.editor-head view text { display: block; }
+.editor-head view text:first-child { color: #9a8378; font-family: Arial,sans-serif; font-size: 12px; letter-spacing: 3px; }
+.editor-head view text:last-child { margin-top: 8px; color: #33231f; font-size: 30px; }
+.editor-head button { display: flex; min-width: 84px; height: 50px; align-items: center; justify-content: center; border-radius: 25px; background: #eee3da; color: #775f57; font-size: 16px; }
+.editor-types { display: grid; gap: 10px; margin-bottom: 8px; grid-template-columns: 1fr 1fr; }
+.editor-types button { display: flex; height: 62px; align-items: center; justify-content: center; border: 1px solid #d8c9bd; border-radius: 31px; color: #7c6961; font-size: 18px; }
+.editor-types button.active { border-color: #702832; background: #702832; color: #fff; }
+.editor-field { display: grid; min-height: 82px; align-items: center; border-bottom: 1px solid #e2d5ca; grid-template-columns: 190px 1fr; }
+.editor-field text { color: #57433d; font-size: 18px; }
+.editor-field input { text-align: right; font-size: 17px; }
+.default-switch { display: flex; min-height: 70px; align-items: center; justify-content: flex-start; gap: 12px; color: #75635c; font-size: 17px; }
+.default-switch view { width: 22px; height: 22px; border: 1px solid #a9958b; border-radius: 50%; }
+.default-switch.active view { border: 6px solid #702832; }
+.save-title { display: flex; height: 76px; align-items: center; justify-content: center; border-radius: 13px; background: #572b2e; color: #fff9ef; font-size: 20px; }
+@keyframes editor-up { from { transform: translateY(100%); } }
+@keyframes invoice-pulse { to { opacity: .5; } }

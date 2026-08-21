@@ -5,7 +5,7 @@ from typing import Any
 from sqlalchemy import inspect, text
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from app.models import Address, AdminRole, AdminUser, Banner, Category, Coupon, PetProfile, Product, SiteSetting, User, UserCoupon
+from app.models import Address, AdminRole, AdminUser, Banner, Category, Coupon, InvoiceTitle, PetProfile, Product, SiteSetting, User, UserCoupon
 from app.security import hash_password
 from app.settings import settings
 
@@ -56,6 +56,7 @@ def _ensure_sqlite_columns() -> None:
         },
         "order": {
             "order_no": ("VARCHAR", ""),
+            "client_request_id": ("VARCHAR", ""),
             "subtotal_cents": ("INTEGER", 0),
             "shipping_fee_cents": ("INTEGER", 0),
             "discount_cents": ("INTEGER", 0),
@@ -70,6 +71,7 @@ def _ensure_sqlite_columns() -> None:
             "invoice_email": ("VARCHAR", ""),
             "logistics_company": ("VARCHAR", ""),
             "tracking_no": ("VARCHAR", ""),
+            "platform_shipping_uploaded_at": ("DATETIME", None),
             "updated_at": ("DATETIME", None),
             "paid_at": ("DATETIME", None),
             "shipped_at": ("DATETIME", None),
@@ -109,6 +111,20 @@ def _ensure_sqlite_columns() -> None:
             ).scalar_one()
             if duplicate_count == 0:
                 connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_user_coupon ON usercoupon (user_id, coupon_id)"))
+        if "order" in existing_tables:
+            duplicate_request_count = connection.execute(
+                text(
+                    'SELECT COUNT(*) FROM (SELECT user_id, client_request_id FROM "order" '
+                    "WHERE client_request_id <> '' GROUP BY user_id, client_request_id HAVING COUNT(*) > 1)"
+                )
+            ).scalar_one()
+            if duplicate_request_count == 0:
+                connection.execute(
+                    text(
+                        'CREATE UNIQUE INDEX IF NOT EXISTS uq_order_client_request '
+                        'ON "order" (user_id, client_request_id) WHERE client_request_id <> \'\''
+                    )
+                )
 
 
 def create_db_and_seed() -> None:
@@ -258,6 +274,21 @@ def create_db_and_seed() -> None:
                 tags='["新中式", "红玛瑙"]',
                 image_color="#8B3338",
             ),
+            Product(
+                name="零元下单流程测试商品",
+                subtitle="免支付流程联调专用",
+                description="用于验证下单、订单状态和履约流程，不会调用微信支付，也不会产生扣款。",
+                category_slug="rings",
+                material="测试商品",
+                price_cents=0,
+                original_price_cents=0,
+                stock=9999,
+                sales=0,
+                free_shipping=True,
+                tags='["零元测试", "免支付"]',
+                image_color="#CDB27A",
+                sort_order=999,
+            ),
         ]
         for category in categories:
             existing_category = session.exec(select(Category).where(Category.slug == category.slug)).first()
@@ -286,6 +317,16 @@ def create_db_and_seed() -> None:
                     city="天津市",
                     district="和平区",
                     detail="南京路 219 号玺鸿珠宝体验店",
+                    is_default=True,
+                )
+            )
+
+        if not session.exec(select(InvoiceTitle).where(InvoiceTitle.user_id == 1)).first():
+            session.add(
+                InvoiceTitle(
+                    user_id=1,
+                    invoice_type="personal",
+                    title="个人",
                     is_default=True,
                 )
             )

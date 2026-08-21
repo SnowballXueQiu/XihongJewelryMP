@@ -42,6 +42,7 @@ export default function ProfilePage() {
   const orderCount = (statuses: string[]) => orders.filter((order) => statuses.includes(order.status)).length
   const menu = [
     { label: '收货地址', copy: '管理常用收件人', value: '', url: '/pages/addresses/index' },
+    { label: '发票抬头', copy: '管理个人与企业抬头', value: '', url: '/pages/invoice-titles/index' },
     { label: '心选收藏', copy: '重温心动作品', value: String(favoriteCount || ''), url: '/pages/favorites/index' },
     { label: '优惠礼券', copy: '查看会员专属礼遇', value: String(couponCount || ''), url: '/pages/coupons/index' },
     { label: '购物袋', copy: '继续未完成的挑选', value: '', url: '/pages/cart/index' }

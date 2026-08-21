@@ -41,7 +41,13 @@ export async function presentPaymentError(error: unknown, orderId?: number): Pro
     }
     return
   }
-  Taro.showToast({ title: error instanceof Error ? error.message : '支付发起失败，请稍后重试', icon: 'none', duration: 3200 })
+  await Taro.showModal({
+    title: '支付未完成',
+    content: error instanceof Error ? error.message : '支付发起失败，订单已保留，请稍后重试。',
+    showCancel: false,
+    confirmText: '查看订单',
+    confirmColor: '#74252D'
+  })
 }
 
 export async function performOrderPayment(orderId: number): Promise<PaymentFlowResult> {
@@ -77,7 +83,7 @@ export async function performOrderPayment(orderId: number): Promise<PaymentFlowR
     if (/violated platform rules|unable to use pay|payment.*restricted|支付.{0,8}(受限|违规|停用)/i.test(message)) {
       throw new PaymentFlowError(
         'capability_restricted',
-        '微信平台已限制当前小程序的支付能力。订单已保留且不会重复扣款，请管理员登录微信公众平台处理违规记录并恢复支付权限后再试。'
+        '微信平台暂时限制当前小程序的支付能力。订单已保留且不会重复创建，请到“我的订单”稍后重试；管理员需在公众平台核对支付能力、订单发货管理与风控状态。'
       )
     }
     throw new PaymentFlowError('request_failed', '微信支付未能完成，订单已保留，请稍后在订单中心重试。')

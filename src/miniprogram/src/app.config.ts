@@ -11,6 +11,7 @@ export default defineAppConfig({
     'pages/payment-result/index',
     'pages/addresses/index',
     'pages/address-edit/index',
+    'pages/invoice-titles/index',
     'pages/favorites/index',
     'pages/coupons/index',
     'pages/ar-try-on/index',

@@ -180,13 +180,13 @@ def current_pending_order_amounts(session: Session, order: Order) -> tuple[int, 
     if order.status != OrderStatus.pending_payment:
         return order.shipping_fee_cents, order.total_cents
     if order.fulfillment_type == "pickup":
-        return 0, max(1, order.subtotal_cents - order.discount_cents)
+        return 0, max(0, order.subtotal_cents - order.discount_cents)
     items = session.exec(select(OrderItem).where(OrderItem.order_id == order.id)).all()
     products = [session.get(Product, item.product_id) for item in items]
     shipping_fee_cents, free_shipping_threshold_cents = get_commerce_rules(session)
     all_items_free_shipping = bool(products) and all(product and product.free_shipping for product in products)
     shipping = 0 if all_items_free_shipping or order.subtotal_cents >= free_shipping_threshold_cents else shipping_fee_cents
-    return shipping, max(1, order.subtotal_cents + shipping - order.discount_cents)
+    return shipping, max(0, order.subtotal_cents + shipping - order.discount_cents)
 
 
 def refresh_pending_order_pricing(session: Session, order: Order) -> None:
@@ -312,6 +312,7 @@ def create_order_from_items(
     pickup_store_name: str = "玺鸿珠宝天津店",
     pickup_store_address: str = "天津市和平区南京路 219 号",
     pickup_store_phone: str = "16622515550",
+    client_request_id: str = "",
 ) -> Order:
     if not item_quantities:
         raise ValueError("Order items are required")
@@ -370,10 +371,11 @@ def create_order_from_items(
     receiver_address = " ".join(filter(None, [address.province, address.city, address.district, address.detail])) if address else pickup_store_address
     order = Order(
         user_id=user_id,
+        client_request_id=client_request_id,
         subtotal_cents=subtotal,
         shipping_fee_cents=shipping,
         discount_cents=discount,
-        total_cents=max(1, subtotal + shipping - discount),
+        total_cents=max(0, subtotal + shipping - discount),
         coupon_id=coupon_id,
         receiver_name=address.receiver_name if address else pickup_store_name,
         receiver_phone=address.phone if address else pickup_store_phone,
@@ -426,6 +428,8 @@ def create_order_from_items(
     session.add(order)
     session.commit()
     session.refresh(order)
+    if order.total_cents == 0:
+        order = mark_order_paid(session, order, "free_order")
     return order
 
 
@@ -527,10 +531,11 @@ def mark_order_paid(session: Session, order: Order, transaction_id: str = "") ->
     session.add(order)
     user = session.get(User, order.user_id)
     if user:
-        reward = max(1, order.total_cents // 1000)
-        user.points += reward
-        session.add(user)
-        session.add(PointLedger(user_id=user.id or 0, action="order_paid", points=reward, note=f"订单 {order.order_no}"))
+        reward = max(0, order.total_cents // 1000)
+        if reward:
+            user.points += reward
+            session.add(user)
+            session.add(PointLedger(user_id=user.id or 0, action="order_paid", points=reward, note=f"订单 {order.order_no}"))
     if transaction_id:
         intent = session.exec(select(PaymentIntent).where(PaymentIntent.order_id == order.id)).first()
         if intent:
@@ -558,7 +563,7 @@ def mark_order_refunded(session: Session, order: Order) -> Order:
             product.sales = max(0, product.sales - item.quantity)
             session.add(product)
     user = session.get(User, order.user_id)
-    reward = max(1, order.total_cents // 1000)
+    reward = max(0, order.total_cents // 1000)
     if user:
         deducted = min(user.points, reward)
         user.points -= deducted

@@ -2,7 +2,12 @@ from fastapi.testclient import TestClient
 from datetime import datetime, timedelta, timezone
 import re
 
+from sqlmodel import Session, select
+
+from app import wechat_platform
+from app.database import engine
 from app.main import app
+from app.models import Order, PaymentIntent, PaymentStatus, User
 
 
 client = TestClient(app)
@@ -117,6 +122,114 @@ def test_pickup_and_invoice_order_flow():
             },
         )
         assert missing_company_tax.status_code == 400
+
+
+def test_invoice_title_book_crud():
+    with client:
+        initial = client.get("/api/invoice-titles")
+        assert initial.status_code == 200
+        created = client.post(
+            "/api/invoice-titles",
+            json={
+                "invoice_type": "company",
+                "title": "天津玺鸿珠宝贸易有限公司",
+                "tax_number": "91120101TEST123456",
+                "email": "invoice@example.com",
+                "is_default": True,
+            },
+        )
+        assert created.status_code == 200
+        assert created.json()["is_default"] is True
+        listed = client.get("/api/invoice-titles").json()
+        assert listed[0]["id"] == created.json()["id"]
+
+        updated = client.put(
+            f"/api/invoice-titles/{created.json()['id']}",
+            json={
+                "invoice_type": "company",
+                "title": "天津玺鸿珠宝贸易有限公司（电子票）",
+                "tax_number": "91120101TEST123456",
+                "email": "finance@example.com",
+                "is_default": True,
+            },
+        )
+        assert updated.status_code == 200
+        assert updated.json()["email"] == "finance@example.com"
+        assert client.delete(f"/api/invoice-titles/{created.json()['id']}").status_code == 200
+
+
+def test_order_creation_is_idempotent_and_zero_order_is_free():
+    with client:
+        products = client.get("/api/products").json()
+        paid_product = next(item for item in products if item["price_cents"] > 0)
+        before_stock = paid_product["stock"]
+        payload = {
+            "items": [{"product_id": paid_product["id"], "quantity": 1}],
+            "client_request_id": "checkout_idempotency_test",
+        }
+        first = client.post("/api/orders", json=payload)
+        second = client.post("/api/orders", json=payload)
+        assert first.status_code == 200
+        assert second.status_code == 200
+        assert first.json()["id"] == second.json()["id"]
+        refreshed = client.get(f"/api/products/{paid_product['id']}").json()
+        assert refreshed["stock"] == before_stock - 1
+
+        free_product = next(item for item in products if item["name"] == "零元下单流程测试商品")
+        free_order = client.post(
+            "/api/orders",
+            json={
+                "items": [{"product_id": free_product["id"], "quantity": 1}],
+                "client_request_id": "checkout_free_order_test",
+            },
+        )
+        assert free_order.status_code == 200
+        assert free_order.json()["total_cents"] == 0
+        assert free_order.json()["status"] == "paid"
+        assert free_order.json()["can_pay"] is False
+        assert client.post(f"/api/orders/{free_order.json()['id']}/pay").status_code == 400
+
+
+def test_shipping_upload_uses_successful_payment_transaction(monkeypatch):
+    with client:
+        product = next(item for item in client.get("/api/products").json() if item["price_cents"] > 0)
+        created = client.post(
+            "/api/orders",
+            json={"items": [{"product_id": product["id"], "quantity": 1}]},
+        ).json()
+        client.post(f"/api/orders/{created['id']}/pay")
+        client.post(f"/api/orders/{created['id']}/mock-pay")
+
+    captured: dict = {}
+
+    def capture(path: str, payload: dict) -> dict:
+        captured.update({"path": path, "payload": payload})
+        return {"errcode": 0, "errmsg": "ok"}
+
+    monkeypatch.setattr(wechat_platform.settings, "wx_pay_mock", False)
+    monkeypatch.setattr(wechat_platform, "_post", capture)
+    with Session(engine) as session:
+        order = session.get(Order, created["id"])
+        user = session.get(User, order.user_id)
+        user.wechat_openid = "openid_shipping_test"
+        payment = session.exec(
+            select(PaymentIntent)
+            .where(PaymentIntent.order_id == order.id, PaymentIntent.status == PaymentStatus.succeeded)
+        ).first()
+        payment.transaction_id = "4200000000000000000000000000"
+        order.logistics_company = "顺丰速运"
+        order.tracking_no = "SF1234567890"
+        session.add_all([user, payment, order])
+        session.commit()
+        wechat_platform.upload_order_shipping(session, order)
+
+    assert captured["path"] == "/wxa/sec/order/upload_shipping_info"
+    assert captured["payload"]["order_key"] == {
+        "order_number_type": 2,
+        "transaction_id": "4200000000000000000000000000",
+    }
+    assert captured["payload"]["logistics_type"] == 1
+    assert captured["payload"]["shipping_list"][0]["express_company"] == "SF"
 
 
 def test_admin_product_and_banner_flow():
