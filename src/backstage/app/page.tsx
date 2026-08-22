@@ -1,8 +1,10 @@
 'use client'
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react'
+import { usePathname, useRouter } from 'next/navigation'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:8000'
+const INVOICE_TITLE_SYNCABLE = new Set(['apply_failed', 'pending_title', 'title_pending_sync', 'title_received'])
 
 type AdminUser = {
   id: number
@@ -65,7 +67,7 @@ type Banner = {
 type Order = {
   id: number
   order_no: string
-  status: 'pending_payment' | 'paid' | 'preparing' | 'shipped' | 'completed' | 'cancelled' | 'refunding' | 'refunded' | 'failed'
+  status: 'pending_payment' | 'paid' | 'preparing' | 'shipped' | 'in_transit' | 'received' | 'completed' | 'cancelled' | 'refunding' | 'refunded' | 'failed'
   total_cents: number
   subtotal_cents: number
   shipping_fee_cents: number
@@ -102,6 +104,10 @@ type Order = {
   platform_shipping_error: string
   platform_confirm_receive_reminded_at?: string | null
   platform_special_order_type: number
+  platform_order_status_text?: string
+  platform_logistics_status?: string
+  platform_logistics_detail?: string
+  platform_logistics_updated_at?: string | null
   created_at?: string | null
   paid_at?: string | null
   items: Array<{ product_id: number; product_name: string; unit_price_cents: number; quantity: number }>
@@ -210,24 +216,6 @@ type AuditLog = {
   created_at: string
 }
 
-type PlatformTradeStatus = {
-  configured: boolean
-  is_trade_managed: boolean
-  confirmation_completed: boolean
-  order_center_configured: boolean
-  order_detail_path: string
-  error?: string
-}
-
-type InvoiceCapability = {
-  configured: boolean
-  development_config: { callback_url?: string; show_fapiao_cell?: boolean } | null
-  card_configured?: boolean
-  card_appid?: string
-  card_id?: string
-  error: string
-}
-
 type ModuleKey = 'dashboard' | 'products' | 'categories' | 'banners' | 'orders' | 'payments' | 'invoices' | 'coupons' | 'users' | 'pets' | 'assets' | 'settings' | 'admins' | 'audit'
 
 const modules: Array<{ key: ModuleKey; label: string; description: string }> = [
@@ -246,6 +234,15 @@ const modules: Array<{ key: ModuleKey; label: string; description: string }> = [
   { key: 'admins', label: '管理员', description: '超级管理员可维护后台账号' },
   { key: 'audit', label: '审计', description: '查看后台操作记录' }
 ]
+
+const modulePaths: Record<ModuleKey, string> = Object.fromEntries(
+  modules.map((module) => [module.key, `/${module.key}`])
+) as Record<ModuleKey, string>
+
+function moduleFromPath(pathname: string): ModuleKey {
+  const segment = pathname.split('/').filter(Boolean)[0]
+  return modules.some((module) => module.key === segment) ? segment as ModuleKey : 'dashboard'
+}
 
 const emptyProduct: Omit<Product, 'id'> = {
   name: '',
@@ -326,7 +323,7 @@ function downloadCsv(filename: string, rows: Array<Array<string | number | null 
 }
 
 const orderStatusText: Record<Order['status'], string> = {
-  pending_payment: '待支付', paid: '已支付', preparing: '备货中', shipped: '已发货', completed: '已完成',
+  pending_payment: '待支付', paid: '待发货', preparing: '待发货', shipped: '已发货', in_transit: '运输中', received: '已收货', completed: '已完成',
   cancelled: '已取消', refunding: '退款中', refunded: '已退款', failed: '支付异常'
 }
 
@@ -338,27 +335,41 @@ const refundStatusText: Record<string, string> = {
   processing: '处理中', success: '退款成功', failed: '提交失败', closed: '已关闭', abnormal: '退款异常'
 }
 
-const orderTransitions: Record<Order['status'], Order['status'][]> = {
-  pending_payment: ['pending_payment', 'cancelled', 'failed'],
-  paid: ['paid', 'preparing'], preparing: ['preparing', 'shipped'], shipped: ['shipped', 'completed'], completed: ['completed'],
-  cancelled: ['cancelled'], refunding: ['refunding'], refunded: ['refunded'], failed: ['failed']
+type Confirmation = {
+  title: string
+  description: string
+  confirmLabel: string
+  danger?: boolean
+  inputLabel?: string
+  inputPlaceholder?: string
+  inputRequired?: boolean
+  onConfirm: (input: string) => Promise<void>
+}
+
+const platformOrderStateText: Record<number, string> = {
+  0: '尚未同步',
+  1: '待发货',
+  2: '已发货',
+  3: '已确认收货',
+  4: '交易完成',
+  5: '已退款'
 }
 
 export default function BackstagePage() {
+  const pathname = usePathname()
+  const router = useRouter()
   const [token, setToken] = useState('')
   const [admin, setAdmin] = useState<AdminUser | null>(null)
-  const [active, setActive] = useState<ModuleKey>('dashboard')
+  const [active, setActive] = useState<ModuleKey>(() => moduleFromPath(pathname))
   const [message, setMessage] = useState('')
-  const [email, setEmail] = useState(process.env.NODE_ENV === 'development' ? 'admin@xihong.local' : '')
-  const [password, setPassword] = useState(process.env.NODE_ENV === 'development' ? 'XihongAdmin123!' : '')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [dashboard, setDashboard] = useState<Dashboard | null>(null)
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [banners, setBanners] = useState<Banner[]>([])
   const [orders, setOrders] = useState<Order[]>([])
   const [invoices, setInvoices] = useState<Order[]>([])
-  const [platformTrade, setPlatformTrade] = useState<PlatformTradeStatus | null>(null)
-  const [invoiceCapability, setInvoiceCapability] = useState<InvoiceCapability | null>(null)
   const [payments, setPayments] = useState<Payment[]>([])
   const [coupons, setCoupons] = useState<Coupon[]>([])
   const [refunds, setRefunds] = useState<Refund[]>([])
@@ -381,8 +392,12 @@ export default function BackstagePage() {
   const [orderPage, setOrderPage] = useState(1)
   const [orderDateFrom, setOrderDateFrom] = useState('')
   const [orderDateTo, setOrderDateTo] = useState('')
-  const [logisticsDraft, setLogisticsDraft] = useState<Record<number, { company: string; tracking: string }>>({})
+  const [logisticsDraft, setLogisticsDraft] = useState<Record<number, { tracking: string; isTest: boolean }>>({})
   const [busy, setBusy] = useState(false)
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null)
+  const [confirmationInput, setConfirmationInput] = useState('')
+  const [confirmationBusy, setConfirmationBusy] = useState(false)
+  const [invoiceEditorOpen, setInvoiceEditorOpen] = useState(false)
   const [adminForm, setAdminForm] = useState({ email: '', name: '', password: '', role: 'admin' as 'super_admin' | 'admin', is_active: true })
   const [queries, setQueries] = useState<Partial<Record<ModuleKey, string>>>({})
   const [productStatus, setProductStatus] = useState<Product['status'] | 'all'>('all')
@@ -494,16 +509,6 @@ export default function BackstagePage() {
       setAssets(nextAssets)
       setSettings(nextSettings)
       setAudit(nextAudit)
-      const [platformResult, invoiceResult] = await Promise.allSettled([
-        request<PlatformTradeStatus>('/api/admin/platform-trade/status'),
-        request<InvoiceCapability>('/api/admin/invoices/capability')
-      ])
-      setPlatformTrade(platformResult.status === 'fulfilled' ? platformResult.value : {
-        configured: false, is_trade_managed: false, confirmation_completed: false, order_center_configured: false, order_detail_path: '', error: '暂时无法读取微信订单管理状态'
-      })
-      setInvoiceCapability(invoiceResult.status === 'fulfilled' ? invoiceResult.value : {
-        configured: false, development_config: null, error: '暂时无法读取微信电子发票配置'
-      })
       if (me.role === 'super_admin') {
         const nextAdmins = await request<AdminUser[]>('/api/admin/admin-users')
         setAdmins(nextAdmins)
@@ -521,6 +526,10 @@ export default function BackstagePage() {
     }
   }, [])
 
+  useEffect(() => {
+    setActive(moduleFromPath(pathname))
+  }, [pathname])
+
   useEffect(() => { setOrderPage(1) }, [orderDateFrom, orderDateTo, orderFilter, orderSearch])
   useEffect(() => { if (orderPage > orderPageCount) setOrderPage(orderPageCount) }, [orderPage, orderPageCount])
   useEffect(() => {
@@ -528,6 +537,34 @@ export default function BackstagePage() {
     const timer = window.setTimeout(() => setMessage(''), 4200)
     return () => window.clearTimeout(timer)
   }, [message])
+
+  function navigateTo(module: ModuleKey) {
+    setActive(module)
+    router.push(modulePaths[module], { scroll: false })
+  }
+
+  function openConfirmation(next: Confirmation) {
+    setConfirmationInput('')
+    setConfirmation(next)
+  }
+
+  async function confirmPendingAction() {
+    if (!confirmation) return
+    if (confirmation.inputRequired && !confirmationInput.trim()) {
+      setMessage(`请填写${confirmation.inputLabel || '必填内容'}`)
+      return
+    }
+    setConfirmationBusy(true)
+    try {
+      await confirmation.onConfirm(confirmationInput.trim())
+      setConfirmation(null)
+      setConfirmationInput('')
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '操作失败')
+    } finally {
+      setConfirmationBusy(false)
+    }
+  }
 
   async function login(event: FormEvent) {
     event.preventDefault()
@@ -600,14 +637,17 @@ export default function BackstagePage() {
   }
 
   async function updateOrderStatus(order: Order, status: Order['status']) {
-    const logistics = logisticsDraft[order.id] || { company: order.logistics_company, tracking: order.tracking_no }
-    if (status === 'shipped' && order.fulfillment_type !== 'pickup' && (!logistics.company.trim() || !logistics.tracking.trim())) {
-      setMessage('发货前请填写物流公司与运单号')
+    const logistics = logisticsDraft[order.id] || { tracking: order.tracking_no || '', isTest: Boolean(order.platform_special_order_type) }
+    if (status === 'shipped' && order.fulfillment_type !== 'pickup' && !logistics.isTest && !logistics.tracking.trim()) {
+      setMessage('发货前请填写运单号')
       return
     }
-    const saved = await api<Order>(`/api/admin/orders/${order.id}/status`, { method: 'PUT', body: JSON.stringify({ status, logistics_company: logistics.company, tracking_no: logistics.tracking }) })
+    const saved = await api<Order>(`/api/admin/orders/${order.id}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ status, tracking_no: logistics.tracking.trim(), is_test_order: logistics.isTest })
+    })
     replaceOrder(saved)
-    setMessage(`订单 ${saved.order_no} 已更新为 ${orderStatusText[saved.status]}`)
+    setMessage(`订单 ${saved.order_no} 已更新为 ${orderStatusText[saved.status]}，微信履约状态已同步`)
   }
 
   function replaceOrder(saved: Order) {
@@ -623,44 +663,19 @@ export default function BackstagePage() {
     setMessage(`已同步微信平台订单：${saved.platform_order_state || '暂无状态'}`)
   }
 
+  function askSyncReceipt(order: Order) {
+    openConfirmation({
+      title: '同步微信收货状态',
+      description: `${order.order_no} · 本操作只会向微信小程序发货信息管理系统查询最新状态，不会代用户确认收货。`,
+      confirmLabel: '确认查询微信状态',
+      onConfirm: async () => syncPlatformOrder(order)
+    })
+  }
+
   async function remindConfirmReceive(order: Order) {
-    if (!window.confirm(`向订单 ${order.order_no} 发送微信确认收货提醒？每笔订单只能发送一次。`)) return
     const saved = await api<Order>(`/api/admin/orders/${order.id}/platform-remind-receive`, { method: 'POST' })
     replaceOrder(saved)
     setMessage('微信确认收货提醒已发送')
-  }
-
-  async function markTestOrder(order: Order) {
-    if (!window.confirm(`将订单 ${order.order_no} 上报为微信平台测试订单？`)) return
-    const saved = await api<Order>(`/api/admin/orders/${order.id}/platform-special`, { method: 'POST', body: JSON.stringify({ special_type: 2 }) })
-    replaceOrder(saved)
-    setMessage('已上报为微信平台测试订单')
-  }
-
-  async function configurePlatformMessagePath() {
-    await api('/api/admin/platform-trade/message-path', { method: 'POST', body: JSON.stringify({ path: 'pages/orders/index' }) })
-    setMessage('微信发货消息跳转路径已设置为订单中心')
-  }
-
-  async function configurePlatformOrderDetailPath() {
-    await api('/api/admin/platform-trade/order-detail-path', { method: 'POST', body: JSON.stringify({ path: 'pages/order-detail/index?orderNo=${商品订单号}' }) })
-    const status = await api<PlatformTradeStatus>('/api/admin/platform-trade/status')
-    setPlatformTrade(status)
-    setMessage('微信购物订单详情入口已配置')
-  }
-
-  async function configureInvoice(showFapiaoCell: boolean) {
-    await api('/api/admin/invoices/configure', { method: 'POST', body: JSON.stringify({ show_fapiao_cell: showFapiaoCell }) })
-    const capability = await api<InvoiceCapability>('/api/admin/invoices/capability')
-    setInvoiceCapability(capability)
-    setMessage('微信电子发票开发配置已更新')
-  }
-
-  async function createInvoiceCardTemplate() {
-    await api('/api/admin/invoices/card-template', { method: 'POST' })
-    const capability = await api<InvoiceCapability>('/api/admin/invoices/capability')
-    setInvoiceCapability(capability)
-    setMessage(capability.card_id ? '微信电子发票卡券模板已就绪' : '微信电子发票卡券模板已创建')
   }
 
   async function syncInvoice(order: Order, target: 'title' | 'status') {
@@ -669,9 +684,49 @@ export default function BackstagePage() {
     setMessage(target === 'title' ? '已同步微信发票抬头' : '已同步微信发票状态')
   }
 
-  async function deliverInvoice(event: FormEvent) {
+  function openInvoiceEditor(order: Order) {
+    setInvoiceFile(null)
+    setInvoiceDelivery((current) => ({
+      ...current,
+      order_id: order.id,
+      total_amount: order.total_cents,
+      fapiao_number: '',
+      fapiao_code: '',
+      check_code: '',
+      password: '',
+      tax_amount: 0
+    }))
+    setInvoiceEditorOpen(true)
+  }
+
+  function prepareInvoiceDelivery(event: FormEvent) {
     event.preventDefault()
-    if (!invoiceDelivery.order_id || !invoiceFile) throw new Error('请选择发票订单并上传 PDF 文件')
+    if (!invoiceDelivery.order_id || !invoiceFile) {
+      setMessage('请上传电子发票 PDF 文件')
+      return
+    }
+    const order = invoices.find((item) => item.id === invoiceDelivery.order_id)
+    openConfirmation({
+      title: '确认交付电子发票',
+      description: `即将向订单 ${order?.order_no || invoiceDelivery.order_id} 交付发票 ${[invoiceDelivery.fapiao_code, invoiceDelivery.fapiao_number].filter(Boolean).join('-')}，价税合计 ${money(invoiceDelivery.total_amount)}。交付后由微信接口写入用户卡包，请再次核对。`,
+      confirmLabel: '确认交付到微信卡包',
+      onConfirm: submitInvoiceDelivery
+    })
+  }
+
+  function selectInvoiceFile(event: ChangeEvent<HTMLInputElement>) {
+    const selected = event.target.files?.[0] || null
+    if (selected && selected.size > 2 * 1024 * 1024) {
+      event.target.value = ''
+      setInvoiceFile(null)
+      setMessage('微信电子发票 PDF 不能超过 2MB')
+      return
+    }
+    setInvoiceFile(selected)
+  }
+
+  async function submitInvoiceDelivery() {
+    if (!invoiceDelivery.order_id || !invoiceFile) throw new Error('发票资料不完整')
     const form = new FormData()
     form.append('file', invoiceFile)
     Object.entries(invoiceDelivery).forEach(([key, value]) => {
@@ -681,6 +736,7 @@ export default function BackstagePage() {
     replaceOrder(saved)
     setInvoiceFile(null)
     setInvoiceDelivery((current) => ({ ...current, order_id: 0, fapiao_number: '', fapiao_code: '', check_code: '', password: '', total_amount: 0, tax_amount: 0 }))
+    setInvoiceEditorOpen(false)
     setMessage('发票已提交微信卡包交付')
   }
 
@@ -704,14 +760,55 @@ export default function BackstagePage() {
     setMessage('优惠券已保存')
   }
 
-  async function requestRefund(order: Order) {
-    const reason = window.prompt(`将为订单 ${order.order_no} 原路全额退款 ${money(order.total_cents)}。请输入退款原因：`, '客户协商退款')
-    if (!reason?.trim()) return
-    if (!window.confirm('退款提交后将进入微信支付退款流程，确定继续吗？')) return
-    const refund = await api<Refund>(`/api/admin/orders/${order.id}/refund`, { method: 'POST', body: JSON.stringify({ reason: reason.trim() }) })
+  async function requestRefund(order: Order, reason: string) {
+    const refund = await api<Refund>(`/api/admin/orders/${order.id}/refund`, { method: 'POST', body: JSON.stringify({ reason }) })
     setRefunds((items) => [refund, ...items.filter((item) => item.id !== refund.id)])
     await loadAll()
     setMessage(`退款单 ${refund.out_refund_no} 已提交，当前状态：${refund.status}`)
+  }
+
+  function askOrderStatus(order: Order, status: Order['status']) {
+    const draft = logisticsDraft[order.id] || { tracking: order.tracking_no || '', isTest: Boolean(order.platform_special_order_type) }
+    if (status === 'shipped' && order.fulfillment_type === 'delivery' && !draft.isTest && !draft.tracking.trim()) {
+      setMessage('请先填写运单号，微信将根据运单号识别物流信息')
+      return
+    }
+    const descriptions: Partial<Record<Order['status'], string>> = {
+      preparing: '确认订单已进入待发货队列。',
+      shipped: draft.isTest
+        ? '将订单标记为微信测试订单（opspecialorder type=2），无需填写运单号。'
+        : `将运单号 ${draft.tracking || '到店自提'} 上报微信，微信将识别并跟踪物流。`,
+      cancelled: '取消后订单不再继续履约，并将尝试同步微信订单状态。'
+    }
+    openConfirmation({
+      title: `将订单更新为“${orderStatusText[status]}”`,
+      description: `${order.order_no} · ${descriptions[status] || '请确认本次订单状态变更。'}`,
+      confirmLabel: `确认${orderStatusText[status]}`,
+      danger: status === 'cancelled',
+      onConfirm: async () => updateOrderStatus(order, status)
+    })
+  }
+
+  function askRefund(order: Order) {
+    openConfirmation({
+      title: '发起微信原路退款',
+      description: `订单 ${order.order_no} 将原路全额退款 ${money(order.total_cents)}。提交后状态由微信支付退款回调更新。`,
+      confirmLabel: '提交微信退款',
+      danger: true,
+      inputLabel: '退款原因',
+      inputPlaceholder: '例如：客户协商退款',
+      inputRequired: true,
+      onConfirm: (reason) => requestRefund(order, reason)
+    })
+  }
+
+  function askReceiveReminder(order: Order) {
+    openConfirmation({
+      title: '发送微信确认收货提醒',
+      description: `将向订单 ${order.order_no} 发送微信确认收货提醒。每笔订单只能发送一次。`,
+      confirmLabel: '确认发送',
+      onConfirm: async () => remindConfirmReceive(order)
+    })
   }
 
   async function uploadAsset(event: ChangeEvent<HTMLInputElement>) {
@@ -800,7 +897,7 @@ export default function BackstagePage() {
         </div>
         <nav>
           {modules.map((item) => (
-            <button key={item.key} className={active === item.key ? 'active' : ''} onClick={() => setActive(item.key)}>{item.label}</button>
+            <button key={item.key} className={active === item.key ? 'active' : ''} onClick={() => navigateTo(item.key)}>{item.label}</button>
           ))}
         </nav>
         <div className="admin-box">
@@ -836,8 +933,8 @@ export default function BackstagePage() {
               <article className="panel stat"><span>会员规模</span><strong>{dashboard?.user_count || 0}</strong><small>{dashboard?.active_product_count || 0} 款在售作品</small></article>
             </div>
             <div className="dashboard-columns">
-              <section className="panel table-panel"><div className="panel-heading"><div><p>FULFILLMENT</p><h3>最近订单</h3></div><button onClick={() => setActive('orders')}>管理全部</button></div>{orders.slice(0, 6).map((order) => <div className="row" key={order.id}><span className={`status-dot ${order.status}`} /><div><strong>{order.order_no}</strong><small>{order.receiver_name} · {orderStatusText[order.status]}</small></div><b>{money(order.total_cents)}</b></div>)}{!orders.length && <Empty text="暂无订单数据" />}</section>
-              <section className="panel table-panel"><div className="panel-heading"><div><p>INVENTORY</p><h3>库存关注</h3></div><button onClick={() => setActive('products')}>商品管理</button></div>{[...products].sort((a, b) => a.stock - b.stock).slice(0, 6).map((product) => <div className="row inventory-row" key={product.id}><span className="swatch" style={{ background: product.image_color }} /><div><strong>{product.name}</strong><small>已售 {product.sales} · {product.status === 'active' ? '在售' : '未上架'}</small></div><span className={product.stock <= 5 ? 'stock-low' : 'stock-ok'}>{product.stock} 件</span></div>)}{!products.length && <Empty text="暂无商品数据" />}</section>
+              <section className="panel table-panel"><div className="panel-heading"><div><p>FULFILLMENT</p><h3>最近订单</h3></div><button onClick={() => navigateTo('orders')}>管理全部</button></div>{orders.slice(0, 6).map((order) => <div className="row" key={order.id}><span className={`status-dot ${order.status}`} /><div><strong>{order.order_no}</strong><small>{order.receiver_name} · {orderStatusText[order.status]}</small></div><b>{money(order.total_cents)}</b></div>)}{!orders.length && <Empty text="暂无订单数据" />}</section>
+              <section className="panel table-panel"><div className="panel-heading"><div><p>INVENTORY</p><h3>库存关注</h3></div><button onClick={() => navigateTo('products')}>商品管理</button></div>{[...products].sort((a, b) => a.stock - b.stock).slice(0, 6).map((product) => <div className="row inventory-row" key={product.id}><span className="swatch" style={{ background: product.image_color }} /><div><strong>{product.name}</strong><small>已售 {product.sales} · {product.status === 'active' ? '在售' : '未上架'}</small></div><span className={product.stock <= 5 ? 'stock-low' : 'stock-ok'}>{product.stock} 件</span></div>)}{!products.length && <Empty text="暂无商品数据" />}</section>
             </div>
           </section>
         )}
@@ -927,18 +1024,27 @@ export default function BackstagePage() {
         {active === 'orders' && (
           <section className="panel order-manager">
             <div className="panel-heading"><div><p>FULFILLMENT DESK</p><h3>订单履约</h3></div><span>{filteredOrders.length} / {orders.length} 笔</span></div>
-            <div className={`platform-readiness ${platformTrade?.is_trade_managed && platformTrade?.confirmation_completed && platformTrade?.order_center_configured ? 'ready' : 'warning'}`}>
-              <div><strong>微信小程序订单管理</strong><span>购物订单入口：{platformTrade?.order_center_configured ? '已配置' : '未配置'} · 发货服务：{platformTrade?.is_trade_managed ? '已开通' : '未确认'} · 结算确认：{platformTrade?.confirmation_completed ? '已完成' : '未完成'}</span><small>{platformTrade?.order_detail_path || '尚未配置微信购物订单详情路径'}</small>{platformTrade?.error && <small>{platformTrade.error}</small>}</div>
-              <div className="platform-readiness-actions"><button onClick={() => configurePlatformOrderDetailPath().catch((error) => setMessage(error.message))}>配置购物订单入口</button><button onClick={() => configurePlatformMessagePath().catch((error) => setMessage(error.message))}>设置发货消息跳转</button></div>
-            </div>
             <div className="table-tools"><input value={orderSearch} onChange={(event) => setOrderSearch(event.target.value)} placeholder="搜索订单、会员、商品、手机、发票或运单号" /><select value={orderFilter} onChange={(event) => setOrderFilter(event.target.value as typeof orderFilter)}><option value="all">全部状态</option>{Object.entries(orderStatusText).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select><label className="compact-field"><span>开始日期</span><input type="date" value={orderDateFrom} onChange={(event) => setOrderDateFrom(event.target.value)} /></label><label className="compact-field"><span>结束日期</span><input type="date" value={orderDateTo} onChange={(event) => setOrderDateTo(event.target.value)} /></label><button className="tool-action" onClick={() => downloadCsv('订单查询结果.csv', [['订单号', '状态', '履约方式', '收件人', '手机', '金额', '商品', '创建时间'], ...filteredOrders.map((order) => [order.order_no, orderStatusText[order.status], order.fulfillment_type === 'pickup' ? '到店自提' : '配送', order.receiver_name, order.receiver_phone, order.total_cents / 100, order.items.map((item) => `${item.product_name}×${item.quantity}`).join('；'), order.created_at])])}>导出结果</button></div>
             <div className="order-cards">{visibleOrders.map((order) => {
-              const draft = logisticsDraft[order.id] || { company: order.logistics_company || '', tracking: order.tracking_no || '' }
+              const draft = logisticsDraft[order.id] || { tracking: order.tracking_no || '', isTest: Boolean(order.platform_special_order_type) }
+              const platformState = order.platform_order_status_text || platformOrderStateText[order.platform_order_state] || `微信状态 ${order.platform_order_state}`
               return <article className="admin-order" key={order.id}>
                 <header><div><strong>{order.order_no}</strong><small>{order.created_at ? new Date(order.created_at).toLocaleString('zh-CN') : ''}</small></div><span className={`status-pill ${order.status}`}>{orderStatusText[order.status]}</span><b>{money(order.total_cents)}</b></header>
-                <div className="order-summary"><div><span>{order.fulfillment_type === 'pickup' ? '到店自提' : '收货人'}</span><strong>{order.receiver_name} · {order.receiver_phone}</strong><small>{order.fulfillment_type === 'pickup' ? `${order.pickup_slot} · 口令 ${order.pickup_code}` : order.receiver_address}</small></div><div><span>商品</span><strong>{order.items.reduce((sum, item) => sum + item.quantity, 0)} 件作品</strong><small>{order.items.map((item) => `${item.product_name} ×${item.quantity}`).join('、')}</small></div><div><span>微信发票 / 平台订单</span><strong>{order.invoice_requested ? `${order.invoice_buyer_name || '等待微信抬头'} · ${order.invoice_status}` : '未申请微信发票'}</strong><small>平台状态 {order.platform_order_state || '未同步'}{order.platform_shipping_uploaded_at ? ' · 发货信息已上传' : ''}{order.platform_shipping_error ? ` · ${order.platform_shipping_error}` : order.buyer_note ? ` · 备注：${order.buyer_note}` : ` · 优惠 -${money(order.discount_cents)}`}</small></div></div>
-                <div className="fulfillment">{order.fulfillment_type === 'delivery' && <><input value={draft.company} onChange={(event) => setLogisticsDraft((current) => ({ ...current, [order.id]: { ...draft, company: event.target.value } }))} placeholder="物流公司（发货时必填）" /><input value={draft.tracking} onChange={(event) => setLogisticsDraft((current) => ({ ...current, [order.id]: { ...draft, tracking: event.target.value } }))} placeholder="运单号（发货时必填）" /></>}<select value={order.status} onChange={(event) => updateOrderStatus(order, event.target.value as Order['status']).catch((error) => setMessage(error.message))}>{orderTransitions[order.status].map((value) => <option value={value} key={value}>{orderStatusText[value]}</option>)}</select>{(['paid', 'preparing', 'shipped', 'completed'] as Order['status'][]).includes(order.status) && <button className="refund-button" onClick={() => requestRefund(order).catch((error) => setMessage(error.message))}>原路退款</button>}</div>
-                {order.payment_transaction_id && <div className="platform-order-actions"><button onClick={() => syncPlatformOrder(order).catch((error) => setMessage(error.message))}>同步微信订单</button>{!order.platform_special_order_type && <button onClick={() => markTestOrder(order).catch((error) => setMessage(error.message))}>标记测试订单</button>}{order.status === 'shipped' && !order.platform_confirm_receive_reminded_at && <button onClick={() => remindConfirmReceive(order).catch((error) => setMessage(error.message))}>提醒确认收货</button>}</div>}
+                <div className="order-summary"><div><span>{order.fulfillment_type === 'pickup' ? '到店自提' : '收货人'}</span><strong>{order.receiver_name} · {order.receiver_phone}</strong><small>{order.fulfillment_type === 'pickup' ? `${order.pickup_slot} · 口令 ${order.pickup_code}` : order.receiver_address}</small></div><div><span>商品</span><strong>{order.items.reduce((sum, item) => sum + item.quantity, 0)} 件作品</strong><small>{order.items.map((item) => `${item.product_name} ×${item.quantity}`).join('、')}</small></div><div><span>微信履约状态</span><strong>{platformState}</strong><small>{order.platform_logistics_status || (order.platform_shipping_uploaded_at ? '发货信息已上传微信' : '等待同步')}{order.platform_logistics_detail ? ` · ${order.platform_logistics_detail}` : ''}{order.platform_shipping_error ? ` · ${order.platform_shipping_error}` : ''}</small></div></div>
+                <div className="fulfillment-workbench">
+                  <div className="shipping-fields">
+                    {order.fulfillment_type === 'delivery' ? <label><span>运单号</span><input value={draft.tracking} disabled={draft.isTest} onChange={(event) => setLogisticsDraft((current) => ({ ...current, [order.id]: { ...draft, tracking: event.target.value } }))} placeholder={draft.isTest ? '微信测试订单无需运单号' : '输入运单号，微信自动识别物流'} /></label> : <div className="pickup-fulfillment"><span>履约方式</span><strong>到店自提</strong></div>}
+                    <label className="test-order-toggle"><input type="checkbox" checked={draft.isTest} disabled={!['paid', 'preparing'].includes(order.status)} onChange={(event) => setLogisticsDraft((current) => ({ ...current, [order.id]: { ...draft, isTest: event.target.checked } }))} /><span><strong>测试订单</strong><small>按 opspecialorder type=2 上报，无需运单号</small></span></label>
+                  </div>
+                  <div className="order-status-actions">
+                    {order.status === 'paid' && <button onClick={() => askOrderStatus(order, 'preparing')}>确认待发货</button>}
+                    {['paid', 'preparing'].includes(order.status) && <button className="primary-action" onClick={() => askOrderStatus(order, 'shipped')}>确认发货</button>}
+                    {(['shipped', 'in_transit'] as Order['status'][]).includes(order.status) && <button className="primary-action" onClick={() => askSyncReceipt(order)}>同步收货状态</button>}
+                    {(['pending_payment', 'failed'] as Order['status'][]).includes(order.status) && <button className="danger-outline" onClick={() => askOrderStatus(order, 'cancelled')}>取消订单</button>}
+                    {(['paid', 'preparing', 'shipped', 'in_transit', 'received', 'completed'] as Order['status'][]).includes(order.status) && <button className="danger-outline" onClick={() => askRefund(order)}>发起退款</button>}
+                  </div>
+                </div>
+                {order.payment_transaction_id && <div className="platform-order-actions"><span>{order.platform_logistics_updated_at ? `微信物流更新于 ${new Date(order.platform_logistics_updated_at).toLocaleString('zh-CN')}` : '订单状态以微信回调为准'}</span><button onClick={() => syncPlatformOrder(order).catch((error) => setMessage(error.message))}>同步微信状态</button>{(['shipped', 'in_transit'] as Order['status'][]).includes(order.status) && !order.platform_confirm_receive_reminded_at && <button onClick={() => askReceiveReminder(order)}>提醒确认收货</button>}</div>}
               </article>
             })}{!visibleOrders.length && <Empty text="没有符合条件的订单" />}</div>
             {filteredOrders.length > 8 && <div className="pagination"><button disabled={orderPage <= 1} onClick={() => setOrderPage((page) => Math.max(1, page - 1))}>上一页</button><span>{orderPage} / {orderPageCount}</span><button disabled={orderPage >= orderPageCount} onClick={() => setOrderPage((page) => Math.min(orderPageCount, page + 1))}>下一页</button></div>}
@@ -951,41 +1057,27 @@ export default function BackstagePage() {
               <select aria-label="支付状态" value={paymentStatus} onChange={(event) => setPaymentStatus(event.target.value as typeof paymentStatus)}><option value="all">全部状态</option>{Object.entries(paymentStatusText).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
             </QueryToolbar>
             <div className="data-head payment-row"><span>商户订单号</span><span>关联订单</span><span>微信交易号 / 失败原因</span><span>更新时间</span><span>状态</span></div>
-            {filteredPayments.map((payment) => <div className="data-row payment-row" key={payment.id}><code>{payment.out_trade_no || '—'}</code><button className="link-button" onClick={() => { setOrderSearch(String(payment.order_id)); setActive('orders') }}>#{payment.order_id}</button><div><strong>{payment.transaction_id || '尚无微信交易号'}</strong>{payment.failure_reason && <small>{payment.failure_reason}</small>}</div><span>{payment.updated_at ? new Date(payment.updated_at).toLocaleString('zh-CN') : '—'}</span><span className={`status-pill payment-${payment.status}`}>{paymentStatusText[payment.status]}</span></div>)}
+            {filteredPayments.map((payment) => <div className="data-row payment-row" key={payment.id}><code>{payment.out_trade_no || '—'}</code><button className="link-button" onClick={() => { setOrderSearch(String(payment.order_id)); navigateTo('orders') }}>#{payment.order_id}</button><div><strong>{payment.transaction_id || '尚无微信交易号'}</strong>{payment.failure_reason && <small>{payment.failure_reason}</small>}</div><span>{payment.updated_at ? new Date(payment.updated_at).toLocaleString('zh-CN') : '—'}</span><span className={`status-pill payment-${payment.status}`}>{paymentStatusText[payment.status]}</span></div>)}
             {!filteredPayments.length && <Empty text="没有符合条件的支付流水" />}
-          </TablePanel><TablePanel title="退款记录"><div className="data-head refund-row"><span>退款单号</span><span>订单</span><span>金额 / 原因</span><span>更新时间</span><span>状态</span></div>{filteredRefunds.map((refund) => <div className="data-row refund-row" key={refund.id}><code>{refund.out_refund_no}</code><button className="link-button" onClick={() => { setOrderSearch(String(refund.order_id)); setActive('orders') }}>#{refund.order_id}</button><div><strong>{money(refund.amount_cents)}</strong><small>{refund.reason}</small></div><span>{new Date(refund.updated_at).toLocaleString('zh-CN')}</span><span className={`status-pill refund-${refund.status}`}>{refundStatusText[refund.status] || refund.status}</span></div>)}{!filteredRefunds.length && <Empty text="没有符合条件的退款记录" />}</TablePanel></div>
+          </TablePanel><TablePanel title="退款记录"><div className="data-head refund-row"><span>退款单号</span><span>订单</span><span>金额 / 原因</span><span>更新时间</span><span>状态</span></div>{filteredRefunds.map((refund) => <div className="data-row refund-row" key={refund.id}><code>{refund.out_refund_no}</code><button className="link-button" onClick={() => { setOrderSearch(String(refund.order_id)); navigateTo('orders') }}>#{refund.order_id}</button><div><strong>{money(refund.amount_cents)}</strong><small>{refund.reason}</small></div><span>{new Date(refund.updated_at).toLocaleString('zh-CN')}</span><span className={`status-pill refund-${refund.status}`}>{refundStatusText[refund.status] || refund.status}</span></div>)}{!filteredRefunds.length && <Empty text="没有符合条件的退款记录" />}</TablePanel></div>
         )}
 
         {active === 'invoices' && (
           <div className="invoice-admin">
-            <section className="panel invoice-capability">
-              <div><p>WECHATPAY FAPIAO</p><h3>微信电子发票能力</h3><span>生产参数：{invoiceCapability?.configured ? '已配置' : '未完整配置'} · 支付凭证入口：{invoiceCapability?.development_config?.show_fapiao_cell ? '已展示' : '未展示'} · 卡券素材：{invoiceCapability?.card_configured ? '已配置' : '待配置'}</span>{invoiceCapability?.card_id && <span>微信卡券模板：{invoiceCapability.card_id}</span>}{invoiceCapability?.error && <small>{invoiceCapability.error}</small>}</div>
-              <div><button onClick={() => configureInvoice(true).catch((error) => setMessage(error.message))}>启用支付凭证开票入口</button><button onClick={() => createInvoiceCardTemplate().catch((error) => setMessage(error.message))}>创建微信卡券模板</button></div>
-            </section>
-            <section className="invoice-admin-grid">
-              <form className="panel form invoice-delivery-form" onSubmit={(event) => deliverInvoice(event).catch((error) => setMessage(error.message))}>
-                <h3>交付发票到微信卡包</h3>
-                <div className="security-callout">适用于自建/第三方开票模式：先从微信同步用户抬头，再上传真实电子发票 PDF，由微信接口插入用户卡包。</div>
-                <label>发票订单<select required value={invoiceDelivery.order_id} onChange={(event) => { const orderId = Number(event.target.value); const order = invoices.find((item) => item.id === orderId); setInvoiceDelivery((current) => ({ ...current, order_id: orderId, total_amount: order?.total_cents || 0 })) }}><option value={0}>请选择已同步抬头的订单</option>{invoices.filter((item) => ['title_received', 'delivery_failed'].includes(item.invoice_status)).map((item) => <option value={item.id} key={item.id}>{item.order_no} · {item.invoice_buyer_name || '微信抬头'} · {money(item.total_cents)}</option>)}</select></label>
-                <label>电子发票 PDF<input required type="file" accept="application/pdf,.pdf" onChange={(event) => setInvoiceFile(event.target.files?.[0] || null)} /></label>
-                <div className="two"><label>发票号码<input required value={invoiceDelivery.fapiao_number} onChange={(event) => setInvoiceDelivery({ ...invoiceDelivery, fapiao_number: event.target.value })} /></label><label>发票代码<input required value={invoiceDelivery.fapiao_code} onChange={(event) => setInvoiceDelivery({ ...invoiceDelivery, fapiao_code: event.target.value })} /></label></div>
-                <label>开票时间<input required type="datetime-local" value={invoiceDelivery.fapiao_time} onChange={(event) => setInvoiceDelivery({ ...invoiceDelivery, fapiao_time: event.target.value })} /></label>
-                <div className="two"><label>价税合计（元）<input required type="number" min="0.01" step="0.01" value={invoiceDelivery.total_amount / 100} onChange={(event) => setInvoiceDelivery({ ...invoiceDelivery, total_amount: cents(event.target.value) })} /></label><label>税额（元）<input required type="number" min="0" step="0.01" value={invoiceDelivery.tax_amount / 100} onChange={(event) => setInvoiceDelivery({ ...invoiceDelivery, tax_amount: cents(event.target.value) })} /></label></div>
-                <div className="two"><label>校验码<input required value={invoiceDelivery.check_code} onChange={(event) => setInvoiceDelivery({ ...invoiceDelivery, check_code: event.target.value })} /></label><label>密码区<input required value={invoiceDelivery.password} onChange={(event) => setInvoiceDelivery({ ...invoiceDelivery, password: event.target.value })} /></label></div>
-                <label>销售方名称<input required value={invoiceDelivery.seller_name} onChange={(event) => setInvoiceDelivery({ ...invoiceDelivery, seller_name: event.target.value })} /></label>
-                <div className="two"><label>销售方纳税人识别号<input required value={invoiceDelivery.seller_taxpayer_id} onChange={(event) => setInvoiceDelivery({ ...invoiceDelivery, seller_taxpayer_id: event.target.value })} /></label><label>开票人<input required value={invoiceDelivery.drawer} onChange={(event) => setInvoiceDelivery({ ...invoiceDelivery, drawer: event.target.value })} /></label></div>
-                <button className="primary" type="submit">通过微信接口交付发票</button>
-              </form>
-              <section className="panel invoice-records">
-                <PanelTitle eyebrow="FAPIAO APPLICATIONS" title="开票申请" count={`${filteredInvoices.length} / ${invoices.length} 笔`} />
-                <QueryToolbar value={queries.invoices || ''} onChange={(value) => setQueries((current) => ({ ...current, invoices: value }))} placeholder="搜索订单号、申请单、抬头、税号、发票号或状态" />
-                {filteredInvoices.map((order) => <article className="invoice-admin-card" key={order.id}>
-                  <header><div><strong>{order.order_no}</strong><small>{order.invoice_apply_id || '付款后生成微信发票申请单号'}</small></div><span>{order.invoice_status}</span></header>
-                  <div className="invoice-admin-copy"><strong>{order.invoice_buyer_name || '等待用户在微信填写抬头'}</strong><span>{order.invoice_buyer_type === 'ORGANIZATION' ? '企业' : order.invoice_buyer_type === 'INDIVIDUAL' ? '个人' : '未填写'} · {money(order.total_cents)}</span>{order.invoice_buyer_taxpayer_id && <small>税号 {order.invoice_buyer_taxpayer_id}</small>}{order.invoice_fapiao_id && <small>发票标识 {order.invoice_fapiao_id} · 卡包 {order.invoice_card_status || '处理中'}</small>}{order.invoice_error && <small className="error-text">{order.invoice_error}</small>}</div>
-                  <div className="invoice-admin-actions">{order.invoice_apply_id && <button onClick={() => syncInvoice(order, 'title').catch((error) => setMessage(error.message))}>同步微信抬头</button>}{order.invoice_apply_id && <button onClick={() => syncInvoice(order, 'status').catch((error) => setMessage(error.message))}>查询开票状态</button>}<button onClick={() => { setOrderSearch(order.order_no); setActive('orders') }}>查看订单</button></div>
-                </article>)}
-                {!filteredInvoices.length && <Empty text="还没有微信电子发票申请" />}
-              </section>
+            <section className="panel invoice-records">
+              <PanelTitle eyebrow="FAPIAO APPLICATIONS" title="开票申请" count={`${filteredInvoices.length} / ${invoices.length} 笔`} />
+              <QueryToolbar value={queries.invoices || ''} onChange={(value) => setQueries((current) => ({ ...current, invoices: value }))} placeholder="搜索订单号、申请单、抬头、税号、发票号或状态" />
+              {filteredInvoices.map((order) => <article className="invoice-admin-card" key={order.id}>
+                <header><div><strong>{order.order_no}</strong><small>{order.invoice_apply_id || '确认收货后由用户在微信申请开票'}</small></div><span>{order.invoice_status}</span></header>
+                <div className="invoice-admin-copy"><strong>{order.invoice_buyer_name || '等待用户在微信填写抬头'}</strong><span>{order.invoice_buyer_type === 'ORGANIZATION' ? '企业' : order.invoice_buyer_type === 'INDIVIDUAL' ? '个人' : '未填写'} · {money(order.total_cents)} · {orderStatusText[order.status]}</span>{order.invoice_buyer_taxpayer_id && <small>税号 {order.invoice_buyer_taxpayer_id}</small>}{order.invoice_fapiao_id && <small>发票标识 {order.invoice_fapiao_id} · 卡包 {order.invoice_card_status || '处理中'}</small>}{order.invoice_error && <small className="error-text">{order.invoice_error}</small>}</div>
+                <div className="invoice-admin-actions">
+                  {order.invoice_apply_id && INVOICE_TITLE_SYNCABLE.has(order.invoice_status) && <button onClick={() => syncInvoice(order, 'title').catch((error) => setMessage(error.message))}>同步微信抬头</button>}
+                  {order.invoice_apply_id && <button onClick={() => syncInvoice(order, 'status').catch((error) => setMessage(error.message))}>查询开票状态</button>}
+                  {(['received', 'completed'] as Order['status'][]).includes(order.status) && ['title_received', 'delivery_failed'].includes(order.invoice_status) && <button className="invoice-deliver-action" onClick={() => openInvoiceEditor(order)}>开票并交付</button>}
+                  <button onClick={() => { setOrderSearch(order.order_no); navigateTo('orders') }}>查看订单</button>
+                </div>
+              </article>)}
+              {!filteredInvoices.length && <Empty text="还没有确认收货后提交的微信电子发票申请" />}
             </section>
           </div>
         )}
@@ -1043,7 +1135,7 @@ export default function BackstagePage() {
               <h3>新建管理员</h3>
               <label>邮箱<input required type="email" value={adminForm.email} onChange={(e) => setAdminForm({ ...adminForm, email: e.target.value })} /></label>
               <label>姓名<input required value={adminForm.name} onChange={(e) => setAdminForm({ ...adminForm, name: e.target.value })} /></label>
-              <label>密码<input required minLength={8} type="password" value={adminForm.password} onChange={(e) => setAdminForm({ ...adminForm, password: e.target.value })} /></label>
+              <label>密码（至少 12 位）<input required minLength={12} type="password" value={adminForm.password} onChange={(e) => setAdminForm({ ...adminForm, password: e.target.value })} /></label>
               <label>角色<select value={adminForm.role} onChange={(e) => setAdminForm({ ...adminForm, role: e.target.value as AdminUser['role'] })}><option value="admin">管理员</option><option value="super_admin">超级管理员</option></select></label>
               <button className="primary">创建账号</button>
             </form>
@@ -1054,6 +1146,37 @@ export default function BackstagePage() {
         {active === 'audit' && <TablePanel title="审计日志"><QueryToolbar value={queries.audit || ''} onChange={(value) => setQueries((current) => ({ ...current, audit: value }))} placeholder="搜索操作、对象、编号、管理员或详情" onExport={() => downloadCsv('审计日志.csv', [['时间', '管理员ID', '操作', '对象', '对象ID', '详情'], ...filteredAudit.map((item) => [item.created_at, item.admin_id, item.action, item.entity, item.entity_id, item.detail])])} />{filteredAudit.map((item) => <div className="row audit-row" key={item.id}><code>{item.action}</code><div><strong>{item.entity} {item.entity_id && `#${item.entity_id}`}</strong><small>{item.detail || '无补充说明'}</small></div><span>管理员 #{item.admin_id || '系统'}</span><time>{new Date(item.created_at).toLocaleString('zh-CN')}</time></div>)}{!filteredAudit.length && <Empty text="没有符合条件的审计记录" />}</TablePanel>}
         </div>
       </section>
+
+      {invoiceEditorOpen && (
+        <div className="modal-backdrop" role="presentation">
+          <section className="dialog invoice-editor" role="dialog" aria-modal="true" aria-labelledby="invoice-editor-title">
+            <header className="dialog-header"><div><p>WECHAT FAPIAO DELIVERY</p><h3 id="invoice-editor-title">核对并交付电子发票</h3><span>{invoices.find((item) => item.id === invoiceDelivery.order_id)?.order_no} · {invoices.find((item) => item.id === invoiceDelivery.order_id)?.invoice_buyer_name || '微信抬头'}</span></div><button type="button" className="dialog-close" aria-label="关闭" onClick={() => setInvoiceEditorOpen(false)}>×</button></header>
+            <form className="form invoice-delivery-form" onSubmit={prepareInvoiceDelivery}>
+              <label>电子发票 PDF（不超过 2MB）<input required type="file" accept="application/pdf,.pdf" onChange={selectInvoiceFile} /></label>
+              <div className="two"><label>发票号码<input required maxLength={8} value={invoiceDelivery.fapiao_number} onChange={(event) => setInvoiceDelivery({ ...invoiceDelivery, fapiao_number: event.target.value })} /></label><label>发票代码<input required maxLength={12} value={invoiceDelivery.fapiao_code} onChange={(event) => setInvoiceDelivery({ ...invoiceDelivery, fapiao_code: event.target.value })} /></label></div>
+              <label>开票时间<input required type="datetime-local" value={invoiceDelivery.fapiao_time} onChange={(event) => setInvoiceDelivery({ ...invoiceDelivery, fapiao_time: event.target.value })} /></label>
+              <div className="two"><label>价税合计（元）<input required type="number" min="0.01" step="0.01" value={invoiceDelivery.total_amount / 100} onChange={(event) => setInvoiceDelivery({ ...invoiceDelivery, total_amount: cents(event.target.value) })} /></label><label>税额（元）<input required type="number" min="0" step="0.01" value={invoiceDelivery.tax_amount / 100} onChange={(event) => setInvoiceDelivery({ ...invoiceDelivery, tax_amount: cents(event.target.value) })} /></label></div>
+              <div className="two"><label>校验码<input required maxLength={20} value={invoiceDelivery.check_code} onChange={(event) => setInvoiceDelivery({ ...invoiceDelivery, check_code: event.target.value })} /></label><label>密码区<input required maxLength={1024} value={invoiceDelivery.password} onChange={(event) => setInvoiceDelivery({ ...invoiceDelivery, password: event.target.value })} /></label></div>
+              <label>销售方名称<input required value={invoiceDelivery.seller_name} onChange={(event) => setInvoiceDelivery({ ...invoiceDelivery, seller_name: event.target.value })} /></label>
+              <div className="two"><label>销售方纳税人识别号<input required value={invoiceDelivery.seller_taxpayer_id} onChange={(event) => setInvoiceDelivery({ ...invoiceDelivery, seller_taxpayer_id: event.target.value })} /></label><label>开票人<input required value={invoiceDelivery.drawer} onChange={(event) => setInvoiceDelivery({ ...invoiceDelivery, drawer: event.target.value })} /></label></div>
+              <div className="dialog-actions"><button type="button" onClick={() => setInvoiceEditorOpen(false)}>取消</button><button className="primary-action" type="submit">下一步：最终核对</button></div>
+            </form>
+          </section>
+        </div>
+      )}
+
+      {confirmation && (
+        <div className="modal-backdrop confirmation-layer" role="presentation">
+          <section className="dialog confirmation-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirmation-title" aria-describedby="confirmation-description">
+            <p>FINAL CHECK</p>
+            <h3 id="confirmation-title">{confirmation.title}</h3>
+            <div className="confirmation-rule" />
+            <span id="confirmation-description">{confirmation.description}</span>
+            {confirmation.inputLabel && <label>{confirmation.inputLabel}<textarea autoFocus value={confirmationInput} onChange={(event) => setConfirmationInput(event.target.value)} placeholder={confirmation.inputPlaceholder} /></label>}
+            <div className="dialog-actions"><button type="button" disabled={confirmationBusy} onClick={() => setConfirmation(null)}>返回检查</button><button type="button" disabled={confirmationBusy} className={confirmation.danger ? 'danger-action-solid' : 'primary-action'} onClick={() => confirmPendingAction()}>{confirmationBusy ? '处理中…' : confirmation.confirmLabel}</button></div>
+          </section>
+        </div>
+      )}
     </main>
   )
 }

@@ -948,12 +948,134 @@ a {
   background: #fcfaf6;
 }
 
+.fulfillment-workbench {
+  display: grid;
+  gap: 14px;
+  padding: 16px 18px;
+  border-top: 1px solid var(--line);
+  background: #fcfaf6;
+}
+
+.shipping-fields {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) 230px;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.shipping-fields > label:not(.test-order-toggle),
+.pickup-fulfillment {
+  display: grid;
+  gap: 6px;
+}
+
+.shipping-fields > label > span,
+.pickup-fulfillment > span {
+  color: var(--faint);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.pickup-fulfillment {
+  min-height: 62px;
+  align-content: center;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.test-order-toggle {
+  display: flex;
+  min-height: 62px;
+  align-items: center;
+  gap: 11px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.test-order-toggle input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--oxblood);
+}
+
+.test-order-toggle span,
+.test-order-toggle strong,
+.test-order-toggle small {
+  display: block;
+}
+
+.test-order-toggle strong {
+  font-size: 12px;
+}
+
+.test-order-toggle small {
+  margin-top: 3px;
+  color: var(--faint);
+  font-size: 10px;
+}
+
+.test-order-toggle:has(input:checked) {
+  border-color: rgba(112, 36, 44, .45);
+  background: #fbf2f1;
+}
+
+.test-order-toggle:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: .6;
+}
+
+.order-status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+.order-status-actions button,
+.dialog-actions button {
+  min-height: 38px;
+  padding: 0 15px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 680;
+}
+
+.order-status-actions .primary-action,
+.dialog-actions .primary-action {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fffdf9;
+}
+
+.order-status-actions .danger-outline {
+  border-color: #cfa7a2;
+  color: var(--danger);
+}
+
 .platform-order-actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 9px;
   padding: 0 18px 14px;
   background: #fcfaf6;
+}
+
+.platform-order-actions > span {
+  margin-right: auto;
+  color: var(--faint);
+  font-size: 10px;
 }
 
 .platform-order-actions button:hover,
@@ -1048,6 +1170,10 @@ a {
   overflow: hidden;
 }
 
+.invoice-admin > .invoice-records {
+  width: 100%;
+}
+
 .invoice-admin-card {
   display: grid;
   gap: 14px;
@@ -1093,6 +1219,155 @@ a {
 .invoice-admin-copy > span {
   color: var(--muted);
   font-size: 11px;
+}
+
+.invoice-admin-actions .invoice-deliver-action {
+  border-color: var(--oxblood);
+  background: var(--oxblood);
+  color: #fff9ef;
+}
+
+.invoice-admin-actions .invoice-deliver-action:hover {
+  border-color: #511820;
+  background: #511820;
+  color: #fff;
+}
+
+.modal-backdrop {
+  position: fixed;
+  z-index: 80;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  overflow-y: auto;
+  background: rgba(20, 17, 14, .52);
+  backdrop-filter: blur(8px);
+  animation: modal-fade 160ms ease-out both;
+}
+
+.confirmation-layer {
+  z-index: 90;
+}
+
+.dialog {
+  width: min(720px, 100%);
+  max-height: calc(100vh - 56px);
+  overflow-y: auto;
+  border: 1px solid rgba(255, 255, 255, .5);
+  border-radius: 16px;
+  background: var(--paper);
+  box-shadow: 0 30px 90px rgba(22, 17, 12, .24);
+  animation: dialog-enter 200ms cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 24px 26px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.dialog-header p,
+.confirmation-dialog > p {
+  margin: 0 0 7px;
+  color: var(--gold);
+  font-size: 10px;
+  font-weight: 760;
+  letter-spacing: .2em;
+}
+
+.dialog-header h3,
+.confirmation-dialog h3 {
+  margin: 0;
+  font-family: Georgia, "Songti SC", serif;
+  font-size: 25px;
+  font-weight: 500;
+}
+
+.dialog-header span {
+  display: block;
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.dialog-close {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--gold-soft);
+  color: var(--ink);
+  font-size: 23px;
+  line-height: 1;
+}
+
+.invoice-editor .invoice-delivery-form {
+  padding: 22px 26px 26px;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.confirmation-dialog {
+  width: min(520px, 100%);
+  padding: 30px;
+}
+
+.confirmation-dialog > span {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+.confirmation-rule {
+  width: 64px;
+  height: 2px;
+  margin: 18px 0;
+  background: var(--gold);
+}
+
+.confirmation-dialog > label {
+  display: grid;
+  gap: 8px;
+  margin-top: 20px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.confirmation-dialog textarea {
+  min-height: 88px;
+}
+
+.dialog-actions .danger-action-solid {
+  border-color: var(--oxblood);
+  background: var(--oxblood);
+  color: #fff;
+}
+
+.dialog-actions button:disabled {
+  cursor: wait;
+  opacity: .55;
+}
+
+@keyframes modal-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes dialog-enter {
+  from { opacity: 0; transform: translateY(12px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .payment-row {
@@ -1386,10 +1661,27 @@ a {
     justify-content: stretch;
   }
 
+  .shipping-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .order-status-actions {
+    justify-content: stretch;
+  }
+
+  .order-status-actions button {
+    flex: 1 1 150px;
+  }
+
   .platform-order-actions button,
   .invoice-capability button,
   .invoice-admin-actions button {
     flex: 1 1 auto;
+  }
+
+  .platform-order-actions > span {
+    width: 100%;
+    margin: 0 0 4px;
   }
 
   .stats {
@@ -1428,6 +1720,25 @@ a {
 
   .two {
     grid-template-columns: 1fr;
+  }
+
+  .modal-backdrop {
+    place-items: end center;
+    padding: 0;
+  }
+
+  .dialog {
+    width: 100%;
+    max-height: 92vh;
+    border-radius: 16px 16px 0 0;
+  }
+
+  .dialog-actions {
+    flex-direction: column-reverse;
+  }
+
+  .dialog-actions button {
+    width: 100%;
   }
 
   .asset-actions {

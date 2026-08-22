@@ -30,6 +30,11 @@ COPY --from=builder /app/src/backstage/public ./src/backstage/public
 COPY --from=builder /app/src/backstage/.next/static ./src/backstage/.next/static
 COPY --from=builder /app/src/backstage/.next/standalone ./
 
+RUN mkdir -p /app/src/backstage/.next/cache \
+    && chown node:node /app/src/backstage/.next/cache
+
+USER node
+
 EXPOSE 3000
 
 CMD ["node", "src/backstage/server.js"]
