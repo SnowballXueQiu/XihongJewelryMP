@@ -67,6 +67,10 @@ interface OrderRepository : JpaRepository<OrderEntity, Long> {
     fun findAllByStatusInOrderByUpdatedAtAsc(statuses: Collection<String>, pageable: Pageable): List<OrderEntity>
     fun findAllByOrderByCreatedAtDesc(pageable: Pageable): List<OrderEntity>
     fun findAllByInvoiceRequestedTrueOrderByCreatedAtDesc(): List<OrderEntity>
+    fun findAllByInvoiceRequestedTrueAndInvoiceStatusInOrderByInvoiceUpdatedAtAsc(
+        statuses: Collection<String>,
+        pageable: Pageable,
+    ): List<OrderEntity>
     fun countByStatus(status: String): Long
     fun countByStatusIn(statuses: Collection<String>): Long
     fun countByCreatedAtGreaterThanEqual(createdAt: java.time.Instant): Long

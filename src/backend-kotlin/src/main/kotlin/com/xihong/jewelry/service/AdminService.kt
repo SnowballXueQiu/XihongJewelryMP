@@ -250,8 +250,8 @@ class AdminService(
 
     @Transactional(readOnly = true)
     fun invoiceCapability(): InvoiceCapabilityDto = InvoiceCapabilityDto(
-        configured = properties.pay.merchantId.isNotBlank() && properties.pay.invoiceNotifyUrl.isNotBlank(),
-        callbackUrl = properties.pay.invoiceNotifyUrl,
+        configured = properties.pay.merchantId.isNotBlank(),
+        statusMode = "active_query",
         applicationCount = orders.findAllByInvoiceRequestedTrueOrderByCreatedAtDesc().size.toLong(),
     )
 

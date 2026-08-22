@@ -42,23 +42,24 @@ class WechatMessageController(private val messages: WechatMessageService) {
         @RequestBody body: String,
         @RequestParam timestamp: String,
         @RequestParam nonce: String,
-        @RequestParam(required = false) signature: String?,
+        @Suppress("UNUSED_PARAMETER") @RequestParam(required = false) signature: String?,
         @RequestParam(name = "msg_signature", required = false) messageSignature: String?,
         @RequestParam(name = "encrypt_type", required = false) encryptType: String?,
-    ): ResponseEntity<String> = runCatching {
-        val payload = if (encryptType == "aes" || !messageSignature.isNullOrBlank()) {
+    ): ResponseEntity<String> {
+        val payload = runCatching {
+            require(encryptType == "aes") { "微信消息回调仅接受安全模式" }
+            require(!messageSignature.isNullOrBlank()) { "微信安全模式回调缺少 msg_signature" }
             val encrypted = messages.extractEncrypted(body)
-            messages.verifyEncryptedSignature(requireNotNull(messageSignature), timestamp, nonce, encrypted)
+            messages.verifyEncryptedSignature(messageSignature, timestamp, nonce, encrypted)
             messages.decrypt(encrypted)
-        } else {
-            messages.verifyPlainSignature(requireNotNull(signature), timestamp, nonce)
-            body
+        }.getOrElse {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("forbidden")
         }
         val requestId = request.getHeader("Request-ID") ?: request.getHeader("Wechatpay-Request-Id") ?: ""
-        check(messages.acceptAndProcess(payload, requestId)) { "微信订单状态同步失败" }
-        "success"
-    }.fold(
-        onSuccess = { ResponseEntity.ok(it) },
-        onFailure = { ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("fail") },
-    )
+        return if (messages.acceptAndProcess(payload, requestId)) {
+            ResponseEntity.ok("success")
+        } else {
+            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("fail")
+        }
+    }
 }

@@ -59,7 +59,7 @@ class OrderService(
     private val paymentProvider: ObjectProvider<WechatPayService>,
     private val invoiceProvider: ObjectProvider<WechatInvoiceService>,
     transactionManager: PlatformTransactionManager,
-) : OrderPaymentLifecycle, InvoiceLifecycle {
+) : OrderPaymentLifecycle {
     private val transactions = TransactionTemplate(transactionManager)
     private val random = SecureRandom()
     private val log = LoggerFactory.getLogger(javaClass)
@@ -664,31 +664,6 @@ class OrderService(
                 it.updatedAt = Instant.now()
                 refunds.save(it)
             }
-        }
-    }
-
-    override fun invoiceNotification(notification: InvoiceNotificationSnapshot) {
-        inTransaction {
-            val order = orders.lockByOrderNo(notification.fapiaoApplyId)
-                ?: throw IllegalArgumentException("微信发票申请对应的订单不存在")
-            order.invoiceRequested = true
-            val invoice = notification.invoices.firstOrNull { it.fapiaoId == order.invoiceFapiaoId }
-                ?: notification.invoices.firstOrNull()
-            order.invoiceStatus = InvoiceWorkflowPolicy.notification(
-                order.invoiceStatus,
-                notification.envelope.eventType,
-                notification.invoices.map(InvoiceStatusItem::fapiaoStatus),
-            )
-            invoice?.let {
-                order.invoiceFapiaoId = invoice.fapiaoId.ifBlank { order.invoiceFapiaoId }
-                invoice.cardStatus?.takeIf(String::isNotBlank)?.let { order.invoiceCardStatus = it }
-            }
-            val failed = notification.invoices.any {
-                "FAIL" in it.fapiaoStatus.uppercase() || "FAIL" in it.cardStatus.orEmpty().uppercase()
-            }
-            order.invoiceError = if (failed) "微信返回发票或卡包处理失败，请联系商家处理" else ""
-            order.invoiceUpdatedAt = notification.applyTime?.toInstant() ?: Instant.now()
-            orders.save(order)
         }
     }
 

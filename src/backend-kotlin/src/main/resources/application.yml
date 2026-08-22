@@ -88,6 +88,3 @@ app:
     private-key-path: ${WX_PAY_PRIVATE_KEY_PATH:/run/secrets/wechatpay/apiclient_key.pem}
     platform-public-key-id: ${WX_PAY_PUBLIC_KEY_ID:}
     platform-public-key-path: ${WX_PAY_PUBLIC_KEY_PATH:/run/secrets/wechatpay/pub_key.pem}
-    notify-url: ${WX_PAY_NOTIFY_URL:https://api.xihongzhubao.com/api/payments/wechat/notify}
-    refund-notify-url: ${WX_PAY_REFUND_NOTIFY_URL:https://api.xihongzhubao.com/api/payments/wechat/refund-notify}
-    invoice-notify-url: ${WX_PAY_INVOICE_NOTIFY_URL:https://api.xihongzhubao.com/api/payments/wechat/invoice-notify}

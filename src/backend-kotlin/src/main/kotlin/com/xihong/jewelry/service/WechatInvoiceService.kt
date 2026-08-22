@@ -11,8 +11,6 @@ import com.wechat.pay.java.core.http.JsonRequestBody
 import com.wechat.pay.java.core.http.MediaType
 import com.xihong.jewelry.config.AppProperties
 import org.bouncycastle.crypto.digests.SM3Digest
-import org.springframework.beans.factory.ObjectProvider
-import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -27,8 +25,6 @@ class WechatInvoiceService(
     private val properties: AppProperties,
     private val clients: WechatPayClientProvider,
     private val mapper: ObjectMapper,
-    private val callbackInbox: WechatCallbackInboxService,
-    private val lifecycle: ObjectProvider<InvoiceLifecycle>,
 ) {
     fun acquireTitleForm(command: InvoiceTitleFormCommand): InvoiceTitleLink {
         requireApplyId(command.fapiaoApplyId)
@@ -126,69 +122,6 @@ class WechatInvoiceService(
             )
         }
         return InvoiceDeliveryStatus(response.totalCount ?: invoices.size, invoices)
-    }
-
-    fun parseNotification(headers: WechatCallbackHeaders, body: String): InvoiceNotificationSnapshot {
-        val envelope = parseEnvelope(body)
-        return when (envelope.eventType) {
-            TITLE_APPLIED_EVENT -> {
-                val resource = verifyAndDecrypt(headers, body, InvoiceTitleNotificationResource::class.java)
-                validateMerchant(resource.mchid)
-                InvoiceNotificationSnapshot(
-                    envelope = envelope,
-                    fapiaoApplyId = resource.fapiaoApplyId.orEmpty().also(::requireApplyId),
-                    applyTime = parseOffsetDateTimeOrNull(resource.applyTime),
-                    invoices = emptyList(),
-                )
-            }
-            INVOICE_ISSUED_EVENT, INVOICE_REVERSED_EVENT, CARD_INSERTED_EVENT, CARD_DISCARDED_EVENT -> {
-                val resource = verifyAndDecrypt(headers, body, InvoiceCardNotificationResource::class.java)
-                validateMerchant(resource.mchid)
-                InvoiceNotificationSnapshot(
-                    envelope = envelope,
-                    fapiaoApplyId = resource.fapiaoApplyId.orEmpty().also(::requireApplyId),
-                    applyTime = null,
-                    invoices = resource.fapiaoInformation.orEmpty().map {
-                        InvoiceStatusItem(
-                            fapiaoId = it.fapiaoId.orEmpty(),
-                            fapiaoStatus = it.fapiaoStatus.orEmpty(),
-                            cardStatus = it.cardStatus,
-                        )
-                    },
-                )
-            }
-            else -> throw WechatCallbackRejectedException("不支持的微信发票通知类型")
-        }
-    }
-
-    fun acceptNotification(headers: WechatCallbackHeaders, body: String): InvoiceNotificationSnapshot {
-        val parsed = parseNotification(headers, body)
-        val registration = try {
-            callbackInbox.register(
-                INVOICE_CALLBACK_SOURCE,
-                parsed.envelope.id,
-                parsed.envelope.eventType,
-                headers.requestId,
-                body,
-            )
-        } catch (_: DataIntegrityViolationException) {
-            callbackInbox.find(INVOICE_CALLBACK_SOURCE, parsed.envelope.id)
-                ?: throw WechatCallbackRejectedException("发票回调幂等记录冲突")
-        }
-        if (registration.alreadyProcessed) return parsed
-        return try {
-            callbackInbox.process(INVOICE_CALLBACK_SOURCE, parsed.envelope.id) {
-                val handler = lifecycle.getIfAvailable()
-                    ?: throw IllegalStateException("微信发票回调业务处理器不可用")
-                handler.invoiceNotification(parsed)
-            }
-            parsed
-        } catch (error: Exception) {
-            // process() has already rolled its transaction back at this point, so recording the
-            // retryable failure cannot deadlock on the callback row lock.
-            callbackInbox.markFailed(INVOICE_CALLBACK_SOURCE, parsed.envelope.id, error)
-            throw error
-        }
     }
 
     private fun uploadPdf(pdf: ByteArray, fileName: String): String {
@@ -334,30 +267,10 @@ class WechatInvoiceService(
         return clients.http().get(headers, "$API_HOST$path$suffix", responseType).serviceResponse
     }
 
-    private fun <T> verifyAndDecrypt(headers: WechatCallbackHeaders, body: String, type: Class<T>): T = runCatching {
-        clients.notifications().parse(headers.toRequestParam(body), type)
-    }.getOrElse { throw WechatCallbackRejectedException("微信发票通知验签或解密失败", it) }
-
-    private fun parseEnvelope(body: String): WechatNotificationEnvelope = runCatching {
-        val root = mapper.readTree(body)
-        WechatNotificationEnvelope(
-            id = root.path("id").asText().takeIf { it.isNotBlank() && it.length <= 160 }
-                ?: throw IllegalArgumentException("通知ID无效"),
-            createTime = OffsetDateTime.parse(root.path("create_time").asText(), DateTimeFormatter.ISO_OFFSET_DATE_TIME),
-            eventType = root.path("event_type").asText().ifBlank { throw IllegalArgumentException("缺少通知类型") },
-            resourceType = root.path("resource_type").asText(),
-            summary = root.path("summary").asText(),
-        )
-    }.getOrElse { throw WechatCallbackRejectedException("微信发票通知报文格式错误", it) }
-
     private fun decryptSensitive(value: String?): String? {
         if (value.isNullOrBlank()) return null
         return runCatching { clients.config().createDecryptor().decrypt(value) }
             .getOrElse { throw WechatPayConfigurationException("微信发票敏感字段解密失败", it) }
-    }
-
-    private fun validateMerchant(merchantId: String?) {
-        if (merchantId != properties.pay.merchantId) throw WechatCallbackRejectedException("发票通知商户号不匹配")
     }
 
     private fun requireApplyId(value: String) {
@@ -377,21 +290,11 @@ class WechatInvoiceService(
         if (clients.isMock()) throw WechatPayConfigurationException("模拟支付模式不能调用微信电子发票API")
     }
 
-    private fun parseOffsetDateTimeOrNull(value: String?): OffsetDateTime? = value?.takeIf(String::isNotBlank)?.let {
-        runCatching { OffsetDateTime.parse(it, DateTimeFormatter.ISO_OFFSET_DATE_TIME) }.getOrNull()
-    }
-
     private fun encode(value: String): String = URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20")
 
     private companion object {
         const val API_HOST = "https://api.mch.weixin.qq.com"
         const val MAX_PDF_BYTES = 2 * 1024 * 1024
-        const val INVOICE_CALLBACK_SOURCE = "wechat_invoice_apiv3"
-        const val TITLE_APPLIED_EVENT = "FAPIAO.USER_APPLIED"
-        const val INVOICE_ISSUED_EVENT = "FAPIAO.ISSUED"
-        const val INVOICE_REVERSED_EVENT = "FAPIAO.REVERSED"
-        const val CARD_INSERTED_EVENT = "FAPIAO.CARD_INSERTED"
-        const val CARD_DISCARDED_EVENT = "FAPIAO.CARD_DISCARDED"
     }
 }
 
@@ -508,17 +411,6 @@ data class InvoiceStatusItem(
     val amount: Long? = null,
 )
 
-data class InvoiceNotificationSnapshot(
-    val envelope: WechatNotificationEnvelope,
-    val fapiaoApplyId: String,
-    val applyTime: OffsetDateTime?,
-    val invoices: List<InvoiceStatusItem>,
-)
-
-interface InvoiceLifecycle {
-    fun invoiceNotification(notification: InvoiceNotificationSnapshot)
-}
-
 private class InvoiceTitleLinkResponse {
     @SerializedName("miniprogram_appid") var miniprogramAppid: String? = null
     @SerializedName("miniprogram_path") var miniprogramPath: String? = null
@@ -558,22 +450,4 @@ private class InvoiceCardStatusResource {
     @SerializedName("card_status") var cardStatus: String? = null
     @SerializedName("card_id") var cardId: String? = null
     @SerializedName("card_code") var cardCode: String? = null
-}
-
-private class InvoiceTitleNotificationResource {
-    var mchid: String? = null
-    @SerializedName("fapiao_apply_id") var fapiaoApplyId: String? = null
-    @SerializedName("apply_time") var applyTime: String? = null
-}
-
-private class InvoiceCardNotificationResource {
-    var mchid: String? = null
-    @SerializedName("fapiao_apply_id") var fapiaoApplyId: String? = null
-    @SerializedName("fapiao_information") var fapiaoInformation: List<InvoiceCardNotificationItem>? = null
-}
-
-private class InvoiceCardNotificationItem {
-    @SerializedName("fapiao_id") var fapiaoId: String? = null
-    @SerializedName("fapiao_status") var fapiaoStatus: String? = null
-    @SerializedName("card_status") var cardStatus: String? = null
 }

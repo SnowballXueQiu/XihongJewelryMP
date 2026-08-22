@@ -2,12 +2,9 @@ package com.xihong.jewelry.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.xihong.jewelry.config.AppProperties
-import com.xihong.jewelry.repository.CallbackEventRepository
 import org.junit.jupiter.api.Assertions.assertDoesNotThrow
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
-import org.mockito.Mockito.mock
-import org.springframework.beans.factory.ObjectProvider
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
 
@@ -28,14 +25,10 @@ class WechatInvoiceServiceTest {
         wechat = AppProperties.Wechat(),
         pay = AppProperties.Pay(mock = true),
     )
-    @Suppress("UNCHECKED_CAST")
-    private val lifecycle = mock(ObjectProvider::class.java) as ObjectProvider<InvoiceLifecycle>
     private val service = WechatInvoiceService(
         properties,
         WechatPayClientProvider(properties),
         ObjectMapper().findAndRegisterModules(),
-        WechatCallbackInboxService(mock(CallbackEventRepository::class.java)),
-        lifecycle,
     )
 
     @Test

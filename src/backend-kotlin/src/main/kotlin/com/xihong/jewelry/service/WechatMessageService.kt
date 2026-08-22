@@ -62,6 +62,13 @@ class WechatMessageService(
 
     fun acceptAndProcess(payload: String, requestId: String): Boolean {
         val fields = parse(payload)
+        require(fields["MsgType"].orEmpty().ifBlank { fields["msg_type"].orEmpty() } == "event") {
+            "微信订单消息类型不是 event"
+        }
+        val recipient = fields["ToUserName"].orEmpty().ifBlank { fields["to_user_name"].orEmpty() }
+        require(recipient.isBlank() || recipient in setOf(properties.wechat.originalId, properties.wechat.appId)) {
+            "微信订单消息接收方不匹配"
+        }
         val eventType = fields["Event"].orEmpty().ifBlank { fields["event"].orEmpty() }
         if (eventType != "trade_manage_order_settlement") return true
         val merchantId = fields["merchant_id"].orEmpty()

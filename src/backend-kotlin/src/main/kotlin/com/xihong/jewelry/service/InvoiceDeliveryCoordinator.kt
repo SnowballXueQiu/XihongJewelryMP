@@ -79,19 +79,33 @@ class InvoiceDeliveryCoordinator(
             throw deliveryError
         }
 
-        val saved = inTransaction {
+        val submitted = inTransaction {
             val order = orders.lockById(claim.orderId)
                 ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "订单不存在")
             order.invoiceMediaId = receipt.fapiaoMediaId
-            // A callback may have committed `inserted` while the remote request was returning. Do
-            // not downgrade that newer authoritative state to merely `delivery_submitted`.
+            // Preserve a newer state written by a concurrent active status synchronization.
             if (order.invoiceStatus == DELIVERING) order.invoiceStatus = DELIVERY_SUBMITTED
             order.invoiceCardStatus = order.invoiceCardStatus.ifBlank { receipt.cardStatus }
             order.invoiceError = ""
             order.invoiceUpdatedAt = receipt.acceptedAt
             orders.save(order)
         }
-        return InvoiceDeliveryOutcome(saved, false, "${receipt.fapiaoMediaId} · ${receipt.cardStatus}")
+
+        // The insert API is asynchronous, but the first authoritative query should happen
+        // immediately. A non-terminal/empty result stays durable as `delivery_submitted` so an
+        // administrator can synchronize it again without ever uploading the same invoice twice.
+        val query = runCatching { invoiceApi.status(claim.command.fapiaoApplyId) }
+        val item = query.getOrNull()?.invoices?.firstOrNull()
+        if (item != null) {
+            val synchronized = finishFromAuthority(claim.orderId, item)
+            return InvoiceDeliveryOutcome(
+                synchronized,
+                false,
+                "${item.fapiaoId.ifBlank { receipt.fapiaoMediaId }} · ${item.cardStatus.orEmpty().ifBlank { item.fapiaoStatus }}",
+            )
+        }
+        val pending = query.exceptionOrNull()?.let { rememberStatusQueryFailure(claim.orderId, it) } ?: submitted
+        return InvoiceDeliveryOutcome(pending, false, "${receipt.fapiaoMediaId} · ${receipt.cardStatus}")
     }
 
     /** Query WeChat outside a database transaction, then merge the result under a row lock. */
@@ -218,10 +232,20 @@ class InvoiceDeliveryCoordinator(
     private fun markReconciling(orderId: Long, error: Throwable): OrderEntity = inTransaction {
         val order = orders.lockById(orderId)
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "订单不存在")
-        // Preserve a newer callback state if it won the race with the failed HTTP response.
+        // Preserve a newer state if an active status synchronization won the race with the failed request.
         if (order.invoiceStatus == DELIVERING) {
             order.invoiceStatus = DELIVERY_RECONCILING
             order.invoiceError = (error.message ?: "微信发票交付结果待核验").take(2000)
+            order.invoiceUpdatedAt = Instant.now()
+            orders.save(order)
+        } else order
+    }
+
+    private fun rememberStatusQueryFailure(orderId: Long, error: Throwable): OrderEntity = inTransaction {
+        val order = orders.lockById(orderId)
+            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "订单不存在")
+        if (order.invoiceStatus == DELIVERY_SUBMITTED) {
+            order.invoiceError = (error.message ?: "微信发票状态暂时无法同步，请稍后重试").take(2000)
             order.invoiceUpdatedAt = Instant.now()
             orders.save(order)
         } else order

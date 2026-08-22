@@ -29,6 +29,26 @@ class WechatPayServiceTest {
     lateinit var tempDir: Path
 
     @Test
+    fun `payment and refund callback URLs are derived from public base URL`() {
+        val properties = properties("0123456789abcdef0123456789abcdef", "PUB_KEY_ID_TEST", tempDir.resolve("unused.pem"))
+        @Suppress("UNCHECKED_CAST")
+        val lifecycle = mock(ObjectProvider::class.java) as ObjectProvider<OrderPaymentLifecycle>
+        val service = WechatPayService(
+            properties,
+            mock(WechatPayClientProvider::class.java),
+            ObjectMapper(),
+            mock(PaymentIntentRepository::class.java),
+            mock(RefundRepository::class.java),
+            mock(OrderRepository::class.java),
+            WechatCallbackInboxService(mock(CallbackEventRepository::class.java)),
+            lifecycle,
+        )
+
+        assertEquals("https://api.example.com/api/payments/wechat/notify", service.callbackUrl("/api/payments/wechat/notify"))
+        assertEquals("https://api.example.com/api/payments/wechat/refund-notify", service.callbackUrl("/api/payments/wechat/refund-notify"))
+    }
+
+    @Test
     fun `refund callback decrypts official amount without currency`() {
         val keyPair = KeyPairGenerator.getInstance("RSA").apply { initialize(2048) }.generateKeyPair()
         val publicKey = tempDir.resolve("wechatpay-public.pem")

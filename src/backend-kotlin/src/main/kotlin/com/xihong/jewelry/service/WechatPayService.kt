@@ -23,6 +23,7 @@ import com.xihong.jewelry.repository.RefundRepository
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
+import java.net.URI
 import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
@@ -68,7 +69,7 @@ class WechatPayService(
             mchid = properties.pay.merchantId
             description = command.description
             outTradeNo = command.outTradeNo
-            notifyUrl = properties.pay.notifyUrl.ifBlank { throw WechatPayConfigurationException("WX_PAY_NOTIFY_URL未配置") }
+            notifyUrl = callbackUrl(PAYMENT_NOTIFY_PATH)
             timeExpire = command.expiresAt?.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
             attach = command.attach?.takeIf(String::isNotBlank)
             // 发票在确认收货后通过官方抬头接口申请，不在支付凭证提前开放入口。
@@ -128,7 +129,7 @@ class WechatPayService(
             outTradeNo = command.outTradeNo
             outRefundNo = command.outRefundNo
             reason = command.reason?.take(80)?.takeIf(String::isNotBlank)
-            notifyUrl = properties.pay.refundNotifyUrl.ifBlank { throw WechatPayConfigurationException("WX_PAY_REFUND_NOTIFY_URL未配置") }
+            notifyUrl = callbackUrl(REFUND_NOTIFY_PATH)
             amount = AmountReq().apply {
                 refund = command.refundCents
                 total = command.totalCents
@@ -326,7 +327,20 @@ class WechatPayService(
         runCatching { parseOffsetDateTime(it) }.getOrNull()
     }
 
+    internal fun callbackUrl(path: String): String {
+        val value = "${properties.publicBaseUrl.trimEnd('/')}$path"
+        val uri = runCatching { URI(value) }.getOrElse {
+            throw WechatPayConfigurationException("PUBLIC_BASE_URL格式不正确")
+        }
+        if (properties.production && (!uri.scheme.equals("https", ignoreCase = true) || uri.host.isNullOrBlank())) {
+            throw WechatPayConfigurationException("生产环境支付回调地址必须是公网HTTPS地址")
+        }
+        return value
+    }
+
     private companion object {
+        const val PAYMENT_NOTIFY_PATH = "/api/payments/wechat/notify"
+        const val REFUND_NOTIFY_PATH = "/api/payments/wechat/refund-notify"
         const val CALLBACK_SOURCE = "wechat_pay_apiv3"
         val REFUND_EVENTS = setOf("REFUND.SUCCESS", "REFUND.ABNORMAL", "REFUND.CLOSED")
         val REFUND_STATUSES = setOf("SUCCESS", "ABNORMAL", "CLOSED", "PROCESSING")

@@ -48,22 +48,19 @@ WX_PAY_CERT_DIR=/absolute/host/path/to/wechatpay-certificates
 WX_PAY_PRIVATE_KEY_PATH=/run/secrets/wechatpay/apiclient_key.pem
 WX_PAY_PUBLIC_KEY_ID=
 WX_PAY_PUBLIC_KEY_PATH=/run/secrets/wechatpay/pub_key.pem
-WX_PAY_NOTIFY_URL=https://your-api.example.com/api/payments/wechat/notify
-WX_PAY_REFUND_NOTIFY_URL=https://your-api.example.com/api/payments/wechat/refund-notify
-WX_PAY_INVOICE_NOTIFY_URL=https://your-api.example.com/api/payments/wechat/invoice-notify
 WX_PAY_MOCK=false
 ALLOW_MOCK_USER=false
 USER_TOKEN_SECRET=<随机长密钥>
 ADMIN_JWT_SECRET=<另一随机长密钥>
 ```
 
-支付流程为：服务端创建 JSAPI 预支付单 → 小程序 `Taro.requestPayment` → 服务端验签并解密支付通知 → 小程序主动查询服务端结果。客户端返回成功不会直接把订单置为已支付。回调校验商户、AppID、金额和签名，并以通知 ID 幂等处理重复通知。退款可在小程序或后台发起，最终状态由微信退款通知和主动查单共同确认。
+支付流程为：服务端创建 JSAPI 预支付单，并在请求中按 `PUBLIC_BASE_URL` 携带支付通知地址 → 小程序 `Taro.requestPayment` → 服务端验签并解密支付通知 → 小程序主动查询服务端结果。客户端返回成功不会直接把订单置为已支付。回调校验商户、AppID、金额和签名，并以通知 ID 幂等处理重复通知。退款请求同样由后端动态携带退款通知地址，最终状态由微信退款通知和主动查单共同确认，无需在平台预先配置这两个 URL。
 
 订单创建携带客户端幂等键，支付取消或失败后会保留原订单并回到订单中心重试，不会重复扣库存或生成新订单号。后台发货时会把最终成功支付流水对应的快递/自提信息同步至微信小程序订单发货管理；微信通知跳转路径应配置为 `pages/orders/index`。
 
 珠宝等实物商品的生产订单以微信小程序订单发货管理状态为准：后台仅录入运单号，服务端通过微信物流助手识别官方运力、订阅轨迹并上传发货；测试订单调用 `opspecialorder(type=2)`，不伪造运单。用户确认收货时只打开微信 `weappOrderConfirm`，返回后服务端查询微信订单状态，小程序不再本地二次完成。消息推送与定时对账会继续同步自动确认、退款和物流状态。
 
-电子发票只允许在微信确认收货后申请。服务端获取微信官方抬头填写小程序链接，小程序跳转至微信页面复用个人/企业抬头；后台只处理真实开票申请、上传电子发票 PDF 并在最终交付前二次确认，不再在结算页自建或重复填写抬头。
+电子发票只允许在微信确认收货后申请。服务端获取微信官方抬头填写小程序链接，小程序跳转至微信页面复用个人/企业抬头；后台只处理真实开票申请、上传电子发票 PDF 并在最终交付前二次确认，交付后主动查询微信状态，不依赖发票回调，也不在结算页自建或重复填写抬头。
 
 单独准备的本地开发 `.env` 可将 `WX_PAY_MOCK=true` 以显示清晰的“模拟支付”确认框；`.env.template` 默认关闭模拟支付与模拟用户。生产环境缺少证书或商户参数时，应用会明确失败，不会伪造支付成功。
 
@@ -72,10 +69,10 @@ ADMIN_JWT_SECRET=<另一随机长密钥>
 - request 合法域名（必须为已备案 HTTPS 域名）
 - 小程序 AppID 与商户号绑定关系
 - JSAPI 支付权限、APIv3 密钥、商户私钥和微信支付公钥
-- 支付/退款通知公网 HTTPS 可达，且不能要求登录
+- `PUBLIC_BASE_URL` 公网 HTTPS 可达；后端会在支付/退款请求中分别携带 `/api/payments/wechat/notify` 与 `/api/payments/wechat/refund-notify`
 - 小程序已接入“订单发货管理”，商户完成发货结算规则确认
-- 小程序“消息推送”URL 配置为 `https://api.xihongzhubao.com/api/wechat/miniprogram/message-push`，Token 与 EncodingAESKey 和服务器环境一致
-- 商户已开通微信电子发票自建/第三方能力，并配置发票回调
+- 小程序“消息推送”URL 配置为 `https://api.xihongzhubao.com/api/wechat/miniprogram/message-push`，消息加密方式选择“安全模式”，Token 与 EncodingAESKey 和服务器环境一致
+- 商户已开通微信电子发票自建/第三方能力；本系统使用同步响应与主动查询，不配置发票回调
 
 ## 验证
 

@@ -212,7 +212,7 @@ data class PlatformTradeStatusDto(
     val shippingServiceEnabled: Boolean, val settlementConfirmed: Boolean,
 )
 data class PathWrite(@field:NotBlank val path: String)
-data class InvoiceCapabilityDto(val configured: Boolean, val callbackUrl: String, val applicationCount: Long)
+data class InvoiceCapabilityDto(val configured: Boolean, val statusMode: String, val applicationCount: Long)
 data class AdminInvoiceDeliveryRequest(
     val fapiaoNumber: String,
     val fapiaoCode: String,

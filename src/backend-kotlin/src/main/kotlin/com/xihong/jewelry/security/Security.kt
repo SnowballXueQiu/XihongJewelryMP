@@ -202,7 +202,17 @@ class SecurityConfiguration(
         .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
         .authorizeHttpRequests {
             it.requestMatchers("/health", "/actuator/health/**", "/uploads/**").permitAll()
-            it.requestMatchers("/api/auth/wechat", "/api/payments/wechat/**", "/api/wechat/miniprogram/message-push").permitAll()
+            it.requestMatchers("/api/auth/wechat").permitAll()
+            it.requestMatchers(
+                HttpMethod.POST,
+                "/api/payments/wechat/notify",
+                "/api/payments/wechat/refund-notify",
+            ).permitAll()
+            it.requestMatchers(
+                HttpMethod.GET,
+                "/api/wechat/miniprogram/message-push",
+            ).permitAll()
+            it.requestMatchers(HttpMethod.POST, "/api/wechat/miniprogram/message-push").permitAll()
             it.requestMatchers(HttpMethod.GET, "/api/store/config", "/api/categories", "/api/banners", "/api/products", "/api/products/**").permitAll()
             it.requestMatchers("/api/admin/auth/login").permitAll()
             it.requestMatchers("/api/admin/**").hasRole("ADMIN")

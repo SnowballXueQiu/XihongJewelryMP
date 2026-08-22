@@ -63,6 +63,19 @@ data class AppProperties(
             }.getOrDefault(false)
         }
 
+    @get:AssertTrue(message = "生产环境必须完整配置微信安全模式消息推送")
+    val productionWechatMessageSecurityConfigured: Boolean
+        get() = !production || runCatching {
+            val callback = URI(wechat.messageCallbackUrl.trim())
+            wechat.messageToken.matches(Regex("[A-Za-z0-9]{3,32}")) &&
+                wechat.messageAesKey.matches(Regex("[A-Za-z0-9]{43}")) &&
+                wechat.appId.isNotBlank() && wechat.originalId.isNotBlank() &&
+                callback.scheme.equals("https", ignoreCase = true) && !callback.host.isNullOrBlank() &&
+                callback.rawQuery == null && callback.rawFragment == null &&
+                wechat.messageCallbackUrl.trimEnd('/') ==
+                "${publicBaseUrl.trimEnd('/')}/api/wechat/miniprogram/message-push"
+        }.getOrDefault(false)
+
     data class Wechat(
         val originalId: String = "",
         val appId: String = "",
@@ -70,7 +83,7 @@ data class AppProperties(
         val appSecret: String = "",
         @field:Pattern(regexp = "^$|^[A-Za-z0-9]{3,32}$")
         val messageToken: String = "",
-        @field:Pattern(regexp = "^$|^.{43}$")
+        @field:Pattern(regexp = "^$|^[A-Za-z0-9]{43}$")
         val messageAesKey: String = "",
         val messageCallbackUrl: String = "",
     )
@@ -85,8 +98,5 @@ data class AppProperties(
         val privateKeyPath: String = "",
         val platformPublicKeyId: String = "",
         val platformPublicKeyPath: String = "",
-        val notifyUrl: String = "",
-        val refundNotifyUrl: String = "",
-        val invoiceNotifyUrl: String = "",
     )
 }

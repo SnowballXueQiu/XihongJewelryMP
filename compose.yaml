@@ -75,9 +75,6 @@ services:
       LEGACY_SQLITE_PATH: /legacy/xihong.sqlite3
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://api.xihongzhubao.com}
       WECHAT_MESSAGE_CALLBACK_URL: ${WECHAT_MESSAGE_CALLBACK_URL:-https://api.xihongzhubao.com/api/wechat/miniprogram/message-push}
-      WX_PAY_NOTIFY_URL: ${WX_PAY_NOTIFY_URL:-https://api.xihongzhubao.com/api/payments/wechat/notify}
-      WX_PAY_REFUND_NOTIFY_URL: ${WX_PAY_REFUND_NOTIFY_URL:-https://api.xihongzhubao.com/api/payments/wechat/refund-notify}
-      WX_PAY_INVOICE_NOTIFY_URL: ${WX_PAY_INVOICE_NOTIFY_URL:-https://api.xihongzhubao.com/api/payments/wechat/invoice-notify}
     volumes:
       - backend_data:/legacy:ro
       - backend_uploads:/app/uploads

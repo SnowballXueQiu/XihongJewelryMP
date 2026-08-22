@@ -48,6 +48,7 @@ class InvoiceDeliveryCoordinatorTest {
             check(releaseRemote.await(3, TimeUnit.SECONDS)) { "test release timed out" }
             InvoiceDeliveryReceipt(order.invoiceApplyId, "media-1", Instant.now(), "INSERT_ACCEPTED")
         }
+        `when`(invoiceApi.status(order.invoiceApplyId)).thenReturn(InvoiceDeliveryStatus(0, emptyList()))
         val executor = Executors.newSingleThreadExecutor()
         val first = executor.submit<InvoiceDeliveryOutcome> {
             service.deliver(order.id!!, request, "invoice.pdf", pdf)
@@ -63,7 +64,35 @@ class InvoiceDeliveryCoordinatorTest {
         val outcome = first.get(2, TimeUnit.SECONDS)
         assertEquals("delivery_submitted", outcome.order.invoiceStatus)
         verify(invoiceApi, times(1)).deliver(command, pdf)
+        verify(invoiceApi, times(1)).status(order.invoiceApplyId)
         executor.shutdownNow()
+    }
+
+    @Test
+    fun `successful delivery immediately queries and stores authoritative WeChat status`() {
+        val order = invoiceOrder()
+        `when`(orders.lockById(order.id!!)).thenReturn(order)
+        `when`(orders.save(any(OrderEntity::class.java))).thenAnswer { it.getArgument(0) }
+        `when`(domain.authoritativeStatus(order)).thenReturn("completed")
+        val request = request()
+        val pdf = pdf()
+        val command = command(order, request)
+        `when`(invoiceApi.deliver(command, pdf)).thenReturn(
+            InvoiceDeliveryReceipt(order.invoiceApplyId, "media-1", Instant.now(), "INSERT_ACCEPTED"),
+        )
+        `when`(invoiceApi.status(order.invoiceApplyId)).thenReturn(
+            InvoiceDeliveryStatus(
+                1,
+                listOf(InvoiceStatusItem("fapiao-1", "ISSUED", "INSERTED")),
+            ),
+        )
+
+        val outcome = service.deliver(order.id!!, request, "invoice.pdf", pdf)
+
+        assertFalse(outcome.recoveredFromWechat)
+        assertEquals("inserted", outcome.order.invoiceStatus)
+        assertEquals("fapiao-1", outcome.order.invoiceFapiaoId)
+        verify(invoiceApi, times(1)).status(order.invoiceApplyId)
     }
 
     @Test

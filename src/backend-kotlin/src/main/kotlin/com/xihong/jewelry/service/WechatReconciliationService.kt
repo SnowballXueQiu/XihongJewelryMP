@@ -15,6 +15,7 @@ import java.util.UUID
 class WechatReconciliationService(
     private val orders: OrderRepository,
     private val orderWorkflow: OrderService,
+    private val invoiceDelivery: InvoiceDeliveryCoordinator,
     private val redis: StringRedisTemplate,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -33,6 +34,15 @@ class WechatReconciliationService(
                     log.warn("WeChat reconciliation failed for {}: {}", order.orderNo, it.message)
                 }
             }
+            // 发票没有异步回调：交付后的非终态必须由服务端主动轮询微信权威状态。
+            orders.findAllByInvoiceRequestedTrueAndInvoiceStatusInOrderByInvoiceUpdatedAtAsc(
+                ACTIVE_INVOICE_STATUSES,
+                PageRequest.of(0, 50),
+            ).forEach { order ->
+                runCatching { invoiceDelivery.syncStatus(order.id!!) }.onFailure {
+                    log.warn("WeChat invoice reconciliation failed for {}: {}", order.orderNo, it.message)
+                }
+            }
         } finally {
             runCatching {
                 redis.execute(
@@ -48,5 +58,14 @@ class WechatReconciliationService(
         private const val LOCK_KEY = "xihong:wechat:reconciliation:lock"
         private const val UNLOCK_SCRIPT = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end"
         private val ACTIVE_STATUSES = setOf("paid", "preparing", "shipped", "in_transit", "refunding")
+        private val ACTIVE_INVOICE_STATUSES = setOf(
+            "delivery_submitted",
+            "delivery_reconciling",
+            "issue_accepted",
+            "issued",
+            "insert_accepted",
+            "card_insert_accepted",
+            "reverse_accepted",
+        )
     }
 }
