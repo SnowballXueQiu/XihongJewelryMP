@@ -108,18 +108,6 @@ class Address(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utc_now)
 
 
-class InvoiceTitle(SQLModel, table=True):
-    id: int | None = Field(default=None, primary_key=True)
-    user_id: int = Field(index=True, foreign_key="user.id")
-    invoice_type: str = Field(default="personal", index=True)
-    title: str
-    tax_number: str = ""
-    email: str = ""
-    is_default: bool = False
-    created_at: datetime = Field(default_factory=utc_now)
-    updated_at: datetime = Field(default_factory=utc_now)
-
-
 class Favorite(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(index=True, foreign_key="user.id")
@@ -179,13 +167,33 @@ class Order(SQLModel, table=True):
     fulfillment_type: str = Field(default="delivery", index=True)
     pickup_slot: str = ""
     pickup_code: str = ""
-    invoice_type: str = "none"
-    invoice_title: str = ""
-    invoice_tax_number: str = ""
-    invoice_email: str = ""
+    invoice_requested: bool = False
+    invoice_status: str = Field(default="not_requested", index=True)
+    invoice_apply_id: str = Field(default="", index=True)
+    invoice_buyer_type: str = ""
+    invoice_buyer_name: str = ""
+    invoice_buyer_taxpayer_id: str = ""
+    invoice_buyer_address: str = ""
+    invoice_buyer_telephone: str = ""
+    invoice_buyer_bank_name: str = ""
+    invoice_buyer_bank_account: str = ""
+    invoice_bill_type: str = ""
+    invoice_user_message: str = ""
+    invoice_fapiao_id: str = ""
+    invoice_media_id: str = ""
+    invoice_card_status: str = ""
+    invoice_error: str = ""
+    invoice_updated_at: datetime | None = None
     logistics_company: str = ""
     tracking_no: str = ""
     platform_shipping_uploaded_at: datetime | None = None
+    platform_order_state: int = 0
+    platform_order_state_updated_at: datetime | None = None
+    platform_order_payload: str = ""
+    platform_shipping_error: str = ""
+    platform_confirm_receive_reminded_at: datetime | None = None
+    platform_special_order_type: int = 0
+    platform_special_order_delay_to: datetime | None = None
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
     paid_at: datetime | None = None

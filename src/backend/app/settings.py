@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     wx_pay_public_key_path: str = ""
     wx_pay_notify_url: str = "http://127.0.0.1:8000/api/payments/wechat/notify"
     wx_pay_refund_notify_url: str = "http://127.0.0.1:8000/api/payments/wechat/refund-notify"
+    wx_pay_invoice_notify_url: str = "http://127.0.0.1:8000/api/payments/wechat/invoice-notify"
     wx_pay_mock: bool = True
     user_token_secret: str = "dev-change-this-user-secret"
     allow_mock_user: bool = True
@@ -31,6 +32,8 @@ class Settings(BaseSettings):
     admin_bootstrap_password: str = "XihongAdmin123!"
     uploads_dir: str = "./uploads"
     public_base_url: str = "http://127.0.0.1:8000"
+    invoice_card_appid: str = ""
+    invoice_card_logo_url: str = ""
 
 
 settings = Settings()

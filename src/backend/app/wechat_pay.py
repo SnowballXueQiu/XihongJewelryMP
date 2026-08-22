@@ -119,6 +119,48 @@ def request(method: str, request_target: str, payload: dict[str, Any] | None = N
         raise WechatPayError("微信支付返回了无效数据") from error
 
 
+def request_multipart(
+    request_target: str,
+    *,
+    meta: dict[str, Any],
+    filename: str,
+    content: bytes,
+    content_type: str,
+) -> dict[str, Any]:
+    """Upload a WeChat Pay multipart file while signing only the meta JSON as required."""
+    if not is_configured():
+        raise WechatPayError("微信支付生产参数未完整配置")
+    meta_body = json.dumps(meta, ensure_ascii=False, separators=(",", ":"))
+    headers = {
+        "Accept": "application/json",
+        "Authorization": _authorization("POST", request_target, meta_body),
+    }
+    try:
+        response = httpx.post(
+            f"https://api.mch.weixin.qq.com{request_target}",
+            headers=headers,
+            files={
+                "meta": (None, meta_body, "application/json"),
+                "file": (filename, content, content_type),
+            },
+            timeout=20,
+        )
+    except httpx.HTTPError as error:
+        raise WechatPayError("连接微信支付发票文件服务失败") from error
+    _validate_response(response)
+    if response.status_code < 200 or response.status_code >= 300:
+        try:
+            data = response.json()
+            detail = data.get("message") or data.get("code")
+        except ValueError:
+            detail = response.text[:200]
+        raise WechatPayError(f"微信支付发票文件上传失败：{detail or response.status_code}")
+    try:
+        return response.json()
+    except ValueError as error:
+        raise WechatPayError("微信支付返回了无效发票文件数据") from error
+
+
 def create_jsapi_prepay(
     *,
     out_trade_no: str,
@@ -126,6 +168,7 @@ def create_jsapi_prepay(
     total_cents: int,
     openid: str,
     goods_detail: list[dict[str, Any]],
+    support_fapiao: bool = False,
 ) -> str:
     data = request(
         "POST",
@@ -140,6 +183,7 @@ def create_jsapi_prepay(
             "payer": {"openid": openid},
             "detail": {"goods_detail": goods_detail},
             "attach": out_trade_no,
+            "support_fapiao": support_fapiao,
         },
     )
     prepay_id = data.get("prepay_id")

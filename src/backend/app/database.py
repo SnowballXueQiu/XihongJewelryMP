@@ -5,7 +5,7 @@ from typing import Any
 from sqlalchemy import inspect, text
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from app.models import Address, AdminRole, AdminUser, Banner, Category, Coupon, InvoiceTitle, PetProfile, Product, SiteSetting, User, UserCoupon
+from app.models import Address, AdminRole, AdminUser, Banner, Category, Coupon, PetProfile, Product, SiteSetting, User, UserCoupon
 from app.security import hash_password
 from app.settings import settings
 
@@ -65,13 +65,33 @@ def _ensure_sqlite_columns() -> None:
             "fulfillment_type": ("VARCHAR", "delivery"),
             "pickup_slot": ("VARCHAR", ""),
             "pickup_code": ("VARCHAR", ""),
-            "invoice_type": ("VARCHAR", "none"),
-            "invoice_title": ("VARCHAR", ""),
-            "invoice_tax_number": ("VARCHAR", ""),
-            "invoice_email": ("VARCHAR", ""),
+            "invoice_requested": ("BOOLEAN", False),
+            "invoice_status": ("VARCHAR", "not_requested"),
+            "invoice_apply_id": ("VARCHAR", ""),
+            "invoice_buyer_type": ("VARCHAR", ""),
+            "invoice_buyer_name": ("VARCHAR", ""),
+            "invoice_buyer_taxpayer_id": ("VARCHAR", ""),
+            "invoice_buyer_address": ("VARCHAR", ""),
+            "invoice_buyer_telephone": ("VARCHAR", ""),
+            "invoice_buyer_bank_name": ("VARCHAR", ""),
+            "invoice_buyer_bank_account": ("VARCHAR", ""),
+            "invoice_bill_type": ("VARCHAR", ""),
+            "invoice_user_message": ("VARCHAR", ""),
+            "invoice_fapiao_id": ("VARCHAR", ""),
+            "invoice_media_id": ("VARCHAR", ""),
+            "invoice_card_status": ("VARCHAR", ""),
+            "invoice_error": ("VARCHAR", ""),
+            "invoice_updated_at": ("DATETIME", None),
             "logistics_company": ("VARCHAR", ""),
             "tracking_no": ("VARCHAR", ""),
             "platform_shipping_uploaded_at": ("DATETIME", None),
+            "platform_order_state": ("INTEGER", 0),
+            "platform_order_state_updated_at": ("DATETIME", None),
+            "platform_order_payload": ("TEXT", ""),
+            "platform_shipping_error": ("VARCHAR", ""),
+            "platform_confirm_receive_reminded_at": ("DATETIME", None),
+            "platform_special_order_type": ("INTEGER", 0),
+            "platform_special_order_delay_to": ("DATETIME", None),
             "updated_at": ("DATETIME", None),
             "paid_at": ("DATETIME", None),
             "shipped_at": ("DATETIME", None),
@@ -321,16 +341,6 @@ def create_db_and_seed() -> None:
                 )
             )
 
-        if not session.exec(select(InvoiceTitle).where(InvoiceTitle.user_id == 1)).first():
-            session.add(
-                InvoiceTitle(
-                    user_id=1,
-                    invoice_type="personal",
-                    title="个人",
-                    is_default=True,
-                )
-            )
-
         coupon = session.exec(select(Coupon).where(Coupon.code == "WELCOME88")).first()
         if not coupon:
             coupon = Coupon(
@@ -373,6 +383,9 @@ def create_db_and_seed() -> None:
             SiteSetting(key="pickup_store_phone", value="16622515550", label="自提联系电话", group="fulfillment"),
             SiteSetting(key="wechat_appid", value=settings.wechat_appid, label="微信 AppID", group="wechat"),
             SiteSetting(key="wechat_mch_id", value=settings.wx_pay_mch_id, label="微信支付商户号", group="payment"),
+            SiteSetting(key="invoice_card_appid", value=settings.invoice_card_appid, label="微信发票卡券公众号 AppID", group="payment"),
+            SiteSetting(key="invoice_card_logo_url", value=settings.invoice_card_logo_url, label="微信发票卡券 Logo URL", group="payment"),
+            SiteSetting(key="invoice_card_id", value="", label="微信发票卡券模板 ID", group="payment"),
         ]
         for setting in seed_settings:
             existing_setting = session.exec(select(SiteSetting).where(SiteSetting.key == setting.key)).first()

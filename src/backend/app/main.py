@@ -9,7 +9,7 @@ from sqlalchemy import or_, update
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
 
-from app import wechat_pay, wechat_platform
+from app import wechat_invoice, wechat_pay, wechat_platform
 from app.admin import router as admin_router
 from app.database import create_db_and_seed, get_session
 from app.models import (
@@ -19,7 +19,6 @@ from app.models import (
     Category,
     Coupon,
     Favorite,
-    InvoiceTitle,
     Order,
     OrderItem,
     OrderStatus,
@@ -43,8 +42,6 @@ from app.schemas import (
     CouponRead,
     CreateOrderRequest,
     FavoriteRead,
-    InvoiceTitleRead,
-    InvoiceTitleWrite,
     OrderItemRead,
     OrderRead,
     PaymentParams,
@@ -107,6 +104,21 @@ async def prevent_api_caching(request: Request, call_next):
 
 def _aware(value: datetime) -> datetime:
     return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+
+def _apply_invoice_title(order: Order, title: dict) -> None:
+    order.invoice_buyer_type = str(title.get("type") or "")
+    order.invoice_buyer_name = str(title.get("name") or "")
+    order.invoice_buyer_taxpayer_id = str(title.get("taxpayer_id") or "")
+    order.invoice_buyer_address = str(title.get("address") or "")
+    order.invoice_buyer_telephone = str(title.get("telephone") or "")
+    order.invoice_buyer_bank_name = str(title.get("bank_name") or "")
+    order.invoice_buyer_bank_account = str(title.get("bank_account") or "")
+    order.invoice_bill_type = str(title.get("fapiao_bill_type") or "")
+    order.invoice_user_message = str(title.get("user_apply_message") or "")
+    order.invoice_status = "title_received"
+    order.invoice_error = ""
+    order.invoice_updated_at = datetime.now(timezone.utc)
 
 
 @app.get("/health")
@@ -373,99 +385,6 @@ def delete_address(
     return {"ok": True}
 
 
-def _set_default_invoice_title(session: Session, user_id: int, invoice_title_id: int) -> None:
-    titles = session.exec(select(InvoiceTitle).where(InvoiceTitle.user_id == user_id)).all()
-    for title in titles:
-        title.is_default = title.id == invoice_title_id
-        session.add(title)
-
-
-@app.get("/api/invoice-titles", response_model=list[InvoiceTitleRead])
-def list_invoice_titles(
-    user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
-) -> list[InvoiceTitle]:
-    return list(
-        session.exec(
-            select(InvoiceTitle)
-            .where(InvoiceTitle.user_id == user.id)
-            .order_by(col(InvoiceTitle.is_default).desc(), col(InvoiceTitle.updated_at).desc())
-        )
-    )
-
-
-@app.post("/api/invoice-titles", response_model=InvoiceTitleRead)
-def create_invoice_title(
-    payload: InvoiceTitleWrite,
-    user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
-) -> InvoiceTitle:
-    if payload.invoice_type == "company" and not payload.tax_number.strip():
-        raise HTTPException(status_code=400, detail="企业抬头需要填写纳税人识别号")
-    has_titles = bool(session.exec(select(InvoiceTitle).where(InvoiceTitle.user_id == user.id)).first())
-    title = InvoiceTitle(
-        user_id=user.id or 0,
-        **payload.model_dump(exclude={"is_default"}),
-        is_default=payload.is_default or not has_titles,
-    )
-    session.add(title)
-    session.flush()
-    if title.is_default:
-        _set_default_invoice_title(session, user.id or 0, title.id or 0)
-    session.commit()
-    session.refresh(title)
-    return title
-
-
-@app.put("/api/invoice-titles/{invoice_title_id}", response_model=InvoiceTitleRead)
-def update_invoice_title(
-    invoice_title_id: int,
-    payload: InvoiceTitleWrite,
-    user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
-) -> InvoiceTitle:
-    title = session.get(InvoiceTitle, invoice_title_id)
-    if not title or title.user_id != user.id:
-        raise HTTPException(status_code=404, detail="发票抬头不存在")
-    if payload.invoice_type == "company" and not payload.tax_number.strip():
-        raise HTTPException(status_code=400, detail="企业抬头需要填写纳税人识别号")
-    was_default = title.is_default
-    for field, value in payload.model_dump().items():
-        setattr(title, field, value)
-    title.updated_at = datetime.now(timezone.utc)
-    session.add(title)
-    if payload.is_default:
-        _set_default_invoice_title(session, user.id or 0, title.id or 0)
-    elif was_default:
-        title.is_default = True
-        session.add(title)
-    session.commit()
-    session.refresh(title)
-    return title
-
-
-@app.delete("/api/invoice-titles/{invoice_title_id}")
-def delete_invoice_title(
-    invoice_title_id: int,
-    user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
-) -> dict[str, bool]:
-    title = session.get(InvoiceTitle, invoice_title_id)
-    if not title or title.user_id != user.id:
-        raise HTTPException(status_code=404, detail="发票抬头不存在")
-    was_default = title.is_default
-    session.delete(title)
-    session.commit()
-    if was_default:
-        next_title = session.exec(
-            select(InvoiceTitle).where(InvoiceTitle.user_id == user.id).order_by(col(InvoiceTitle.updated_at).desc())
-        ).first()
-        if next_title:
-            _set_default_invoice_title(session, user.id or 0, next_title.id or 0)
-            session.commit()
-    return {"ok": True}
-
-
 @app.get("/api/favorites", response_model=list[FavoriteRead])
 def list_favorites(user: User = Depends(get_current_user), session: Session = Depends(get_session)) -> list[FavoriteRead]:
     favorites = session.exec(
@@ -560,11 +479,11 @@ def claim_coupon(
 def serialize_order(order: Order, session: Session, include_payment: bool = False) -> OrderRead:
     items = session.exec(select(OrderItem).where(OrderItem.order_id == order.id)).all()
     display_shipping, display_total = current_pending_order_amounts(session, order)
+    intent = session.exec(
+        select(PaymentIntent).where(PaymentIntent.order_id == order.id).order_by(col(PaymentIntent.created_at).desc())
+    ).first()
     payment = None
     if include_payment:
-        intent = session.exec(
-            select(PaymentIntent).where(PaymentIntent.order_id == order.id).order_by(col(PaymentIntent.created_at).desc())
-        ).first()
         if intent:
             payment = PaymentParams(
                 provider=intent.provider,
@@ -592,12 +511,31 @@ def serialize_order(order: Order, session: Session, include_payment: bool = Fals
         fulfillment_type=order.fulfillment_type,
         pickup_slot=order.pickup_slot,
         pickup_code=order.pickup_code,
-        invoice_type=order.invoice_type,
-        invoice_title=order.invoice_title,
-        invoice_tax_number=order.invoice_tax_number,
-        invoice_email=order.invoice_email,
+        invoice_requested=order.invoice_requested,
+        invoice_status=order.invoice_status,
+        invoice_apply_id=order.invoice_apply_id,
+        invoice_buyer_type=order.invoice_buyer_type,
+        invoice_buyer_name=order.invoice_buyer_name,
+        invoice_buyer_taxpayer_id=order.invoice_buyer_taxpayer_id,
+        invoice_buyer_address=order.invoice_buyer_address,
+        invoice_buyer_telephone=order.invoice_buyer_telephone,
+        invoice_buyer_bank_name=order.invoice_buyer_bank_name,
+        invoice_buyer_bank_account=order.invoice_buyer_bank_account,
+        invoice_bill_type=order.invoice_bill_type,
+        invoice_user_message=order.invoice_user_message,
+        invoice_fapiao_id=order.invoice_fapiao_id,
+        invoice_media_id=order.invoice_media_id,
+        invoice_card_status=order.invoice_card_status,
+        invoice_error=order.invoice_error,
         logistics_company=order.logistics_company,
         tracking_no=order.tracking_no,
+        payment_transaction_id=intent.transaction_id if intent else "",
+        platform_shipping_uploaded_at=order.platform_shipping_uploaded_at,
+        platform_order_state=order.platform_order_state,
+        platform_order_state_updated_at=order.platform_order_state_updated_at,
+        platform_shipping_error=order.platform_shipping_error,
+        platform_confirm_receive_reminded_at=order.platform_confirm_receive_reminded_at,
+        platform_special_order_type=order.platform_special_order_type,
         created_at=order.created_at,
         paid_at=order.paid_at,
         shipped_at=order.shipped_at,
@@ -651,10 +589,7 @@ def create_order(
             payload.buyer_note,
             payload.fulfillment_type,
             payload.pickup_slot,
-            payload.invoice_type,
-            payload.invoice_title,
-            payload.invoice_tax_number,
-            payload.invoice_email,
+            payload.invoice_requested,
             config_values.get("pickup_store_name") or "玺鸿珠宝天津店",
             config_values.get("pickup_store_address") or "天津市和平区南京路 219 号",
             config_values.get("pickup_store_phone") or "16622515550",
@@ -781,9 +716,63 @@ def complete_order(
         raise HTTPException(status_code=404, detail="订单不存在")
     if order.status != OrderStatus.shipped:
         raise HTTPException(status_code=400, detail="订单尚未发货")
+    if not settings.wx_pay_mock and order.total_cents > 0:
+        try:
+            platform_order = wechat_platform.query_order_shipping(session, order)
+        except wechat_platform.WechatPlatformError as error:
+            raise HTTPException(status_code=502, detail=str(error)) from error
+        if int(platform_order.get("order_state") or 0) not in {3, 4}:
+            raise HTTPException(status_code=409, detail="请先通过微信官方确认收货组件完成确认")
+        session.commit()
+        session.refresh(order)
+        return serialize_order(order, session)
     order.status = OrderStatus.completed
     order.completed_at = datetime.now(timezone.utc)
     order.updated_at = order.completed_at
+    session.add(order)
+    session.commit()
+    session.refresh(order)
+    return serialize_order(order, session)
+
+
+@app.post("/api/orders/{order_id}/platform-sync", response_model=OrderRead)
+def sync_user_platform_order(
+    order_id: int,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> OrderRead:
+    order = session.get(Order, order_id)
+    if not order or order.user_id != user.id:
+        raise HTTPException(status_code=404, detail="订单不存在")
+    try:
+        wechat_platform.query_order_shipping(session, order)
+    except wechat_platform.WechatPlatformError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+    session.commit()
+    session.refresh(order)
+    return serialize_order(order, session)
+
+
+@app.post("/api/orders/{order_id}/invoice-sync", response_model=OrderRead)
+def sync_user_invoice(
+    order_id: int,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> OrderRead:
+    order = session.get(Order, order_id)
+    if not order or order.user_id != user.id:
+        raise HTTPException(status_code=404, detail="订单不存在")
+    if not order.invoice_requested or not order.invoice_apply_id:
+        raise HTTPException(status_code=400, detail="该订单没有微信电子发票申请")
+    try:
+        title = wechat_invoice.get_user_title(order.invoice_apply_id)
+    except wechat_pay.WechatPayError as error:
+        order.invoice_error = str(error)
+        order.invoice_updated_at = datetime.now(timezone.utc)
+        session.add(order)
+        session.commit()
+        raise HTTPException(status_code=502, detail=str(error)) from error
+    _apply_invoice_title(order, title)
     session.add(order)
     session.commit()
     session.refresh(order)
@@ -834,6 +823,44 @@ async def wechat_pay_notify(request: Request, session: Session = Depends(get_ses
     if int(amount.get("total", -1)) != order.total_cents or amount.get("currency") != "CNY":
         raise HTTPException(status_code=400, detail="回调金额不匹配")
     mark_order_paid(session, order, str(resource.get("transaction_id") or ""))
+    return Response(status_code=204)
+
+
+@app.post("/api/payments/wechat/invoice-notify", status_code=204)
+async def wechat_invoice_notify(request: Request, session: Session = Depends(get_session)) -> Response:
+    if not wechat_pay.is_configured():
+        raise HTTPException(status_code=503, detail="微信支付未配置")
+    raw_body = await request.body()
+    try:
+        payload = wechat_pay.verify_callback(raw_body, request.headers)
+        resource = wechat_pay.decrypt_callback_resource(payload)
+    except wechat_pay.WechatPayError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    if resource.get("mchid") != settings.wx_pay_mch_id:
+        raise HTTPException(status_code=400, detail="发票回调商户号不匹配")
+    apply_id = str(resource.get("fapiao_apply_id") or "")
+    intent = session.exec(select(PaymentIntent).where(PaymentIntent.transaction_id == apply_id)).first()
+    order = session.get(Order, intent.order_id) if intent else session.exec(
+        select(Order).where(Order.invoice_apply_id == apply_id)
+    ).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="发票申请对应订单不存在")
+    event_type = str(payload.get("event_type") or "")
+    order.invoice_apply_id = apply_id
+    order.invoice_updated_at = datetime.now(timezone.utc)
+    order.invoice_error = ""
+    if event_type == "FAPIAO.USER_APPLIED":
+        order.invoice_status = "title_pending_sync"
+    elif event_type in {"FAPIAO.CARD_INSERTED", "FAPIAO.CARD_DISCARDED"}:
+        information = resource.get("fapiao_information") or []
+        if isinstance(information, dict):
+            information = [information]
+        first = information[0] if information else {}
+        order.invoice_fapiao_id = str(first.get("fapiao_id") or order.invoice_fapiao_id)
+        order.invoice_card_status = str(first.get("card_status") or "")
+        order.invoice_status = "inserted" if order.invoice_card_status == "INSERTED" else "card_updated"
+    session.add(order)
+    session.commit()
     return Response(status_code=204)
 
 

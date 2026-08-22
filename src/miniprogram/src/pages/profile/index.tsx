@@ -113,7 +113,7 @@ export default function ProfilePage() {
   const maskedPhone = user?.phone ? `${user.phone.slice(0, 3)}****${user.phone.slice(-4)}` : ''
   const menu = [
     { icon: 'location' as const, label: '收货地址', copy: '管理常用收件人', value: '', url: '/pages/addresses/index' },
-    { icon: 'order' as const, label: '发票抬头', copy: '管理个人与企业抬头', value: '', url: '/pages/invoice-titles/index' },
+    { icon: 'order' as const, label: '微信电子发票', copy: '查询抬头与卡包状态', value: '', url: '/pages/invoice-titles/index' },
     { icon: 'heart' as const, label: '心选收藏', copy: '重温心动作品', value: String(favoriteCount || ''), url: '/pages/favorites/index' },
     { icon: 'gift' as const, label: '优惠礼券', copy: '查看会员专属礼遇', value: String(couponCount || ''), url: '/pages/coupons/index' },
     { icon: 'cart' as const, label: '购物袋', copy: '继续未完成的挑选', value: '', url: '/pages/cart/index' }

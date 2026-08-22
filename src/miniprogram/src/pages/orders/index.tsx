@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import Taro, { useDidShow, usePullDownRefresh, useRouter } from '@tarojs/taro'
 import { Button, ScrollView, Text, View } from '@tarojs/components'
-import { cancelOrder, completeOrder, fetchOrders, formatMoney, orderStatusLabel } from '@/services/api'
+import { cancelOrder, confirmWechatOrderReceipt, fetchOrders, formatMoney, orderStatusLabel } from '@/services/api'
 import { performOrderPayment, presentPaymentError } from '@/services/payment'
 import { Order, OrderStatus } from '@/types/domain'
 import IconFont from '@/components/IconFont'
@@ -71,8 +71,13 @@ export default function OrdersPage() {
     const modal = await Taro.showModal({ title: '确认收货', content: '请确认已收到并检查商品完好。', confirmColor: '#74252D' })
     if (!modal.confirm) return
     setActing(order.id)
-    try { await completeOrder(order.id); await load(false) } catch (error) {
-      Taro.showToast({ title: error instanceof Error ? error.message : '操作失败', icon: 'none' })
+    try {
+      const updated = await confirmWechatOrderReceipt(order)
+      await load(false)
+      if (updated.status !== 'completed') Taro.showToast({ title: '尚未在微信确认收货', icon: 'none' })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String((error as { errMsg?: string })?.errMsg || '')
+      if (!message.includes('cancel')) Taro.showToast({ title: message || '操作失败', icon: 'none' })
     } finally { setActing(0) }
   }
 

@@ -48,6 +48,9 @@ WX_PAY_PUBLIC_KEY_ID=
 WX_PAY_PUBLIC_KEY_PATH=/run/secrets/wechatpay/pub_key.pem
 WX_PAY_NOTIFY_URL=https://your-api.example.com/api/payments/wechat/notify
 WX_PAY_REFUND_NOTIFY_URL=https://your-api.example.com/api/payments/wechat/refund-notify
+WX_PAY_INVOICE_NOTIFY_URL=https://your-api.example.com/api/payments/wechat/invoice-notify
+INVOICE_CARD_APPID=<插入发票卡券所用的公众号AppID>
+INVOICE_CARD_LOGO_URL=<微信可访问的HTTPS卡券Logo地址>
 WX_PAY_MOCK=false
 ALLOW_MOCK_USER=false
 USER_TOKEN_SECRET=<随机长密钥>
@@ -58,6 +61,8 @@ ADMIN_JWT_SECRET=<另一随机长密钥>
 
 订单创建携带客户端幂等键，支付取消或失败后会保留原订单并回到订单中心重试，不会重复扣库存或生成新订单号。后台发货时会把最终成功支付流水对应的快递/自提信息同步至微信小程序订单发货管理；微信通知跳转路径应配置为 `pages/orders/index`。
 
+珠宝等实物商品的生产订单以微信小程序订单发货管理状态为准：后台发货会调用平台发货接口，订单完成前会再次查询平台确认收货状态，不能在微信未确认收货时提前完成。电子发票不再维护本地发票抬头；支付下单通过 `support_fapiao` 展示微信支付凭证开票入口，用户在微信填写个人/企业抬头，后台只同步微信抬头、上传真实 PDF 并调用微信接口插入卡包。
+
 本地 `.env.example` 中 `WX_PAY_MOCK=true` 会显示清晰的“模拟支付”确认框；生产模板默认关闭。生产环境缺少证书或商户参数时，接口会明确失败，不会伪造支付成功。
 
 上线前还需在微信公众平台配置：
@@ -66,6 +71,8 @@ ADMIN_JWT_SECRET=<另一随机长密钥>
 - 小程序 AppID 与商户号绑定关系
 - JSAPI 支付权限、APIv3 密钥、商户私钥和微信支付公钥
 - 支付/退款通知公网 HTTPS 可达，且不能要求登录
+- 小程序已接入“订单发货管理”，商户完成发货结算规则确认
+- 商户已开通微信电子发票自建/第三方能力，并配置发票回调、插卡公众号 AppID 与卡券 Logo
 
 ## 验证
 

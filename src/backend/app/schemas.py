@@ -104,10 +104,7 @@ class CreateOrderRequest(BaseModel):
     buyer_note: str = Field(default="", max_length=200)
     fulfillment_type: Literal["delivery", "pickup"] = "delivery"
     pickup_slot: str = Field(default="", max_length=80)
-    invoice_type: Literal["none", "personal", "company"] = "none"
-    invoice_title: str = Field(default="", max_length=100)
-    invoice_tax_number: str = Field(default="", max_length=40)
-    invoice_email: str = Field(default="", max_length=100)
+    invoice_requested: bool = False
     client_request_id: str = Field(default="", max_length=64, pattern=r"^[A-Za-z0-9_-]*$")
 
 
@@ -115,6 +112,19 @@ class OrderStatusUpdate(BaseModel):
     status: OrderStatus
     logistics_company: str = ""
     tracking_no: str = ""
+
+
+class PlatformMessagePathWrite(BaseModel):
+    path: str = Field(default="pages/orders/index", max_length=200)
+
+
+class PlatformSpecialOrderWrite(BaseModel):
+    special_type: Literal[1, 2]
+    delay_to: datetime | None = None
+
+
+class InvoiceDevelopmentConfigWrite(BaseModel):
+    show_fapiao_cell: bool = False
 
 
 class OrderItemRead(BaseModel):
@@ -154,12 +164,31 @@ class OrderRead(BaseModel):
     fulfillment_type: str = "delivery"
     pickup_slot: str = ""
     pickup_code: str = ""
-    invoice_type: str = "none"
-    invoice_title: str = ""
-    invoice_tax_number: str = ""
-    invoice_email: str = ""
+    invoice_requested: bool = False
+    invoice_status: str = "not_requested"
+    invoice_apply_id: str = ""
+    invoice_buyer_type: str = ""
+    invoice_buyer_name: str = ""
+    invoice_buyer_taxpayer_id: str = ""
+    invoice_buyer_address: str = ""
+    invoice_buyer_telephone: str = ""
+    invoice_buyer_bank_name: str = ""
+    invoice_buyer_bank_account: str = ""
+    invoice_bill_type: str = ""
+    invoice_user_message: str = ""
+    invoice_fapiao_id: str = ""
+    invoice_media_id: str = ""
+    invoice_card_status: str = ""
+    invoice_error: str = ""
     logistics_company: str = ""
     tracking_no: str = ""
+    payment_transaction_id: str = ""
+    platform_shipping_uploaded_at: datetime | None = None
+    platform_order_state: int = 0
+    platform_order_state_updated_at: datetime | None = None
+    platform_shipping_error: str = ""
+    platform_confirm_receive_reminded_at: datetime | None = None
+    platform_special_order_type: int = 0
     can_pay: bool = False
     can_cancel: bool = False
     created_at: datetime | None = None
@@ -188,23 +217,6 @@ class AddressWrite(BaseModel):
     district: str = Field(min_length=1, max_length=30)
     detail: str = Field(min_length=2, max_length=100)
     postal_code: str = Field(default="", max_length=12)
-    is_default: bool = False
-
-
-class InvoiceTitleRead(BaseModel):
-    id: int
-    invoice_type: Literal["personal", "company"]
-    title: str
-    tax_number: str
-    email: str
-    is_default: bool
-
-
-class InvoiceTitleWrite(BaseModel):
-    invoice_type: Literal["personal", "company"]
-    title: str = Field(min_length=1, max_length=100)
-    tax_number: str = Field(default="", max_length=40)
-    email: str = Field(default="", max_length=100)
     is_default: bool = False
 
 

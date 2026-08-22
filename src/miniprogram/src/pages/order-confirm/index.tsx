@@ -4,15 +4,14 @@ import { Button, Input, Picker, Text, View } from '@tarojs/components'
 import JewelryVisual from '@/components/JewelryVisual'
 import IconFont from '@/components/IconFont'
 import LuxuryLoader from '@/components/LuxuryLoader'
-import { createAddress, createOrder, fetchAddresses, fetchCoupons, fetchInvoiceTitles, fetchOrder, fetchProduct, fetchStoreConfig, formatMoney } from '@/services/api'
+import { createAddress, createOrder, fetchAddresses, fetchCoupons, fetchOrder, fetchProduct, fetchStoreConfig, formatMoney } from '@/services/api'
 import { performOrderPayment, presentPaymentError } from '@/services/payment'
 import { usePageEntranceAnimation } from '@/hooks/useSubtleAnimation'
-import { Address, Coupon, InvoiceTitle, Product, StoreConfig } from '@/types/domain'
+import { Address, Coupon, Product, StoreConfig } from '@/types/domain'
 import './index.scss'
 
 interface CheckoutLine { product_id: number; quantity: number; product?: Product }
 type FulfillmentType = 'delivery' | 'pickup'
-type InvoiceType = 'none' | 'personal' | 'company'
 
 function buildPickupSlots() {
   const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
@@ -37,9 +36,7 @@ export default function OrderConfirmPage() {
   const [addressId, setAddressId] = useState<number | null>(null)
   const [fulfillmentType, setFulfillmentType] = useState<FulfillmentType>('delivery')
   const [pickupIndex, setPickupIndex] = useState(0)
-  const [invoiceType, setInvoiceType] = useState<InvoiceType>('none')
-  const [invoiceTitles, setInvoiceTitles] = useState<InvoiceTitle[]>([])
-  const [invoiceTitleId, setInvoiceTitleId] = useState<number | null>(null)
+  const [invoiceRequested, setInvoiceRequested] = useState(false)
   const [coupons, setCoupons] = useState<Coupon[]>([])
   const [couponIndex, setCouponIndex] = useState(0)
   const [buyerNote, setBuyerNote] = useState('')
@@ -59,35 +56,20 @@ export default function OrderConfirmPage() {
   useDidShow(() => {
     Promise.all([
       Promise.all(rawItems.map(async (item) => ({ ...item, product: await fetchProduct(item.product_id) }))),
-      fetchAddresses(), fetchCoupons(), fetchStoreConfig(), fetchInvoiceTitles()
-    ]).then(([nextLines, nextAddresses, nextCoupons, nextStoreConfig, nextInvoiceTitles]) => {
+      fetchAddresses(), fetchCoupons(), fetchStoreConfig()
+    ]).then(([nextLines, nextAddresses, nextCoupons, nextStoreConfig]) => {
       const selectedAddressId = Number(Taro.getStorageSync('selected_address_id') || 0)
-      const selectedInvoiceTitleId = Number(Taro.getStorageSync('selected_invoice_title_id') || 0)
       Taro.removeStorageSync('selected_address_id')
-      Taro.removeStorageSync('selected_invoice_title_id')
       setLines(nextLines)
       setAddresses(nextAddresses)
       setAddressId((current) => selectedAddressId || current || nextAddresses.find((item) => item.is_default)?.id || nextAddresses[0]?.id || null)
       setCoupons(nextCoupons.filter((item) => item.claimed && item.available))
       setStoreConfig(nextStoreConfig)
-      setInvoiceTitles(nextInvoiceTitles)
-      if (selectedInvoiceTitleId) {
-        const selected = nextInvoiceTitles.find((item) => item.id === selectedInvoiceTitleId)
-        if (selected) {
-          setInvoiceTitleId(selected.id)
-          setInvoiceType(selected.invoice_type)
-        }
-      } else {
-        setInvoiceTitleId((current) => current && nextInvoiceTitles.some((item) => item.id === current)
-          ? current
-          : nextInvoiceTitles.find((item) => item.is_default)?.id || nextInvoiceTitles[0]?.id || null)
-      }
     }).catch((error) => Taro.showToast({ title: error instanceof Error ? error.message : '结算信息加载失败', icon: 'none' }))
       .finally(() => setLoading(false))
   })
 
   const address = addresses.find((item) => item.id === addressId)
-  const selectedInvoiceTitle = invoiceTitles.find((item) => item.id === invoiceTitleId && item.invoice_type === invoiceType)
   const subtotal = lines.reduce((sum, item) => sum + (item.product?.price_cents || 0) * item.quantity, 0)
   const allItemsFreeShipping = lines.length > 0 && lines.every((item) => item.product?.free_shipping)
   const shipping = fulfillmentType === 'pickup' || allItemsFreeShipping || subtotal >= storeConfig.free_shipping_threshold_cents ? 0 : storeConfig.shipping_fee_cents
@@ -115,28 +97,17 @@ export default function OrderConfirmPage() {
     }
   }
 
-  function chooseInvoiceType(type: InvoiceType) {
-    setInvoiceType(type)
-    if (type === 'none') return
-    const current = invoiceTitles.find((item) => item.id === invoiceTitleId && item.invoice_type === type)
-    if (!current) setInvoiceTitleId(invoiceTitles.find((item) => item.invoice_type === type && item.is_default)?.id || invoiceTitles.find((item) => item.invoice_type === type)?.id || null)
-  }
-
   async function submitOrder() {
     if (submitting) return
     if (!lines.length) return Taro.showToast({ title: '没有可结算商品', icon: 'none' })
     if (fulfillmentType === 'delivery' && !addressId) return Taro.showToast({ title: '请先添加收货地址', icon: 'none' })
-    if (invoiceType !== 'none' && !selectedInvoiceTitle) return Taro.showToast({ title: '请先选择发票抬头', icon: 'none' })
     setSubmitting(true)
     try {
       const payload = {
         items: lines.map((item) => ({ product_id: item.product_id, quantity: item.quantity })),
         address_id: fulfillmentType === 'delivery' ? addressId : null, coupon_id: selectedCoupon?.id || null, buyer_note: buyerNote.trim(),
         fulfillment_type: fulfillmentType, pickup_slot: fulfillmentType === 'pickup' ? pickupSlots[pickupIndex] : '',
-        invoice_type: invoiceType,
-        invoice_title: selectedInvoiceTitle?.title || '',
-        invoice_tax_number: selectedInvoiceTitle?.tax_number || '',
-        invoice_email: selectedInvoiceTitle?.email || '',
+        invoice_requested: total > 0 && invoiceRequested,
         client_request_id: clientRequestId
       } as const
       const order = createdOrderId.current ? await fetchOrder(createdOrderId.current) : await createOrder(payload)
@@ -192,14 +163,15 @@ export default function OrderConfirmPage() {
 
     <View className='checkout-block options-block'>
       <View className='block-heading'><Text>03</Text><Text>发票与优惠</Text><Text /></View>
-      <View className='invoice-tabs'>{(['none', 'personal', 'company'] as InvoiceType[]).map((type) => <Button key={type} className={invoiceType === type ? 'active' : ''} onClick={() => chooseInvoiceType(type)}>{type === 'none' ? '不开发票' : type === 'personal' ? '个人' : '企业'}</Button>)}</View>
-      {invoiceType !== 'none' && <View className='invoice-fields'>
-        <View className='invoice-book-row' onClick={() => Taro.navigateTo({ url: `/pages/invoice-titles/index?select=1&type=${invoiceType}` })}>
-          <IconFont name='order' />
-          {selectedInvoiceTitle ? <View><Text>{selectedInvoiceTitle.title}</Text><Text>{selectedInvoiceTitle.invoice_type === 'company' ? `税号 ${selectedInvoiceTitle.tax_number}` : '个人发票抬头'}{selectedInvoiceTitle.email ? ` · ${selectedInvoiceTitle.email}` : ''}</Text></View> : <View><Text>选择或新增发票抬头</Text><Text>保存一次，之后结算可直接选择</Text></View>}
-          <IconFont name='chevronRight' />
-        </View>
-      </View>}
+      <Button
+        className={invoiceRequested && total > 0 ? 'wechat-invoice-row active' : 'wechat-invoice-row'}
+        disabled={total === 0}
+        onClick={() => setInvoiceRequested((current) => !current)}
+      >
+        <View className='wechat-invoice-check' />
+        <View><Text>微信电子发票</Text><Text>{total === 0 ? '零元订单不支持开票' : '支付后在微信支付凭证中填写个人或企业抬头'}</Text></View>
+        <Text>{invoiceRequested && total > 0 ? '已选择' : '暂不需要'}</Text>
+      </Button>
       <Picker mode='selector' range={couponLabels} value={couponIndex} onChange={(event) => setCouponIndex(Number(event.detail.value))}><View className='option-row'><Text>优惠券</Text><View className={selectedCoupon ? 'option-value accent' : 'option-value'}><Text>{couponLabels[couponIndex] || '暂无可用'}</Text><IconFont name='chevronRight' /></View></View></Picker>
       <View className='note-row'><Text>订单备注</Text><Input value={buyerNote} maxlength={200} placeholder='选填，给店员留言' onInput={(event) => setBuyerNote(String(event.detail.value))} /></View>
     </View>

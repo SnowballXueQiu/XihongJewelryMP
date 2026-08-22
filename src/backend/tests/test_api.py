@@ -4,10 +4,10 @@ import re
 
 from sqlmodel import Session, select
 
-from app import wechat_platform
+from app import services, wechat_invoice, wechat_platform
 from app.database import engine
 from app.main import app
-from app.models import Order, PaymentIntent, PaymentStatus, User
+from app.models import Order, OrderStatus, PaymentIntent, PaymentStatus, User
 
 
 client = TestClient(app)
@@ -102,7 +102,7 @@ def test_addresses_favorites_and_coupons():
         assert coupons and coupons[0]["amount_cents"] > 0
 
 
-def test_pickup_and_invoice_order_flow():
+def test_pickup_and_wechat_invoice_order_flow(monkeypatch):
     with client:
         product = client.get("/api/products").json()[0]
         pickup = client.post(
@@ -111,10 +111,7 @@ def test_pickup_and_invoice_order_flow():
                 "items": [{"product_id": product["id"], "quantity": 1}],
                 "fulfillment_type": "pickup",
                 "pickup_slot": "8月23日 周日 14:00–16:00",
-                "invoice_type": "company",
-                "invoice_title": "天津玺鸿珠宝贸易有限公司",
-                "invoice_tax_number": "91120101TEST123456",
-                "invoice_email": "invoice@example.com",
+                "invoice_requested": True,
             },
         )
         assert pickup.status_code == 200
@@ -123,54 +120,72 @@ def test_pickup_and_invoice_order_flow():
         assert order["shipping_fee_cents"] == 0
         assert order["pickup_slot"] == "8月23日 周日 14:00–16:00"
         assert re.match(r"^\d{3}\. .+", order["pickup_code"])
-        assert order["invoice_type"] == "company"
-        assert order["invoice_tax_number"] == "91120101TEST123456"
+        assert order["invoice_requested"] is True
+        assert order["invoice_status"] == "pending_payment"
+        assert client.get("/api/invoice-titles").status_code == 404
 
-        missing_company_tax = client.post(
-            "/api/orders",
-            json={
-                "items": [{"product_id": product["id"], "quantity": 1}],
-                "fulfillment_type": "pickup",
-                "pickup_slot": "8月23日 周日 17:00–19:00",
-                "invoice_type": "company",
-                "invoice_title": "缺少税号的公司",
+        client.post(f"/api/orders/{order['id']}/pay")
+        paid = client.post(f"/api/orders/{order['id']}/mock-pay").json()
+        assert paid["invoice_apply_id"]
+        assert paid["invoice_status"] == "pending_title"
+
+        monkeypatch.setattr(
+            wechat_invoice,
+            "get_user_title",
+            lambda apply_id: {
+                "type": "ORGANIZATION",
+                "name": "天津玺鸿珠宝贸易有限公司",
+                "taxpayer_id": "91120101TEST123456",
+                "address": "天津市和平区",
+                "telephone": "02212345678",
+                "bank_name": "测试银行",
+                "bank_account": "6222000000000000",
+                "fapiao_bill_type": "COMM_FAPIAO",
+                "user_apply_message": "请开电子票",
             },
         )
-        assert missing_company_tax.status_code == 400
+        synced = client.post(f"/api/orders/{order['id']}/invoice-sync")
+        assert synced.status_code == 200
+        invoice = synced.json()
+        assert invoice["invoice_status"] == "title_received"
+        assert invoice["invoice_buyer_type"] == "ORGANIZATION"
+        assert invoice["invoice_buyer_name"] == "天津玺鸿珠宝贸易有限公司"
+        assert invoice["invoice_buyer_taxpayer_id"] == "91120101TEST123456"
+        assert invoice["invoice_bill_type"] == "COMM_FAPIAO"
 
 
-def test_invoice_title_book_crud():
+def test_real_prepay_enables_wechat_invoice_entry(monkeypatch):
+    captured: dict = {}
+    monkeypatch.setattr(services.settings, "wx_pay_mock", False)
+    monkeypatch.setattr(
+        services.wechat_pay,
+        "create_jsapi_prepay",
+        lambda **kwargs: captured.update(kwargs) or "wx-prepay-id",
+    )
+    monkeypatch.setattr(
+        services.wechat_pay,
+        "build_miniprogram_params",
+        lambda prepay_id: {
+            "timeStamp": "1",
+            "nonceStr": "nonce",
+            "package": f"prepay_id={prepay_id}",
+            "paySign": "signature",
+        },
+    )
+    with Session(engine) as session:
+        user = session.get(User, 1)
+        user.wechat_openid = "openid_invoice_test"
+        session.add(user)
+        session.commit()
     with client:
-        initial = client.get("/api/invoice-titles")
-        assert initial.status_code == 200
+        product = next(item for item in client.get("/api/products").json() if item["price_cents"] > 0)
         created = client.post(
-            "/api/invoice-titles",
-            json={
-                "invoice_type": "company",
-                "title": "天津玺鸿珠宝贸易有限公司",
-                "tax_number": "91120101TEST123456",
-                "email": "invoice@example.com",
-                "is_default": True,
-            },
-        )
-        assert created.status_code == 200
-        assert created.json()["is_default"] is True
-        listed = client.get("/api/invoice-titles").json()
-        assert listed[0]["id"] == created.json()["id"]
-
-        updated = client.put(
-            f"/api/invoice-titles/{created.json()['id']}",
-            json={
-                "invoice_type": "company",
-                "title": "天津玺鸿珠宝贸易有限公司（电子票）",
-                "tax_number": "91120101TEST123456",
-                "email": "finance@example.com",
-                "is_default": True,
-            },
-        )
-        assert updated.status_code == 200
-        assert updated.json()["email"] == "finance@example.com"
-        assert client.delete(f"/api/invoice-titles/{created.json()['id']}").status_code == 200
+            "/api/orders",
+            json={"items": [{"product_id": product["id"], "quantity": 1}], "invoice_requested": True},
+        ).json()
+        result = client.post(f"/api/orders/{created['id']}/pay")
+        assert result.status_code == 200
+    assert captured["support_fapiao"] is True
 
 
 def test_order_creation_is_idempotent_and_zero_order_is_free():
@@ -245,6 +260,23 @@ def test_shipping_upload_uses_successful_payment_transaction(monkeypatch):
     }
     assert captured["payload"]["logistics_type"] == 1
     assert captured["payload"]["shipping_list"][0]["express_company"] == "SF"
+
+    def query_capture(path: str, payload: dict) -> dict:
+        assert path == "/wxa/sec/order/get_order"
+        assert payload == {"transaction_id": "4200000000000000000000000000"}
+        return {"errcode": 0, "errmsg": "ok", "order": {"order_state": 3}}
+
+    monkeypatch.setattr(wechat_platform, "_post", query_capture)
+    with Session(engine) as session:
+        order = session.get(Order, created["id"])
+        order.status = OrderStatus.shipped
+        session.add(order)
+        session.commit()
+        wechat_platform.query_order_shipping(session, order)
+        session.commit()
+        session.refresh(order)
+        assert order.platform_order_state == 3
+        assert order.status == OrderStatus.completed
 
 
 def test_admin_product_and_banner_flow():

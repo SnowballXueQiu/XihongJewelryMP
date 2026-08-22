@@ -7,8 +7,6 @@ import {
   Category,
   Coupon,
   Favorite,
-  InvoiceTitle,
-  InvoiceTitlePayload,
   Order,
   OrderStatus,
   PaymentParams,
@@ -179,11 +177,6 @@ export const createAddress = (payload: AddressPayload) => request<Address>('/api
 export const updateAddress = (id: number, payload: AddressPayload) => request<Address>(`/api/addresses/${id}`, { method: 'PUT', data: payload })
 export const deleteAddress = (id: number) => request<{ ok: boolean }>(`/api/addresses/${id}`, { method: 'DELETE' })
 
-export const fetchInvoiceTitles = () => request<InvoiceTitle[]>('/api/invoice-titles')
-export const createInvoiceTitle = (payload: InvoiceTitlePayload) => request<InvoiceTitle>('/api/invoice-titles', { method: 'POST', data: payload })
-export const updateInvoiceTitle = (id: number, payload: InvoiceTitlePayload) => request<InvoiceTitle>(`/api/invoice-titles/${id}`, { method: 'PUT', data: payload })
-export const deleteInvoiceTitle = (id: number) => request<{ ok: boolean }>(`/api/invoice-titles/${id}`, { method: 'DELETE' })
-
 export const fetchFavorites = () => request<Favorite[]>('/api/favorites')
 export const toggleFavorite = (productId: number) => request<{ active: boolean }>(`/api/favorites/${productId}`, { method: 'PUT' })
 
@@ -197,10 +190,7 @@ export const createOrder = (payload: {
   buyer_note?: string
   fulfillment_type?: 'delivery' | 'pickup'
   pickup_slot?: string
-  invoice_type?: 'none' | 'personal' | 'company'
-  invoice_title?: string
-  invoice_tax_number?: string
-  invoice_email?: string
+  invoice_requested?: boolean
   client_request_id?: string
 }) => request<Order>('/api/orders', { method: 'POST', data: payload })
 
@@ -211,6 +201,19 @@ export const fetchOrders = (status?: OrderStatus) => request<Order[]>(`/api/orde
 export const fetchOrder = (orderId: number) => request<Order>(`/api/orders/${orderId}`)
 export const cancelOrder = (orderId: number) => request<Order>(`/api/orders/${orderId}/cancel`, { method: 'POST' })
 export const completeOrder = (orderId: number) => request<Order>(`/api/orders/${orderId}/complete`, { method: 'POST' })
+export const syncPlatformOrder = (orderId: number) => request<Order>(`/api/orders/${orderId}/platform-sync`, { method: 'POST' })
+export const syncWechatInvoice = (orderId: number) => request<Order>(`/api/orders/${orderId}/invoice-sync`, { method: 'POST' })
+
+export async function confirmWechatOrderReceipt(order: Order): Promise<Order> {
+  if (!order.payment_transaction_id) return completeOrder(order.id)
+  await (Taro as typeof Taro & {
+    openBusinessView: (options: { businessType: string; extraData: { transaction_id: string } }) => Promise<unknown>
+  }).openBusinessView({
+    businessType: 'weappOrderConfirm',
+    extraData: { transaction_id: order.payment_transaction_id }
+  })
+  return syncPlatformOrder(order.id)
+}
 
 export async function fetchUser(): Promise<User> {
   try {

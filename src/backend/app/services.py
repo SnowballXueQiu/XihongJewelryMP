@@ -277,6 +277,7 @@ def start_order_payment(order: Order, user: User, session: Session) -> PaymentPa
             }
             for item in items
         ],
+        support_fapiao=order.invoice_requested,
     )
     params = wechat_pay.build_miniprogram_params(prepay_id)
     intent = PaymentIntent(
@@ -305,10 +306,7 @@ def create_order_from_items(
     buyer_note: str,
     fulfillment_type: str = "delivery",
     pickup_slot: str = "",
-    invoice_type: str = "none",
-    invoice_title: str = "",
-    invoice_tax_number: str = "",
-    invoice_email: str = "",
+    invoice_requested: bool = False,
     pickup_store_name: str = "玺鸿珠宝天津店",
     pickup_store_address: str = "天津市和平区南京路 219 号",
     pickup_store_phone: str = "16622515550",
@@ -337,13 +335,6 @@ def create_order_from_items(
         raise ValueError("请先选择收货地址")
     if fulfillment_type == "pickup" and not pickup_slot.strip():
         raise ValueError("请选择到店自提时间")
-    if invoice_type not in {"none", "personal", "company"}:
-        raise ValueError("发票类型无效")
-    if invoice_type == "company" and (not invoice_title.strip() or not invoice_tax_number.strip()):
-        raise ValueError("企业发票需要填写抬头和税号")
-    if invoice_type == "personal" and not invoice_title.strip():
-        invoice_title = "个人"
-
     subtotal = sum(products[product_id].price_cents * quantity for product_id, quantity in merged.items())
     shipping_fee_cents, free_shipping_threshold_cents = get_commerce_rules(session)
     all_items_free_shipping = all(products[product_id].free_shipping for product_id in merged)
@@ -383,10 +374,8 @@ def create_order_from_items(
         buyer_note=buyer_note,
         fulfillment_type=fulfillment_type,
         pickup_slot=pickup_slot.strip() if fulfillment_type == "pickup" else "",
-        invoice_type=invoice_type,
-        invoice_title=invoice_title.strip() if invoice_type != "none" else "",
-        invoice_tax_number=invoice_tax_number.strip() if invoice_type == "company" else "",
-        invoice_email=invoice_email.strip() if invoice_type != "none" else "",
+        invoice_requested=invoice_requested,
+        invoice_status="pending_payment" if invoice_requested else "not_requested",
     )
     session.add(order)
     session.flush()
@@ -429,6 +418,10 @@ def create_order_from_items(
     session.commit()
     session.refresh(order)
     if order.total_cents == 0:
+        order.invoice_requested = False
+        order.invoice_status = "not_available_for_free_order"
+        session.add(order)
+        session.commit()
         order = mark_order_paid(session, order, "free_order")
     return order
 
@@ -537,13 +530,22 @@ def mark_order_paid(session: Session, order: Order, transaction_id: str = "") ->
             session.add(user)
             session.add(PointLedger(user_id=user.id or 0, action="order_paid", points=reward, note=f"订单 {order.order_no}"))
     if transaction_id:
-        intent = session.exec(select(PaymentIntent).where(PaymentIntent.order_id == order.id)).first()
+        intent = session.exec(
+            select(PaymentIntent)
+            .where(PaymentIntent.order_id == order.id)
+            .order_by(col(PaymentIntent.created_at).desc())
+        ).first()
         if intent:
             intent.transaction_id = transaction_id
             intent.status = PaymentStatus.succeeded
             intent.notified_at = datetime.now(timezone.utc)
             intent.updated_at = intent.notified_at
             session.add(intent)
+        if order.invoice_requested and transaction_id != "free_order":
+            order.invoice_apply_id = transaction_id
+            order.invoice_status = "pending_title"
+            order.invoice_updated_at = datetime.now(timezone.utc)
+            session.add(order)
     session.commit()
     session.refresh(order)
     return order

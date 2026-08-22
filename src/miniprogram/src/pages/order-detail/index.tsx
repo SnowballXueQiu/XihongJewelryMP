@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import Taro, { useDidShow, useRouter } from '@tarojs/taro'
 import { Button, Text, View } from '@tarojs/components'
-import { cancelOrder, completeOrder, fetchOrder, formatMoney, orderStatusLabel } from '@/services/api'
+import { cancelOrder, confirmWechatOrderReceipt, fetchOrder, formatMoney, orderStatusLabel, syncWechatInvoice } from '@/services/api'
 import { performOrderPayment, presentPaymentError } from '@/services/payment'
 import { Order } from '@/types/domain'
 import IconFont from '@/components/IconFont'
@@ -49,8 +49,27 @@ export default function OrderDetailPage() {
     const modal = await Taro.showModal({ title: '确认收货', content: '请确认作品已经安全送达。', confirmColor: '#74252D' })
     if (!modal.confirm) return
     setActing(true)
-    try { setOrder(await completeOrder(order.id)) } catch (error) { Taro.showToast({ title: error instanceof Error ? error.message : '操作失败', icon: 'none' }) }
+    try {
+      const updated = await confirmWechatOrderReceipt(order)
+      setOrder(updated)
+      if (updated.status === 'completed') Taro.showToast({ title: '收货状态已确认', icon: 'success' })
+      else Taro.showToast({ title: '尚未在微信确认收货', icon: 'none' })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String((error as { errMsg?: string })?.errMsg || '')
+      if (!message.includes('cancel')) Taro.showToast({ title: message || '操作失败', icon: 'none' })
+    }
     finally { setActing(false) }
+  }
+
+  async function syncInvoice() {
+    if (!order) return
+    setActing(true)
+    try {
+      setOrder(await syncWechatInvoice(order.id))
+      Taro.showToast({ title: '已同步微信发票信息', icon: 'success' })
+    } catch (error) {
+      Taro.showToast({ title: error instanceof Error ? error.message : '暂未读取到微信抬头', icon: 'none' })
+    } finally { setActing(false) }
   }
 
   if (loading) return <LuxuryLoader overlay label='正在读取订单详情' />
@@ -71,7 +90,13 @@ export default function OrderDetailPage() {
         <View><Text>商品小计</Text><Text>{formatMoney(order.subtotal_cents)}</Text></View><View><Text>配送费</Text><Text>{order.shipping_fee_cents ? formatMoney(order.shipping_fee_cents) : '包邮'}</Text></View><View><Text>优惠</Text><Text>-{formatMoney(order.discount_cents)}</Text></View><View className='grand-total'><Text>实付金额</Text><Text>{formatMoney(order.total_cents)}</Text></View>
       </View>
       {order.buyer_note && <View className='detail-block note'><Text>订单备注</Text><Text>{order.buyer_note}</Text></View>}
-      {order.invoice_type !== 'none' && <View className='detail-block invoice-detail'><View className='block-title'><Text>电子发票</Text><Text>{order.invoice_type === 'company' ? '企业' : '个人'}</Text></View><Text>{order.invoice_title}</Text>{order.invoice_tax_number && <Text>税号 · {order.invoice_tax_number}</Text>}{order.invoice_email && <Text>接收邮箱 · {order.invoice_email}</Text>}</View>}
+      {order.invoice_requested && <View className='detail-block invoice-detail'>
+        <View className='block-title'><Text>微信电子发票</Text><Text>{order.invoice_status === 'inserted' ? '已入卡包' : '微信开票'}</Text></View>
+        <Text>{order.invoice_buyer_name || '抬头请在微信支付凭证中填写'}</Text>
+        {order.invoice_buyer_taxpayer_id && <Text>纳税人识别号 · {order.invoice_buyer_taxpayer_id}</Text>}
+        <Text>抬头与联系方式由微信统一保存和复用，本小程序不自建发票抬头簿。</Text>
+        {order.invoice_apply_id && order.invoice_status !== 'inserted' && <Button disabled={acting} onClick={syncInvoice}>同步微信发票状态</Button>}
+      </View>}
       <View className='detail-meta'><Text>订单编号 {order.order_no}</Text><Text>下单时间 {order.created_at?.replace('T', ' ').slice(0, 19)}</Text>{order.paid_at && <Text>支付时间 {order.paid_at.replace('T', ' ').slice(0, 19)}</Text>}</View>
       <View className='detail-service'><Text>需要帮助？</Text><Button openType='contact'>联系专属顾问</Button></View>
       {(order.can_pay || order.can_cancel || order.status === 'shipped') && <View className='detail-footer'>{order.can_cancel && <Button disabled={acting} onClick={cancel}>取消订单</Button>}{order.status === 'shipped' && <Button className='strong' disabled={acting} onClick={receive}>确认收货</Button>}{order.can_pay && <Button className='strong' loading={acting} onClick={pay}>微信支付</Button>}</View>}

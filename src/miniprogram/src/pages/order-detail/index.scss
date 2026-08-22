@@ -27,6 +27,7 @@
 .pickup-code-block > text:nth-child(3) { margin-top: 10px; color: #352521; font-size: 23px; }
 .pickup-code-block > text:last-child { margin-top: 15px; padding-top: 15px; border-top: 1px solid #ece5db; font-size: 18px; }
 .invoice-detail > text + text { margin-top: 8px; }
+.invoice-detail > button { display: flex; width: 100%; height: 64px; align-items: center; justify-content: center; margin-top: 18px; border: 1px solid #c9b8ad; border-radius: 32px; color: #742a32; font-size: 17px; line-height: 1.2; }
 .detail-meta { padding: 30px 54px; }
 .detail-meta text { display: block; margin: 8px 0; color: #91887f; font-family: Arial,"PingFang SC",sans-serif; font-size: 19px; }
 .detail-service { display: flex; align-items: center; justify-content: space-between; margin: 0 24px; padding: 28px 30px; border-top: 1px solid #d9d0c4; border-bottom: 1px solid #d9d0c4; font-size: 25px; }

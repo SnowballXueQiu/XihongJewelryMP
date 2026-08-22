@@ -2,13 +2,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from secrets import token_hex
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlmodel import Session, col, select
 
 from app.auth import create_admin_token, get_admin_by_email, get_current_admin, require_super_admin
 from app.database import get_session
-from app import wechat_pay
-from app import wechat_platform
+from app import wechat_invoice, wechat_pay, wechat_platform
 from app.models import AdminUser, Asset, Banner, Category, Coupon, Order, OrderStatus, PaymentIntent, PaymentStatus, PetProfile, PointLedger, Product, ProductStatus, Refund, SiteSetting, User
 from app.schemas import (
     AdminLoginRequest,
@@ -26,6 +25,9 @@ from app.schemas import (
     DashboardRead,
     OrderRead,
     OrderStatusUpdate,
+    InvoiceDevelopmentConfigWrite,
+    PlatformMessagePathWrite,
+    PlatformSpecialOrderWrite,
     PaymentAdminRead,
     PetRead,
     ProductRead,
@@ -307,14 +309,377 @@ def update_admin_order_status(order_id: int, payload: OrderStatusUpdate, session
     session.add(order)
     try:
         if payload.status == OrderStatus.shipped and order.status != OrderStatus.shipped:
+            if order.fulfillment_type != "pickup" and (not order.logistics_company or not order.tracking_no):
+                raise ValueError("发货前必须填写物流公司和运单号")
             wechat_platform.upload_order_shipping(session, order)
+        if (
+            payload.status == OrderStatus.completed
+            and order.status != OrderStatus.completed
+            and not settings.wx_pay_mock
+            and order.total_cents > 0
+        ):
+            platform_order = wechat_platform.query_order_shipping(session, order)
+            if int(platform_order.get("order_state") or 0) not in {3, 4}:
+                raise ValueError("微信平台订单尚未确认收货，不能提前完成订单")
         order = update_order_status(session, order_id, payload.status)
     except (ValueError, wechat_platform.WechatPlatformError) as error:
         session.rollback()
+        failed_order = session.get(Order, order_id)
+        if failed_order and isinstance(error, wechat_platform.WechatPlatformError):
+            failed_order.platform_shipping_error = str(error)
+            session.add(failed_order)
+            session.commit()
         raise HTTPException(status_code=400, detail=str(error)) from error
     write_audit_log(session, admin, "update_status", "order", str(order.id or ""), payload.status)
     session.commit()
     return _order_read(order, session, include_payment=False)
+
+
+@router.get("/platform-trade/status")
+def get_platform_trade_status(_: AdminUser = Depends(get_current_admin)) -> dict:
+    try:
+        return {"configured": True, **wechat_platform.trade_management_status()}
+    except wechat_platform.WechatPlatformError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+
+
+@router.post("/platform-trade/message-path")
+def configure_platform_message_path(
+    payload: PlatformMessagePathWrite,
+    _: AdminUser = Depends(require_super_admin),
+) -> dict[str, str | bool]:
+    try:
+        wechat_platform.set_message_jump_path(payload.path)
+    except wechat_platform.WechatPlatformError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+    return {"ok": True, "path": payload.path}
+
+
+@router.get("/platform-orders")
+def list_platform_orders(
+    order_state: int | None = Query(default=None, ge=1, le=6),
+    openid: str = "",
+    begin_time: int | None = None,
+    end_time: int | None = None,
+    last_index: str = "",
+    page_size: int = Query(default=100, ge=1, le=100),
+    _: AdminUser = Depends(get_current_admin),
+) -> dict:
+    try:
+        return wechat_platform.query_order_list(
+            order_state=order_state,
+            openid=openid,
+            begin_time=begin_time,
+            end_time=end_time,
+            last_index=last_index,
+            page_size=page_size,
+        )
+    except wechat_platform.WechatPlatformError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+
+
+@router.post("/orders/{order_id}/platform-sync", response_model=OrderRead)
+def sync_admin_platform_order(
+    order_id: int,
+    session: Session = Depends(get_session),
+    _: AdminUser = Depends(get_current_admin),
+) -> OrderRead:
+    order = session.get(Order, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    try:
+        wechat_platform.query_order_shipping(session, order)
+    except wechat_platform.WechatPlatformError as error:
+        order.platform_shipping_error = str(error)
+        session.add(order)
+        session.commit()
+        raise HTTPException(status_code=502, detail=str(error)) from error
+    session.commit()
+    session.refresh(order)
+    return _order_read(order, session)
+
+
+@router.post("/orders/{order_id}/platform-remind-receive", response_model=OrderRead)
+def remind_platform_confirm_receive(
+    order_id: int,
+    received_time: int | None = None,
+    session: Session = Depends(get_session),
+    admin: AdminUser = Depends(get_current_admin),
+) -> OrderRead:
+    order = session.get(Order, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    try:
+        wechat_platform.notify_confirm_receive(
+            session,
+            order,
+            received_time or int(datetime.now(timezone.utc).timestamp()),
+        )
+    except wechat_platform.WechatPlatformError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+    write_audit_log(session, admin, "confirm_receive_reminder", "order", str(order_id))
+    session.commit()
+    session.refresh(order)
+    return _order_read(order, session)
+
+
+@router.post("/orders/{order_id}/platform-special", response_model=OrderRead)
+def report_admin_special_order(
+    order_id: int,
+    payload: PlatformSpecialOrderWrite,
+    session: Session = Depends(get_session),
+    admin: AdminUser = Depends(get_current_admin),
+) -> OrderRead:
+    order = session.get(Order, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    delay_to = int(payload.delay_to.timestamp()) if payload.delay_to else None
+    try:
+        wechat_platform.report_special_order(session, order, payload.special_type, delay_to)
+    except wechat_platform.WechatPlatformError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+    write_audit_log(session, admin, "special_order", "order", str(order_id), str(payload.special_type))
+    session.commit()
+    session.refresh(order)
+    return _order_read(order, session)
+
+
+@router.get("/invoices", response_model=list[OrderRead])
+def list_admin_invoices(
+    session: Session = Depends(get_session),
+    _: AdminUser = Depends(get_current_admin),
+) -> list[OrderRead]:
+    orders = session.exec(
+        select(Order).where(Order.invoice_requested == True).order_by(col(Order.created_at).desc())  # noqa: E712
+    ).all()
+    return [_order_read(order, session) for order in orders]
+
+
+@router.get("/invoices/capability")
+def get_invoice_capability(
+    session: Session = Depends(get_session),
+    _: AdminUser = Depends(get_current_admin),
+) -> dict:
+    values = {item.key: item.value for item in session.exec(select(SiteSetting)).all()}
+    card_appid = values.get("invoice_card_appid") or settings.invoice_card_appid or settings.wx_pay_appid
+    card_logo_url = values.get("invoice_card_logo_url") or settings.invoice_card_logo_url
+    card_id = values.get("invoice_card_id") or ""
+    card_state = {
+        "card_configured": bool(card_appid and card_logo_url),
+        "card_appid": card_appid,
+        "card_id": card_id,
+    }
+    if not wechat_invoice.is_configured():
+        return {
+            "configured": False,
+            "development_config": None,
+            "error": "微信支付生产参数未完整配置",
+            **card_state,
+        }
+    try:
+        config = wechat_invoice.get_development_config()
+        return {"configured": True, "development_config": config, "error": "", **card_state}
+    except wechat_pay.WechatPayError as error:
+        return {
+            "configured": True,
+            "development_config": None,
+            "error": str(error),
+            **card_state,
+        }
+
+
+@router.post("/invoices/configure")
+def configure_invoice_capability(
+    payload: InvoiceDevelopmentConfigWrite,
+    _: AdminUser = Depends(require_super_admin),
+) -> dict:
+    try:
+        return wechat_invoice.configure_development(
+            callback_url=settings.wx_pay_invoice_notify_url,
+            show_fapiao_cell=payload.show_fapiao_cell,
+        )
+    except wechat_pay.WechatPayError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+
+
+@router.post("/invoices/card-template")
+def create_invoice_card_template(
+    session: Session = Depends(get_session),
+    _: AdminUser = Depends(require_super_admin),
+) -> dict:
+    values = {item.key: item.value for item in session.exec(select(SiteSetting)).all()}
+    existing_card_id = values.get("invoice_card_id", "").strip()
+    if existing_card_id:
+        return {
+            "card_appid": values.get("invoice_card_appid") or settings.invoice_card_appid or settings.wx_pay_appid,
+            "card_id": existing_card_id,
+            "existing": True,
+        }
+    try:
+        result = wechat_invoice.create_card_template(
+            card_appid=values.get("invoice_card_appid") or settings.invoice_card_appid or settings.wx_pay_appid,
+            logo_url=values.get("invoice_card_logo_url") or settings.invoice_card_logo_url,
+            payee_name=values.get("company_name") or settings.company_name_zh,
+        )
+    except wechat_pay.WechatPayError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+    card_id = str(result.get("card_id") or "")
+    if card_id:
+        card_id_setting = session.exec(select(SiteSetting).where(SiteSetting.key == "invoice_card_id")).first()
+        if card_id_setting:
+            card_id_setting.value = card_id
+            session.add(card_id_setting)
+            session.commit()
+    return result
+
+
+def _store_invoice_title(order: Order, title: dict) -> None:
+    order.invoice_buyer_type = str(title.get("type") or "")
+    order.invoice_buyer_name = str(title.get("name") or "")
+    order.invoice_buyer_taxpayer_id = str(title.get("taxpayer_id") or "")
+    order.invoice_buyer_address = str(title.get("address") or "")
+    order.invoice_buyer_telephone = str(title.get("telephone") or "")
+    order.invoice_buyer_bank_name = str(title.get("bank_name") or "")
+    order.invoice_buyer_bank_account = str(title.get("bank_account") or "")
+    order.invoice_bill_type = str(title.get("fapiao_bill_type") or "")
+    order.invoice_user_message = str(title.get("user_apply_message") or "")
+    order.invoice_status = "title_received"
+    order.invoice_error = ""
+    order.invoice_updated_at = datetime.now(timezone.utc)
+
+
+@router.post("/invoices/{order_id}/sync-title", response_model=OrderRead)
+def sync_admin_invoice_title(
+    order_id: int,
+    session: Session = Depends(get_session),
+    _: AdminUser = Depends(get_current_admin),
+) -> OrderRead:
+    order = session.get(Order, order_id)
+    if not order or not order.invoice_apply_id:
+        raise HTTPException(status_code=404, detail="订单尚无微信发票申请单号")
+    try:
+        title = wechat_invoice.get_user_title(order.invoice_apply_id)
+    except wechat_pay.WechatPayError as error:
+        order.invoice_error = str(error)
+        order.invoice_updated_at = datetime.now(timezone.utc)
+        session.add(order)
+        session.commit()
+        raise HTTPException(status_code=502, detail=str(error)) from error
+    _store_invoice_title(order, title)
+    session.add(order)
+    session.commit()
+    session.refresh(order)
+    return _order_read(order, session)
+
+
+@router.post("/invoices/{order_id}/sync-status", response_model=OrderRead)
+def sync_admin_invoice_status(
+    order_id: int,
+    session: Session = Depends(get_session),
+    _: AdminUser = Depends(get_current_admin),
+) -> OrderRead:
+    order = session.get(Order, order_id)
+    if not order or not order.invoice_apply_id:
+        raise HTTPException(status_code=404, detail="订单尚无微信发票申请单号")
+    try:
+        result = wechat_invoice.query_invoice(order.invoice_apply_id, order.invoice_fapiao_id)
+    except wechat_pay.WechatPayError as error:
+        order.invoice_error = str(error)
+        order.invoice_updated_at = datetime.now(timezone.utc)
+        session.add(order)
+        session.commit()
+        raise HTTPException(status_code=502, detail=str(error)) from error
+    invoices = result.get("fapiao_information") or []
+    first = invoices[0] if invoices else {}
+    order.invoice_fapiao_id = str(first.get("fapiao_id") or order.invoice_fapiao_id)
+    order.invoice_card_status = str((first.get("card_information") or {}).get("card_status") or "")
+    order.invoice_status = "inserted" if order.invoice_card_status == "INSERTED" else str(first.get("status") or "queried").lower()
+    order.invoice_error = ""
+    order.invoice_updated_at = datetime.now(timezone.utc)
+    session.add(order)
+    session.commit()
+    session.refresh(order)
+    return _order_read(order, session)
+
+
+@router.post("/invoices/{order_id}/deliver", response_model=OrderRead)
+async def deliver_admin_invoice(
+    order_id: int,
+    file: UploadFile = File(...),
+    fapiao_number: str = Form(...),
+    fapiao_code: str = Form(...),
+    fapiao_time: str = Form(...),
+    check_code: str = Form(...),
+    password: str = Form(...),
+    total_amount: int = Form(...),
+    tax_amount: int = Form(...),
+    seller_name: str = Form(...),
+    seller_taxpayer_id: str = Form(...),
+    drawer: str = Form(...),
+    session: Session = Depends(get_session),
+    admin: AdminUser = Depends(get_current_admin),
+) -> OrderRead:
+    order = session.get(Order, order_id)
+    if not order or not order.invoice_apply_id:
+        raise HTTPException(status_code=404, detail="订单尚无微信发票申请单号")
+    if order.invoice_status not in {"title_received", "delivery_failed"}:
+        raise HTTPException(status_code=409, detail="请先从微信同步用户填写的发票抬头")
+    if total_amount <= 0 or tax_amount < 0 or tax_amount > total_amount:
+        raise HTTPException(status_code=400, detail="发票金额或税额不正确")
+    content = await file.read()
+    media_id = ""
+    try:
+        media_id = wechat_invoice.upload_invoice_file(file.filename or "invoice.pdf", content)
+        buyer = {
+            key: value
+            for key, value in {
+                "type": order.invoice_buyer_type,
+                "name": order.invoice_buyer_name,
+                "taxpayer_id": order.invoice_buyer_taxpayer_id,
+                "address": order.invoice_buyer_address,
+                "telephone": order.invoice_buyer_telephone,
+                "bank_name": order.invoice_buyer_bank_name,
+                "bank_account": order.invoice_buyer_bank_account,
+            }.items()
+            if value
+        }
+        fapiao_id = f"{fapiao_code}{fapiao_number}"
+        wechat_invoice.insert_cards(
+            fapiao_apply_id=order.invoice_apply_id,
+            buyer_information=buyer,
+            card_information={
+                "fapiao_media_id": media_id,
+                "fapiao_number": fapiao_number,
+                "fapiao_code": fapiao_code,
+                "fapiao_time": fapiao_time,
+                "check_code": check_code,
+                "password": password,
+                "total_amount": total_amount,
+                "tax_amount": tax_amount,
+                "amount": total_amount - tax_amount,
+                "seller_information": {"name": seller_name, "taxpayer_id": seller_taxpayer_id},
+                "extra_information": {"drawer": drawer},
+            },
+        )
+    except wechat_pay.WechatPayError as error:
+        order.invoice_media_id = media_id
+        order.invoice_status = "delivery_failed"
+        order.invoice_error = str(error)
+        order.invoice_updated_at = datetime.now(timezone.utc)
+        session.add(order)
+        session.commit()
+        raise HTTPException(status_code=502, detail=str(error)) from error
+    order.invoice_media_id = media_id
+    order.invoice_fapiao_id = f"{fapiao_code}{fapiao_number}"
+    order.invoice_card_status = "INSERT_ACCEPTED"
+    order.invoice_status = "card_insert_accepted"
+    order.invoice_error = ""
+    order.invoice_updated_at = datetime.now(timezone.utc)
+    session.add(order)
+    write_audit_log(session, admin, "deliver_invoice", "order", str(order_id), order.invoice_fapiao_id)
+    session.commit()
+    session.refresh(order)
+    return _order_read(order, session)
 
 
 @router.get("/payments", response_model=list[PaymentAdminRead])

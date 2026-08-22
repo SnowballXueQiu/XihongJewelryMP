@@ -88,12 +88,31 @@ export interface Order {
   fulfillment_type: 'delivery' | 'pickup'
   pickup_slot: string
   pickup_code: string
-  invoice_type: 'none' | 'personal' | 'company'
-  invoice_title: string
-  invoice_tax_number: string
-  invoice_email: string
+  invoice_requested: boolean
+  invoice_status: string
+  invoice_apply_id: string
+  invoice_buyer_type: 'INDIVIDUAL' | 'ORGANIZATION' | ''
+  invoice_buyer_name: string
+  invoice_buyer_taxpayer_id: string
+  invoice_buyer_address: string
+  invoice_buyer_telephone: string
+  invoice_buyer_bank_name: string
+  invoice_buyer_bank_account: string
+  invoice_bill_type: 'COMM_FAPIAO' | 'VAT_FAPIAO' | ''
+  invoice_user_message: string
+  invoice_fapiao_id: string
+  invoice_media_id: string
+  invoice_card_status: string
+  invoice_error: string
   logistics_company: string
   tracking_no: string
+  payment_transaction_id: string
+  platform_shipping_uploaded_at?: string | null
+  platform_order_state: number
+  platform_order_state_updated_at?: string | null
+  platform_shipping_error: string
+  platform_confirm_receive_reminded_at?: string | null
+  platform_special_order_type: number
   can_pay: boolean
   can_cancel: boolean
   created_at?: string | null
@@ -133,17 +152,6 @@ export interface Address {
 }
 
 export type AddressPayload = Omit<Address, 'id'>
-
-export interface InvoiceTitle {
-  id: number
-  invoice_type: 'personal' | 'company'
-  title: string
-  tax_number: string
-  email: string
-  is_default: boolean
-}
-
-export type InvoiceTitlePayload = Omit<InvoiceTitle, 'id'>
 
 export interface Favorite {
   id: number

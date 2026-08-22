@@ -733,6 +733,59 @@ a {
   overflow: hidden;
 }
 
+.platform-readiness {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin: 16px 20px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-left: 3px solid #c08b42;
+  border-radius: 10px;
+  background: #fff9ee;
+}
+
+.platform-readiness.ready {
+  border-left-color: #65906c;
+  background: #f1f7f1;
+}
+
+.platform-readiness > div {
+  display: grid;
+  gap: 4px;
+}
+
+.platform-readiness strong {
+  font-size: 13px;
+}
+
+.platform-readiness span,
+.platform-readiness small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.platform-readiness small {
+  color: var(--danger);
+}
+
+.platform-readiness button,
+.platform-order-actions button,
+.invoice-capability button,
+.invoice-admin-actions button {
+  min-height: 36px;
+  padding: 0 13px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
 .table-tools {
   display: grid;
   grid-template-columns: minmax(260px, 1fr) 150px minmax(135px, 160px) minmax(135px, 160px) auto;
@@ -887,6 +940,22 @@ a {
   background: #fcfaf6;
 }
 
+.platform-order-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  padding: 0 18px 14px;
+  background: #fcfaf6;
+}
+
+.platform-order-actions button:hover,
+.invoice-admin-actions button:hover,
+.platform-readiness button:hover,
+.invoice-capability button:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
 .refund-button {
   border: 1px solid #cfa7a2;
   border-radius: 8px;
@@ -899,6 +968,123 @@ a {
 .payment-sections {
   display: grid;
   gap: 18px;
+}
+
+.invoice-admin {
+  display: grid;
+  gap: 18px;
+}
+
+.invoice-capability {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+  padding: 20px 22px;
+}
+
+.invoice-capability > div:first-child {
+  display: grid;
+  gap: 5px;
+}
+
+.invoice-capability > div:last-child,
+.invoice-admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+.invoice-capability p {
+  margin: 0;
+  color: var(--oxblood);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: .18em;
+}
+
+.invoice-capability h3,
+.invoice-delivery-form h3 {
+  margin: 0;
+  font-family: Georgia, "Songti SC", serif;
+  font-size: 23px;
+  font-weight: 500;
+}
+
+.invoice-capability span,
+.invoice-capability small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.invoice-capability small,
+.error-text {
+  color: var(--danger) !important;
+}
+
+.invoice-admin-grid {
+  display: grid;
+  grid-template-columns: minmax(390px, 460px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.invoice-delivery-form .security-callout {
+  margin: 0;
+}
+
+.invoice-records {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.invoice-admin-card {
+  display: grid;
+  gap: 14px;
+  padding: 18px 22px;
+  border-top: 1px solid var(--line);
+}
+
+.invoice-admin-card header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.invoice-admin-card header strong,
+.invoice-admin-card header small,
+.invoice-admin-copy > * {
+  display: block;
+}
+
+.invoice-admin-card header small,
+.invoice-admin-copy small {
+  margin-top: 4px;
+  color: var(--faint);
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+
+.invoice-admin-card header > span {
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: var(--gold-soft);
+  color: #725c32;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.invoice-admin-copy {
+  display: grid;
+  gap: 3px;
+}
+
+.invoice-admin-copy > span {
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .payment-row {
@@ -1125,6 +1311,10 @@ a {
     grid-template-columns: 1fr;
   }
 
+  .invoice-admin-grid {
+    grid-template-columns: 1fr;
+  }
+
   .table-tools {
     grid-template-columns: minmax(220px, 1fr) 150px 1fr 1fr;
   }
@@ -1171,9 +1361,27 @@ a {
   }
 
   .topbar,
-  .top-actions {
+  .top-actions,
+  .platform-readiness,
+  .invoice-capability {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .platform-readiness {
+    margin-inline: 14px;
+  }
+
+  .platform-order-actions,
+  .invoice-capability > div:last-child,
+  .invoice-admin-actions {
+    justify-content: stretch;
+  }
+
+  .platform-order-actions button,
+  .invoice-capability button,
+  .invoice-admin-actions button {
+    flex: 1 1 auto;
   }
 
   .stats {
