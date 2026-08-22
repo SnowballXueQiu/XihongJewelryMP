@@ -772,6 +772,7 @@ a {
 }
 
 .platform-readiness button,
+.platform-readiness-actions button,
 .platform-order-actions button,
 .invoice-capability button,
 .invoice-admin-actions button {
@@ -784,6 +785,13 @@ a {
   font-size: 11px;
   font-weight: 650;
   white-space: nowrap;
+}
+
+.platform-readiness-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .table-tools {

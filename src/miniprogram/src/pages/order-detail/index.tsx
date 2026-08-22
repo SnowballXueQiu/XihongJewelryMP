@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import Taro, { useDidShow, useRouter } from '@tarojs/taro'
 import { Button, Text, View } from '@tarojs/components'
-import { cancelOrder, confirmWechatOrderReceipt, fetchOrder, formatMoney, orderStatusLabel, syncWechatInvoice } from '@/services/api'
+import { cancelOrder, confirmWechatOrderReceipt, fetchOrder, fetchOrderByNumber, formatMoney, orderStatusLabel, syncWechatInvoice } from '@/services/api'
 import { performOrderPayment, presentPaymentError } from '@/services/payment'
 import { Order } from '@/types/domain'
 import IconFont from '@/components/IconFont'
@@ -13,13 +13,18 @@ const statusCopy: Record<string, string> = {
 }
 
 export default function OrderDetailPage() {
-  const id = Number(useRouter().params.id || 0)
+  const route = useRouter()
+  const id = Number(route.params.id || 0)
+  const orderNumber = String(route.params.orderNo || '').trim()
   const [order, setOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
   const [acting, setActing] = useState(false)
 
   async function load() {
-    try { setOrder(await fetchOrder(id)) } catch (error) {
+    try {
+      if (!id && !orderNumber) throw new Error('订单编号缺失')
+      setOrder(orderNumber ? await fetchOrderByNumber(orderNumber) : await fetchOrder(id))
+    } catch (error) {
       Taro.showToast({ title: error instanceof Error ? error.message : '订单加载失败', icon: 'none' })
     } finally { setLoading(false) }
   }

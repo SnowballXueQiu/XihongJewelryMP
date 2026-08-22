@@ -69,6 +69,23 @@ def test_order_payment_and_query_flow():
         status = client.get(f"/api/orders/{order['id']}/payment-status").json()
         assert status["order_status"] == "paid"
 
+        by_number = client.get(f"/api/orders/by-number/{order['order_no']}")
+        assert by_number.status_code == 200
+        assert by_number.json()["id"] == order["id"]
+
+        with Session(engine) as session:
+            intent = session.exec(
+                select(PaymentIntent)
+                .where(PaymentIntent.order_id == order["id"])
+                .order_by(PaymentIntent.created_at.desc())
+            ).first()
+            intent.out_trade_no = f"{order['order_no']}ABCD"
+            session.add(intent)
+            session.commit()
+        by_payment_number = client.get(f"/api/orders/by-number/{order['order_no']}ABCD")
+        assert by_payment_number.status_code == 200
+        assert by_payment_number.json()["id"] == order["id"]
+
 
 def test_cart_crud_flow():
     with client:
@@ -277,6 +294,27 @@ def test_shipping_upload_uses_successful_payment_transaction(monkeypatch):
         session.refresh(order)
         assert order.platform_order_state == 3
         assert order.status == OrderStatus.completed
+
+
+def test_order_center_detail_path_configuration(monkeypatch):
+    calls: list[tuple[str, dict]] = []
+
+    def capture(path: str, payload: dict) -> dict:
+        calls.append((path, payload))
+        if path.endswith("get_order_detail_path"):
+            return {"errcode": 0, "errmsg": "ok", "path": wechat_platform.DEFAULT_ORDER_DETAIL_PATH}
+        return {"errcode": 0, "errmsg": "ok"}
+
+    monkeypatch.setattr(wechat_platform, "_post", capture)
+    assert wechat_platform.get_order_detail_path() == wechat_platform.DEFAULT_ORDER_DETAIL_PATH
+    assert wechat_platform.set_order_detail_path() == wechat_platform.DEFAULT_ORDER_DETAIL_PATH
+    assert calls == [
+        ("/wxa/sec/order/get_order_detail_path", {}),
+        (
+            "/wxa/sec/order/update_order_detail_path",
+            {"path": "pages/order-detail/index?orderNo=${商品订单号}"},
+        ),
+    ]
 
 
 def test_admin_product_and_banner_flow():

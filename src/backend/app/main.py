@@ -625,6 +625,26 @@ def list_orders(
     return [serialize_order(order, session) for order in orders]
 
 
+@app.get("/api/orders/by-number/{order_number}", response_model=OrderRead)
+def get_order_by_number(
+    order_number: str,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> OrderRead:
+    normalized = order_number.strip()
+    order = session.exec(select(Order).where(Order.order_no == normalized)).first()
+    if not order:
+        payment = session.exec(
+            select(PaymentIntent)
+            .where(PaymentIntent.out_trade_no == normalized)
+            .order_by(col(PaymentIntent.created_at).desc())
+        ).first()
+        order = session.get(Order, payment.order_id) if payment else None
+    if not order or order.user_id != user.id:
+        raise HTTPException(status_code=404, detail="订单不存在")
+    return serialize_order(order, session)
+
+
 @app.get("/api/orders/{order_id}", response_model=OrderRead)
 def get_order(order_id: int, user: User = Depends(get_current_user), session: Session = Depends(get_session)) -> OrderRead:
     order = session.get(Order, order_id)

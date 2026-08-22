@@ -199,6 +199,7 @@ export const fetchPaymentStatus = (orderId: number) => request<PaymentStatusResu
 export const confirmMockPayment = (orderId: number) => request<Order>(`/api/orders/${orderId}/mock-pay`, { method: 'POST' })
 export const fetchOrders = (status?: OrderStatus) => request<Order[]>(`/api/orders${status ? `?status=${status}` : ''}`)
 export const fetchOrder = (orderId: number) => request<Order>(`/api/orders/${orderId}`)
+export const fetchOrderByNumber = (orderNumber: string) => request<Order>(`/api/orders/by-number/${encodeURIComponent(orderNumber)}`)
 export const cancelOrder = (orderId: number) => request<Order>(`/api/orders/${orderId}/cancel`, { method: 'POST' })
 export const completeOrder = (orderId: number) => request<Order>(`/api/orders/${orderId}/complete`, { method: 'POST' })
 export const syncPlatformOrder = (orderId: number) => request<Order>(`/api/orders/${orderId}/platform-sync`, { method: 'POST' })

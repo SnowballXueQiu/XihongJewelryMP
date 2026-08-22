@@ -214,6 +214,8 @@ type PlatformTradeStatus = {
   configured: boolean
   is_trade_managed: boolean
   confirmation_completed: boolean
+  order_center_configured: boolean
+  order_detail_path: string
   error?: string
 }
 
@@ -497,7 +499,7 @@ export default function BackstagePage() {
         request<InvoiceCapability>('/api/admin/invoices/capability')
       ])
       setPlatformTrade(platformResult.status === 'fulfilled' ? platformResult.value : {
-        configured: false, is_trade_managed: false, confirmation_completed: false, error: '暂时无法读取微信发货管理状态'
+        configured: false, is_trade_managed: false, confirmation_completed: false, order_center_configured: false, order_detail_path: '', error: '暂时无法读取微信订单管理状态'
       })
       setInvoiceCapability(invoiceResult.status === 'fulfilled' ? invoiceResult.value : {
         configured: false, development_config: null, error: '暂时无法读取微信电子发票配置'
@@ -638,6 +640,13 @@ export default function BackstagePage() {
   async function configurePlatformMessagePath() {
     await api('/api/admin/platform-trade/message-path', { method: 'POST', body: JSON.stringify({ path: 'pages/orders/index' }) })
     setMessage('微信发货消息跳转路径已设置为订单中心')
+  }
+
+  async function configurePlatformOrderDetailPath() {
+    await api('/api/admin/platform-trade/order-detail-path', { method: 'POST', body: JSON.stringify({ path: 'pages/order-detail/index?orderNo=${商品订单号}' }) })
+    const status = await api<PlatformTradeStatus>('/api/admin/platform-trade/status')
+    setPlatformTrade(status)
+    setMessage('微信购物订单详情入口已配置')
   }
 
   async function configureInvoice(showFapiaoCell: boolean) {
@@ -918,9 +927,9 @@ export default function BackstagePage() {
         {active === 'orders' && (
           <section className="panel order-manager">
             <div className="panel-heading"><div><p>FULFILLMENT DESK</p><h3>订单履约</h3></div><span>{filteredOrders.length} / {orders.length} 笔</span></div>
-            <div className={`platform-readiness ${platformTrade?.is_trade_managed && platformTrade?.confirmation_completed ? 'ready' : 'warning'}`}>
-              <div><strong>微信小程序发货信息管理</strong><span>服务开通：{platformTrade?.is_trade_managed ? '已开通' : '未确认'} · 结算管理确认：{platformTrade?.confirmation_completed ? '已完成' : '未完成'}</span>{platformTrade?.error && <small>{platformTrade.error}</small>}</div>
-              <button onClick={() => configurePlatformMessagePath().catch((error) => setMessage(error.message))}>设置订单消息跳转</button>
+            <div className={`platform-readiness ${platformTrade?.is_trade_managed && platformTrade?.confirmation_completed && platformTrade?.order_center_configured ? 'ready' : 'warning'}`}>
+              <div><strong>微信小程序订单管理</strong><span>购物订单入口：{platformTrade?.order_center_configured ? '已配置' : '未配置'} · 发货服务：{platformTrade?.is_trade_managed ? '已开通' : '未确认'} · 结算确认：{platformTrade?.confirmation_completed ? '已完成' : '未完成'}</span><small>{platformTrade?.order_detail_path || '尚未配置微信购物订单详情路径'}</small>{platformTrade?.error && <small>{platformTrade.error}</small>}</div>
+              <div className="platform-readiness-actions"><button onClick={() => configurePlatformOrderDetailPath().catch((error) => setMessage(error.message))}>配置购物订单入口</button><button onClick={() => configurePlatformMessagePath().catch((error) => setMessage(error.message))}>设置发货消息跳转</button></div>
             </div>
             <div className="table-tools"><input value={orderSearch} onChange={(event) => setOrderSearch(event.target.value)} placeholder="搜索订单、会员、商品、手机、发票或运单号" /><select value={orderFilter} onChange={(event) => setOrderFilter(event.target.value as typeof orderFilter)}><option value="all">全部状态</option>{Object.entries(orderStatusText).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select><label className="compact-field"><span>开始日期</span><input type="date" value={orderDateFrom} onChange={(event) => setOrderDateFrom(event.target.value)} /></label><label className="compact-field"><span>结束日期</span><input type="date" value={orderDateTo} onChange={(event) => setOrderDateTo(event.target.value)} /></label><button className="tool-action" onClick={() => downloadCsv('订单查询结果.csv', [['订单号', '状态', '履约方式', '收件人', '手机', '金额', '商品', '创建时间'], ...filteredOrders.map((order) => [order.order_no, orderStatusText[order.status], order.fulfillment_type === 'pickup' ? '到店自提' : '配送', order.receiver_name, order.receiver_phone, order.total_cents / 100, order.items.map((item) => `${item.product_name}×${item.quantity}`).join('；'), order.created_at])])}>导出结果</button></div>
             <div className="order-cards">{visibleOrders.map((order) => {

@@ -13,6 +13,9 @@ class WechatPlatformError(RuntimeError):
     pass
 
 
+DEFAULT_ORDER_DETAIL_PATH = "pages/order-detail/index?orderNo=${商品订单号}"
+
+
 _access_token = ""
 _access_token_expires_at = 0.0
 
@@ -233,6 +236,19 @@ def trade_management_status() -> dict:
         "is_trade_managed": bool(managed.get("is_trade_managed")),
         "confirmation_completed": bool(confirmation.get("completed")),
     }
+
+
+def get_order_detail_path() -> str:
+    data = _post("/wxa/sec/order/get_order_detail_path", {})
+    return str(data.get("path") or "")
+
+
+def set_order_detail_path(path: str = DEFAULT_ORDER_DETAIL_PATH) -> str:
+    normalized = path.strip()
+    if "${商品订单号}" not in normalized:
+        raise WechatPlatformError("微信购物订单详情路径必须包含 ${商品订单号}")
+    _post("/wxa/sec/order/update_order_detail_path", {"path": normalized})
+    return normalized
 
 
 def set_message_jump_path(path: str) -> None:

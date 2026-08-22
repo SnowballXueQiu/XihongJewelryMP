@@ -115,7 +115,7 @@ class OrderStatusUpdate(BaseModel):
 
 
 class PlatformMessagePathWrite(BaseModel):
-    path: str = Field(default="pages/orders/index", max_length=200)
+    path: str = Field(default="pages/orders/index", min_length=1, max_length=200)
 
 
 class PlatformSpecialOrderWrite(BaseModel):

@@ -338,9 +338,27 @@ def update_admin_order_status(order_id: int, payload: OrderStatusUpdate, session
 @router.get("/platform-trade/status")
 def get_platform_trade_status(_: AdminUser = Depends(get_current_admin)) -> dict:
     try:
-        return {"configured": True, **wechat_platform.trade_management_status()}
+        detail_path = wechat_platform.get_order_detail_path()
+        return {
+            "configured": True,
+            **wechat_platform.trade_management_status(),
+            "order_center_configured": bool(detail_path),
+            "order_detail_path": detail_path,
+        }
     except wechat_platform.WechatPlatformError as error:
         raise HTTPException(status_code=502, detail=str(error)) from error
+
+
+@router.post("/platform-trade/order-detail-path")
+def configure_platform_order_detail_path(
+    payload: PlatformMessagePathWrite,
+    _: AdminUser = Depends(require_super_admin),
+) -> dict[str, str | bool]:
+    try:
+        path = wechat_platform.set_order_detail_path(payload.path)
+    except wechat_platform.WechatPlatformError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+    return {"ok": True, "path": path}
 
 
 @router.post("/platform-trade/message-path")
