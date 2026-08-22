@@ -62,6 +62,29 @@ def _post(path: str, payload: dict) -> dict:
     return data
 
 
+def exchange_phone_number(code: str) -> str:
+    """Exchange the one-time code emitted by the WeChat phone-number button."""
+    token = _get_access_token()
+    try:
+        response = httpx.post(
+            "https://api.weixin.qq.com/wxa/business/getuserphonenumber",
+            params={"access_token": token},
+            json={"code": code},
+            timeout=10,
+        )
+        response.raise_for_status()
+        data = response.json()
+    except (httpx.HTTPError, ValueError) as error:
+        raise WechatPlatformError("连接微信手机号服务失败") from error
+    if int(data.get("errcode") or 0) != 0:
+        raise WechatPlatformError(f"手机号授权失败：{data.get('errmsg') or data.get('errcode')}")
+    phone_info = data.get("phone_info") or {}
+    phone = str(phone_info.get("purePhoneNumber") or phone_info.get("phoneNumber") or "").strip()
+    if not phone or not phone.isdigit() or len(phone) not in {11, 12, 13, 14, 15}:
+        raise WechatPlatformError("微信未返回有效手机号")
+    return phone
+
+
 def _express_code(name: str) -> str:
     normalized = name.strip().upper()
     aliases = {

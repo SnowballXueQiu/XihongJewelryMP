@@ -5,6 +5,7 @@ import { cancelOrder, completeOrder, fetchOrders, formatMoney, orderStatusLabel 
 import { performOrderPayment, presentPaymentError } from '@/services/payment'
 import { Order, OrderStatus } from '@/types/domain'
 import IconFont from '@/components/IconFont'
+import LuxuryLoader from '@/components/LuxuryLoader'
 import './index.scss'
 
 type OrderGroup = 'all' | 'pending_payment' | 'processing' | 'shipped' | 'completed'
@@ -85,7 +86,7 @@ export default function OrdersPage() {
       </ScrollView>
 
       <View className='order-list'>
-        {loading && [0, 1].map((item) => <View key={item} className='order-skeleton' />)}
+        {loading && <LuxuryLoader label='正在整理你的订单' />}
         {!loading && visibleOrders.map((order) => (
           <View className='order-card' key={order.id} onClick={() => Taro.navigateTo({ url: `/pages/order-detail/index?id=${order.id}` })}>
             <View className='order-top'><View><Text>{order.order_no}</Text><Text>{order.created_at ? order.created_at.slice(0, 10) : ''}</Text></View><Text className={`status status-${order.status}`}>{orderStatusLabel[order.status]}</Text></View>

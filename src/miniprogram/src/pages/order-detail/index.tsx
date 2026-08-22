@@ -5,6 +5,7 @@ import { cancelOrder, completeOrder, fetchOrder, formatMoney, orderStatusLabel }
 import { performOrderPayment, presentPaymentError } from '@/services/payment'
 import { Order } from '@/types/domain'
 import IconFont from '@/components/IconFont'
+import LuxuryLoader from '@/components/LuxuryLoader'
 import './index.scss'
 
 const statusCopy: Record<string, string> = {
@@ -52,7 +53,7 @@ export default function OrderDetailPage() {
     finally { setActing(false) }
   }
 
-  if (loading) return <View className='detail-loading'><View /></View>
+  if (loading) return <LuxuryLoader overlay label='正在读取订单详情' />
   if (!order) return <View className='detail-missing'><Text>订单不存在</Text></View>
 
   return (

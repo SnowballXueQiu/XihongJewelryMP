@@ -54,7 +54,7 @@ function applyProductFilters(products: Product[], filters: ProductFilters): Prod
   return filtered
 }
 
-async function ensureSession(): Promise<string> {
+export async function ensureSession(): Promise<string> {
   const cached = Taro.getStorageSync<string>(AUTH_KEY)
   if (cached) return cached
   if (sessionPromise) return sessionPromise
@@ -219,6 +219,8 @@ export async function fetchUser(): Promise<User> {
     return mockUser
   }
 }
+
+export const bindWechatPhone = (code: string) => request<User>('/api/me/phone', { method: 'POST', data: { code } })
 
 export async function fetchPet(): Promise<Pet> {
   try {

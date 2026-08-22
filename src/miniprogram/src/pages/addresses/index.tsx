@@ -4,6 +4,7 @@ import { Button, Text, View } from '@tarojs/components'
 import { fetchAddresses } from '@/services/api'
 import { Address } from '@/types/domain'
 import IconFont from '@/components/IconFont'
+import LuxuryLoader from '@/components/LuxuryLoader'
 import './index.scss'
 
 export default function AddressesPage() {
@@ -26,7 +27,7 @@ export default function AddressesPage() {
   return (
     <View className='page addresses-page'>
       <View className='addresses-head'><Text className='addresses-kicker'>DELIVERY BOOK</Text><Text className='addresses-title'>{selecting ? '选择收货地址' : '地址簿'}</Text></View>
-      {loading ? <View className='address-skeleton' /> : addresses.length ? (
+      {loading ? <LuxuryLoader label='正在读取常用地址' /> : addresses.length ? (
         <View className='address-list'>
           {addresses.map((address, index) => (
             <View key={address.id} className='address-item' style={{ animationDelay: `${index * 45}ms` }} onClick={() => choose(address)}>

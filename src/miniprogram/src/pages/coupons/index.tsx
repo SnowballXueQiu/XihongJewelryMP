@@ -4,6 +4,7 @@ import { Button, Text, View } from '@tarojs/components'
 import { claimCoupon, fetchCoupons, formatMoney } from '@/services/api'
 import { Coupon } from '@/types/domain'
 import IconFont from '@/components/IconFont'
+import LuxuryLoader from '@/components/LuxuryLoader'
 import './index.scss'
 
 export default function CouponsPage() {
@@ -35,7 +36,7 @@ export default function CouponsPage() {
     <View className='coupon-head'><View><Text>PRIVATE BENEFITS</Text><Text>会员礼券</Text><Text>每一份礼遇，都为重要时刻而来。</Text></View><IconFont name='gift' /></View>
     <View className='coupon-tabs'><Button className={tab === 'available' ? 'active' : ''} onClick={() => setTab('available')}>可使用</Button><Button className={tab === 'used' ? 'active' : ''} onClick={() => setTab('used')}>已失效</Button></View>
     <View className='coupon-list'>
-      {loading && [0, 1].map((item) => <View className='coupon-skeleton' key={item} />)}
+      {loading && <LuxuryLoader label='正在整理会员礼券' />}
       {!loading && visible.map((coupon) => <View className={`coupon-card ${coupon.used || !coupon.available ? 'disabled' : ''}`} key={coupon.id}>
         <View className='coupon-value'><Text>{formatMoney(coupon.amount_cents).replace('¥', '')}</Text><Text>元</Text><Text>满 {formatMoney(coupon.minimum_cents)} 可用</Text></View>
         <View className='coupon-copy'><Text>{coupon.name}</Text><Text>{coupon.description}</Text><Text>{coupon.valid_until ? `有效期至 ${coupon.valid_until.slice(0, 10)}` : '长期有效'}</Text></View>

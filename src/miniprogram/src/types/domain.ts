@@ -117,6 +117,7 @@ export interface User {
   avatar_color: string
   wechat_openid?: string | null
   points: number
+  created_at?: string
 }
 
 export interface Address {

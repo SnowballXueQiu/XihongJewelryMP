@@ -3,6 +3,7 @@ import Taro, { useDidShow } from '@tarojs/taro'
 import { Button, Checkbox, Text, View } from '@tarojs/components'
 import JewelryVisual from '@/components/JewelryVisual'
 import IconFont from '@/components/IconFont'
+import LuxuryLoader from '@/components/LuxuryLoader'
 import { clearCart, deleteCartItem, fetchCart, fetchStoreConfig, formatMoney, updateCartItem } from '@/services/api'
 import { usePageEntranceAnimation } from '@/hooks/useSubtleAnimation'
 import { CartItem, StoreConfig } from '@/types/domain'
@@ -109,7 +110,7 @@ export default function CartPage() {
       )}
 
       {loading ? (
-        <View className='cart-loading'><View /><View /></View>
+        <LuxuryLoader label='正在打开购物袋' />
       ) : items.length === 0 ? (
         <View className='cart-empty'>
           <View className='empty-bag'><IconFont name='cart' /></View>

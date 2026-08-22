@@ -3,6 +3,7 @@ import Taro, { useDidShow, useRouter } from '@tarojs/taro'
 import { Button, Input, Picker, Text, View } from '@tarojs/components'
 import JewelryVisual from '@/components/JewelryVisual'
 import IconFont from '@/components/IconFont'
+import LuxuryLoader from '@/components/LuxuryLoader'
 import { createAddress, createOrder, fetchAddresses, fetchCoupons, fetchInvoiceTitles, fetchOrder, fetchProduct, fetchStoreConfig, formatMoney } from '@/services/api'
 import { performOrderPayment, presentPaymentError } from '@/services/payment'
 import { usePageEntranceAnimation } from '@/hooks/useSubtleAnimation'
@@ -183,7 +184,7 @@ export default function OrderConfirmPage() {
 
     <View className='checkout-block'>
       <View className='block-heading'><Text>02</Text><Text>订单商品</Text><Text>{lines.reduce((sum, item) => sum + item.quantity, 0)} 件</Text></View>
-      {loading ? <View className='checkout-loading' /> : lines.map((item) => item.product && <View key={item.product_id} className='checkout-line'>
+      {loading ? <LuxuryLoader label='正在核对订单信息' /> : lines.map((item) => item.product && <View key={item.product_id} className='checkout-line'>
         <View className='line-visual'><JewelryVisual product={item.product} compact={false} showLabel={false} /></View>
         <View className='line-copy'><Text className='line-material'>{item.product.material}</Text><Text className='line-name'>{item.product.name}</Text><Text className='line-sub'>{item.product.subtitle}</Text>{item.product.free_shipping && <Text className='line-shipping'>此商品包邮</Text>}<View className='line-price'><Text>{formatMoney(item.product.price_cents)}</Text><Text>× {item.quantity}</Text></View></View>
       </View>)}

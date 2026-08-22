@@ -3,6 +3,7 @@ import Taro, { usePullDownRefresh } from '@tarojs/taro'
 import { Button, Text, View } from '@tarojs/components'
 import ProductCard from '@/components/ProductCard'
 import IconFont from '@/components/IconFont'
+import LuxuryLoader from '@/components/LuxuryLoader'
 import { fetchBanners, fetchProducts } from '@/services/api'
 import { usePageEntranceAnimation } from '@/hooks/useSubtleAnimation'
 import { Banner, Product } from '@/types/domain'
@@ -119,9 +120,7 @@ export default function HomePage() {
       </View>
 
       {loading ? (
-        <View className='home-skeleton-grid'>
-          <View className='home-skeleton' /><View className='home-skeleton' />
-        </View>
+        <LuxuryLoader compact label='正在甄选本季作品' />
       ) : (
         <View className='home-product-grid'>
           {featured.map((product, index) => <ProductCard key={product.id} product={product} index={index} />)}

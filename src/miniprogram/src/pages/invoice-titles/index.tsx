@@ -4,6 +4,7 @@ import { Button, Input, Text, View } from '@tarojs/components'
 import { createInvoiceTitle, deleteInvoiceTitle, fetchInvoiceTitles, updateInvoiceTitle } from '@/services/api'
 import { InvoiceTitle, InvoiceTitlePayload } from '@/types/domain'
 import IconFont from '@/components/IconFont'
+import LuxuryLoader from '@/components/LuxuryLoader'
 import './index.scss'
 
 const emptyEditor: InvoiceTitlePayload = {
@@ -98,7 +99,7 @@ export default function InvoiceTitlesPage() {
       <Button onClick={importFromWechat}>从微信导入</Button>
       <Button className='primary' onClick={() => openEditor()}><IconFont name='plus' />新增抬头</Button>
     </View>
-    {loading ? <View className='invoice-book-skeleton' /> : visibleTitles.length ? <View className='invoice-title-list'>
+    {loading ? <LuxuryLoader label='正在读取发票抬头' /> : visibleTitles.length ? <View className='invoice-title-list'>
       {visibleTitles.map((title, index) => <View className='invoice-title-card' key={title.id} onClick={() => choose(title)}>
         <View className='invoice-title-number'><Text>{String(index + 1).padStart(2, '0')}</Text><Text>{title.invoice_type === 'company' ? '企业' : '个人'}</Text></View>
         <View className='invoice-title-copy'><View><Text>{title.title}</Text>{title.is_default && <Text className='default-tag'>默认</Text>}</View>{title.invoice_type === 'company' && <Text>税号 {title.tax_number}</Text>}{title.email && <Text>{title.email}</Text>}</View>

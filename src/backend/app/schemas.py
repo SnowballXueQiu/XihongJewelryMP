@@ -248,6 +248,10 @@ class WechatLoginRequest(BaseModel):
     nickname: str = Field(default="微信用户", max_length=40)
 
 
+class WechatPhoneRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=256)
+
+
 class PaymentStatusRead(BaseModel):
     order_id: int
     order_status: OrderStatus
@@ -308,6 +312,7 @@ class UserRead(BaseModel):
     avatar_color: str
     wechat_openid: str | None
     points: int
+    created_at: datetime
 
 
 class UserTokenRead(BaseModel):

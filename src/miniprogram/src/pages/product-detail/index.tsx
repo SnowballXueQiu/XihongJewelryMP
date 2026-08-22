@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Taro, { useRouter, useShareAppMessage } from '@tarojs/taro'
 import { Button, Text, View } from '@tarojs/components'
 import JewelryVisual from '@/components/JewelryVisual'
+import LuxuryLoader from '@/components/LuxuryLoader'
 import IconFont from '@/components/IconFont'
 import { addToCart, fetchFavorites, fetchProduct, fetchStoreConfig, formatMoney, toggleFavorite } from '@/services/api'
 import { usePageEntranceAnimation } from '@/hooks/useSubtleAnimation'
@@ -66,7 +67,7 @@ export default function ProductDetailPage() {
   }
 
   if (!product) {
-    return <View className='page detail-page detail-loading' animation={pageAnimation}><View className='detail-skeleton' /><View className='detail-copy-skeleton' /></View>
+    return <View className='page detail-page detail-loading' animation={pageAnimation}><LuxuryLoader overlay label='正在呈现珠宝细节' /></View>
   }
 
   return (

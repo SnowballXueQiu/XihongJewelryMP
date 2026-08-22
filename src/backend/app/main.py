@@ -9,7 +9,7 @@ from sqlalchemy import or_, update
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
 
-from app import wechat_pay
+from app import wechat_pay, wechat_platform
 from app.admin import router as admin_router
 from app.database import create_db_and_seed, get_session
 from app.models import (
@@ -56,6 +56,7 @@ from app.schemas import (
     UserRead,
     UserTokenRead,
     WechatLoginRequest,
+    WechatPhoneRequest,
 )
 from app.services import (
     apply_pet_action,
@@ -199,6 +200,23 @@ def get_product(product_id: int, session: Session = Depends(get_session)) -> Pro
 
 @app.get("/api/me", response_model=UserRead)
 def get_me(user: User = Depends(get_current_user)) -> User:
+    return user
+
+
+@app.post("/api/me/phone", response_model=UserRead)
+def bind_wechat_phone(
+    payload: WechatPhoneRequest,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> User:
+    try:
+        phone = wechat_platform.exchange_phone_number(payload.code)
+    except wechat_platform.WechatPlatformError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+    user.phone = phone
+    session.add(user)
+    session.commit()
+    session.refresh(user)
     return user
 
 

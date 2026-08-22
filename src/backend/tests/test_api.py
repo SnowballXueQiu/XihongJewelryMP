@@ -24,6 +24,21 @@ def test_api_responses_disable_shared_caching():
         assert products.headers["cache-control"] == "private, no-store, max-age=0, must-revalidate"
 
 
+def test_wechat_phone_binding(monkeypatch):
+    monkeypatch.setattr(wechat_platform, "exchange_phone_number", lambda code: "13912345678")
+    with client:
+        login = client.post("/api/auth/wechat", json={"code": "phone-binding-user", "nickname": "手机号会员"})
+        assert login.status_code == 200
+        token = login.json()["access_token"]
+        bound = client.post(
+            "/api/me/phone",
+            json={"code": "one-time-phone-code"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert bound.status_code == 200
+        assert bound.json()["phone"] == "13912345678"
+
+
 def test_products_and_pet_flow():
     with client:
         products = client.get("/api/products").json()
