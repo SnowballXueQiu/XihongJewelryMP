@@ -70,7 +70,7 @@ class WechatPayService(
             description = command.description
             outTradeNo = command.outTradeNo
             notifyUrl = callbackUrl(PAYMENT_NOTIFY_PATH)
-            timeExpire = command.expiresAt?.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+            timeExpire = command.expiresAt?.toWechatRfc3339()
             attach = command.attach?.takeIf(String::isNotBlank)
             // 发票在确认收货后通过官方抬头接口申请，不在支付凭证提前开放入口。
             supportFapiao = false

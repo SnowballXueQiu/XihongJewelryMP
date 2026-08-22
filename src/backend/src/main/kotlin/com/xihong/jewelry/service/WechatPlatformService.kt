@@ -105,7 +105,7 @@ class WechatPlatformService(
         val payload = mapOf(
             "order_key" to orderKey(plan.payment), "logistics_type" to plan.logisticsType, "delivery_mode" to 1,
             "shipping_list" to listOf(shipping),
-            "upload_time" to OffsetDateTime.now(ZoneId.of("Asia/Shanghai")).toString(),
+            "upload_time" to OffsetDateTime.now(ZoneId.of("Asia/Shanghai")).toWechatRfc3339(),
             "payer" to mapOf("openid" to plan.openid),
         )
         return uploadWithAuthoritativeRecovery(plan, payload)

@@ -29,6 +29,13 @@ class WechatPayServiceTest {
     lateinit var tempDir: Path
 
     @Test
+    fun `wechat RFC3339 timestamps never include fractional seconds`() {
+        val timestamp = OffsetDateTime.of(2026, 8, 23, 3, 38, 53, 239_730_007, ZoneOffset.ofHours(8))
+
+        assertEquals("2026-08-23T03:38:53+08:00", timestamp.toWechatRfc3339())
+    }
+
+    @Test
     fun `payment and refund callback URLs are derived from public base URL`() {
         val properties = properties("0123456789abcdef0123456789abcdef", "PUB_KEY_ID_TEST", tempDir.resolve("unused.pem"))
         @Suppress("UNCHECKED_CAST")

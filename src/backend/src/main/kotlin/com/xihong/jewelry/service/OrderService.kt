@@ -263,7 +263,9 @@ class OrderService(
                     // The create response can be lost after WeChat accepted the request. Keep the
                     // intent blocking new payments until query+close proves it is terminal.
                     it.status = "closing"
-                    it.failureReason = error.message ?: "微信支付下单结果不确定"
+                    // SDK exceptions include the signed HTTP request. Never persist or expose
+                    // Authorization/signature material through order APIs.
+                    it.failureReason = "微信支付下单结果不确定"
                     it.updatedAt = Instant.now()
                     payments.save(it)
                 }
@@ -1030,7 +1032,7 @@ class OrderService(
     private fun setting(key: String, fallback: String): String = settings.findByKey(key)?.value?.trim().takeUnless { it.isNullOrBlank() } ?: fallback
 
     private fun externalFailure(label: String, error: RuntimeException): ResponseStatusException =
-        if (error is ResponseStatusException) error else ResponseStatusException(HttpStatus.BAD_GATEWAY, "$label：${error.message ?: "未知错误"}", error)
+        if (error is ResponseStatusException) error else ResponseStatusException(HttpStatus.BAD_GATEWAY, "$label，请稍后重试", error)
 
     private fun <T> inTransaction(block: () -> T): T = transactions.execute { block() }
         ?: throw IllegalStateException("事务未返回结果")

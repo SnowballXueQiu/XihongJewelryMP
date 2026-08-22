@@ -16,7 +16,6 @@ import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.time.OffsetDateTime
-import java.time.format.DateTimeFormatter
 import java.util.HexFormat
 
 /** Official ordinary-merchant electronic invoice APIs (APIv3). */
@@ -184,7 +183,7 @@ class WechatInvoiceService(
             "fapiao_media_id" to mediaId,
             "fapiao_number" to card.fapiaoNumber,
             "fapiao_code" to card.fapiaoCode,
-            "fapiao_time" to card.fapiaoTime.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME),
+            "fapiao_time" to card.fapiaoTime.toWechatRfc3339(),
             "check_code" to card.checkCode,
             "password" to card.password,
             "total_amount" to card.totalAmount,
