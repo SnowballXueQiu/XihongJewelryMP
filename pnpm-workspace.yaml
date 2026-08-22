@@ -1,6 +1,5 @@
 packages:
   - src/miniprogram
-  - src/backend
   - src/backstage
 
 onlyBuiltDependencies:

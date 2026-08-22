@@ -8,9 +8,9 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "next": "latest",
-    "react": "latest",
-    "react-dom": "latest",
+    "next": "16.2.11",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
     "sass": "^1.83.0",
     "three": "^0.184.0"
   },
