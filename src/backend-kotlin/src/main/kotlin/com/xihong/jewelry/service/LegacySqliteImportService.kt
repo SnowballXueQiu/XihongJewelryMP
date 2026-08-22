@@ -54,6 +54,10 @@ class LegacySqliteImportService(
                     "WHERE lower(status) = 'success' AND business_applied_at IS NULL",
             )
             TABLES.map(TableMapping::target).distinct().forEach(::advanceSequence)
+            val reminderAudits = backfillConfirmReceiveReminderAudits(sqlite)
+            if (reminderAudits > 0) {
+                log.info("Backfilled {} legacy confirmation reminder markers as audit events", reminderAudits)
+            }
             log.info("Imported {} legacy rows from {} into PostgreSQL", total, pathText)
         }
     }
@@ -105,6 +109,9 @@ class LegacySqliteImportService(
     }
 
     private fun normalize(mapping: TableMapping, column: Column, rows: ResultSet, index: Int): Any? {
+        if (mapping.target == "orders" && column.target == LegacyOrderCompatibility.TEST_ORDER_TARGET) {
+            return LegacyOrderCompatibility.isTestOrder(rows.getObject(index))
+        }
         val converted = convert(rows, index, column.dataType)
         if (mapping.target == "orders" && column.target == "order_no" && converted?.toString().isNullOrBlank()) {
             return legacyOrderNo(rows.getLong("id"))
@@ -152,6 +159,49 @@ class LegacySqliteImportService(
         )
     }
 
+    /**
+     * The Kotlin admin service uses audit events, rather than an order column, as the durable
+     * duplicate-reminder guard. Most legacy reminders already have a matching audit row, which is
+     * copied normally; this backfill preserves older markers that predate that audit write.
+     */
+    internal fun backfillConfirmReceiveReminderAudits(sqlite: java.sql.Connection): Int {
+        if (!sourceTableExists(sqlite, "order") ||
+            "platform_confirm_receive_reminded_at" !in sourceColumns(sqlite, "order")) return 0
+
+        var inserted = 0
+        sqlite.createStatement().use { statement ->
+            statement.executeQuery(
+                "SELECT [id], [platform_confirm_receive_reminded_at] FROM [order] " +
+                    "WHERE [platform_confirm_receive_reminded_at] IS NOT NULL " +
+                    "AND trim(CAST([platform_confirm_receive_reminded_at] AS TEXT)) <> ''",
+            ).use { rows ->
+                while (rows.next()) {
+                    val orderId = rows.getLong("id").toString()
+                    val exists = jdbc.queryForObject(
+                        "SELECT EXISTS(SELECT 1 FROM audit_logs WHERE action=? AND entity=? AND entity_id=?)",
+                        Boolean::class.java,
+                        "confirm_receive_reminder",
+                        "order",
+                        orderId,
+                    ) == true
+                    if (!exists) {
+                        jdbc.update(
+                            "INSERT INTO audit_logs(admin_id, action, entity, entity_id, detail, created_at) " +
+                                "VALUES (NULL, ?, ?, ?, ?, ?)",
+                            "confirm_receive_reminder",
+                            "order",
+                            orderId,
+                            "由旧版确认收货提醒标记迁移",
+                            parseTimestamp(rows.getObject("platform_confirm_receive_reminded_at").toString()),
+                        )
+                        inserted += 1
+                    }
+                }
+            }
+        }
+        return inserted
+    }
+
     private fun quoteSqlite(value: String) = "[${value.replace("]", "]]" )}]"
     private fun quotePostgres(value: String) = "\"${value.replace("\"", "\"\"")}\""
 
@@ -164,7 +214,7 @@ class LegacySqliteImportService(
             TableMapping("category", "categories"),
             TableMapping("product", "products"),
             TableMapping("coupon", "coupons"),
-            TableMapping("order", "orders", mapOf("completed_at" to "received_at")),
+            TableMapping("order", "orders", LegacyOrderCompatibility.renames),
             TableMapping("address", "addresses"),
             TableMapping("cartitem", "cart_items"),
             TableMapping("favorite", "favorites"),
@@ -180,5 +230,30 @@ class LegacySqliteImportService(
             TableMapping("sitesetting", "site_settings", mapOf("group" to "setting_group")),
             TableMapping("auditlog", "audit_logs"),
         )
+    }
+}
+
+/**
+ * Semantic compatibility for legacy order columns whose names or value domains changed.
+ *
+ * The old platform_special_order_type used 1 for presale orders and 2 for test orders. The new
+ * model deliberately persists only the test-order distinction, so a generic numeric-to-boolean
+ * conversion would be unsafe: it would incorrectly turn presale value 1 into test_order=true.
+ * Legacy logistics_company is not copied to WeChat's carrier ID/name fields because a free-form
+ * label cannot establish an official carrier identity; the new workflow resolves it from WeChat.
+ * Presale delay metadata likewise has no equivalent in the new model and remains authoritative in
+ * the already-uploaded WeChat order rather than being reinterpreted locally.
+ */
+internal object LegacyOrderCompatibility {
+    const val TEST_ORDER_TARGET = "test_order"
+
+    val renames = mapOf(
+        "completed_at" to "received_at",
+        "platform_special_order_type" to TEST_ORDER_TARGET,
+    )
+
+    fun isTestOrder(value: Any?): Boolean = when (value) {
+        is Number -> value.toInt() == 2
+        else -> value?.toString()?.trim()?.toIntOrNull() == 2
     }
 }
