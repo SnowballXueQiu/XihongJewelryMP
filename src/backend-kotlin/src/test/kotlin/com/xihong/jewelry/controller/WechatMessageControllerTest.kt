@@ -132,7 +132,7 @@ class WechatMessageControllerTest {
             appId = appId,
             messageToken = token,
             messageAesKey = encodingAesKey,
-            messageCallbackUrl = "https://api.xihongzhubao.com/api/wechat/miniprogram/message-push",
+            messageCallbackUrl = "https://api.xihongzhubao.com/wechat/miniprogram/message-push",
         ),
         pay = AppProperties.Pay(merchantId = "1112005993"),
     )

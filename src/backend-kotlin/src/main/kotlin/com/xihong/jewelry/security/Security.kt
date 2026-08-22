@@ -205,14 +205,21 @@ class SecurityConfiguration(
             it.requestMatchers("/api/auth/wechat").permitAll()
             it.requestMatchers(
                 HttpMethod.POST,
+                "/payments/wechat/notify",
+                "/payments/wechat/refund-notify",
                 "/api/payments/wechat/notify",
                 "/api/payments/wechat/refund-notify",
             ).permitAll()
             it.requestMatchers(
                 HttpMethod.GET,
+                "/wechat/miniprogram/message-push",
                 "/api/wechat/miniprogram/message-push",
             ).permitAll()
-            it.requestMatchers(HttpMethod.POST, "/api/wechat/miniprogram/message-push").permitAll()
+            it.requestMatchers(
+                HttpMethod.POST,
+                "/wechat/miniprogram/message-push",
+                "/api/wechat/miniprogram/message-push",
+            ).permitAll()
             it.requestMatchers(HttpMethod.GET, "/api/store/config", "/api/categories", "/api/banners", "/api/products", "/api/products/**").permitAll()
             it.requestMatchers("/api/admin/auth/login").permitAll()
             it.requestMatchers("/api/admin/**").hasRole("ADMIN")

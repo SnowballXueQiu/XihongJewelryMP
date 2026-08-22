@@ -13,7 +13,10 @@ import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 
 @RestController
-@RequestMapping("/api/wechat/miniprogram/message-push")
+@RequestMapping(
+    "/wechat/miniprogram/message-push",
+    "/api/wechat/miniprogram/message-push",
+)
 class WechatMessageController(private val messages: WechatMessageService) {
     @GetMapping(produces = [MediaType.TEXT_PLAIN_VALUE])
     fun handshake(

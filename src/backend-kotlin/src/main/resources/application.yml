@@ -78,7 +78,7 @@ app:
     app-secret: ${WECHAT_APP_SECRET:}
     message-token: ${WECHAT_MESSAGE_TOKEN:}
     message-aes-key: ${WECHAT_MESSAGE_AES_KEY:}
-    message-callback-url: ${WECHAT_MESSAGE_CALLBACK_URL:https://api.xihongzhubao.com/api/wechat/miniprogram/message-push}
+    message-callback-url: ${WECHAT_MESSAGE_CALLBACK_URL:https://api.xihongzhubao.com/wechat/miniprogram/message-push}
   pay:
     mock: ${WX_PAY_MOCK:false}
     app-id: ${WX_PAY_APPID:}

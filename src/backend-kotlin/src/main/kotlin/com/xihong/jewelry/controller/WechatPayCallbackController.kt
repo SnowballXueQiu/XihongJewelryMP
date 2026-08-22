@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
 @RestController
-@RequestMapping("/api/payments/wechat")
+@RequestMapping("/payments/wechat", "/api/payments/wechat")
 class WechatPayCallbackController(private val payments: WechatPayService) {
     private val log = LoggerFactory.getLogger(javaClass)
 

@@ -69,9 +69,10 @@ ADMIN_JWT_SECRET=<另一随机长密钥>
 - request 合法域名（必须为已备案 HTTPS 域名）
 - 小程序 AppID 与商户号绑定关系
 - JSAPI 支付权限、APIv3 密钥、商户私钥和微信支付公钥
-- `PUBLIC_BASE_URL` 公网 HTTPS 可达；后端会在支付/退款请求中分别携带 `/api/payments/wechat/notify` 与 `/api/payments/wechat/refund-notify`
+- `PUBLIC_BASE_URL` 公网 HTTPS 可达；后端会在支付/退款请求中分别携带 `/payments/wechat/notify` 与 `/payments/wechat/refund-notify`
 - 小程序已接入“订单发货管理”，商户完成发货结算规则确认
-- 小程序“消息推送”URL 配置为 `https://api.xihongzhubao.com/api/wechat/miniprogram/message-push`，消息加密方式选择“安全模式”，Token 与 EncodingAESKey 和服务器环境一致
+- 小程序“消息推送”URL 配置为 `https://api.xihongzhubao.com/wechat/miniprogram/message-push`，数据格式选择 JSON，消息加密方式选择“安全模式”，Token 与 EncodingAESKey 和服务器环境一致
+- 旧 `/api/wechat/miniprogram/message-push` 与 `/api/payments/wechat/*` 仅作为迁移期兼容入口；新配置和新请求统一使用无 `/api` 的回调路径
 - 商户已开通微信电子发票自建/第三方能力；本系统使用同步响应与主动查询，不配置发票回调
 
 ## 验证

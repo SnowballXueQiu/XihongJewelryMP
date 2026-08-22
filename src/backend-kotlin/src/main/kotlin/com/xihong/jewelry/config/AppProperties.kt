@@ -73,7 +73,7 @@ data class AppProperties(
                 callback.scheme.equals("https", ignoreCase = true) && !callback.host.isNullOrBlank() &&
                 callback.rawQuery == null && callback.rawFragment == null &&
                 wechat.messageCallbackUrl.trimEnd('/') ==
-                "${publicBaseUrl.trimEnd('/')}/api/wechat/miniprogram/message-push"
+                "${publicBaseUrl.trimEnd('/')}/wechat/miniprogram/message-push"
         }.getOrDefault(false)
 
     data class Wechat(

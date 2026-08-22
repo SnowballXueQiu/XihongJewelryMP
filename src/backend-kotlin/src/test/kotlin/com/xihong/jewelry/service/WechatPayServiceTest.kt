@@ -44,8 +44,8 @@ class WechatPayServiceTest {
             lifecycle,
         )
 
-        assertEquals("https://api.example.com/api/payments/wechat/notify", service.callbackUrl("/api/payments/wechat/notify"))
-        assertEquals("https://api.example.com/api/payments/wechat/refund-notify", service.callbackUrl("/api/payments/wechat/refund-notify"))
+        assertEquals("https://api.example.com/payments/wechat/notify", service.callbackUrl("/payments/wechat/notify"))
+        assertEquals("https://api.example.com/payments/wechat/refund-notify", service.callbackUrl("/payments/wechat/refund-notify"))
     }
 
     @Test

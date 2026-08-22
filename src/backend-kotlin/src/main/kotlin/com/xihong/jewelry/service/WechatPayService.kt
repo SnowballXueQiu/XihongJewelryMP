@@ -339,8 +339,8 @@ class WechatPayService(
     }
 
     private companion object {
-        const val PAYMENT_NOTIFY_PATH = "/api/payments/wechat/notify"
-        const val REFUND_NOTIFY_PATH = "/api/payments/wechat/refund-notify"
+        const val PAYMENT_NOTIFY_PATH = "/payments/wechat/notify"
+        const val REFUND_NOTIFY_PATH = "/payments/wechat/refund-notify"
         const val CALLBACK_SOURCE = "wechat_pay_apiv3"
         val REFUND_EVENTS = setOf("REFUND.SUCCESS", "REFUND.ABNORMAL", "REFUND.CLOSED")
         val REFUND_STATUSES = setOf("SUCCESS", "ABNORMAL", "CLOSED", "PROCESSING")
