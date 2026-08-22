@@ -37,7 +37,7 @@ services:
 
   backend:
     build:
-      context: src/backend-kotlin
+      context: src/backend
       dockerfile: Dockerfile
     restart: unless-stopped
     depends_on:

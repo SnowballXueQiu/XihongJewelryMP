@@ -6,14 +6,14 @@
   "scripts": {
     "predev": "node scripts/kill-dev-ports.mjs",
     "dev": "concurrently -n backend,miniprogram,backstage -c gray,yellow,white \"pnpm dev:backend\" \"pnpm --dir src/miniprogram dev:weapp\" \"pnpm --dir src/backstage dev\"",
-    "dev:backend": "gradle -p src/backend-kotlin bootRun",
+    "dev:backend": "gradle -p src/backend bootRun",
     "dev:miniprogram": "pnpm --dir src/miniprogram dev:weapp",
     "dev:backstage": "pnpm --dir src/backstage dev",
     "build": "pnpm build:backend && pnpm --dir src/miniprogram build:weapp && pnpm --dir src/backstage build",
-    "build:backend": "gradle -p src/backend-kotlin clean build",
+    "build:backend": "gradle -p src/backend clean build",
     "build:miniprogram": "pnpm --dir src/miniprogram build:weapp",
     "build:backstage": "pnpm --dir src/backstage build",
-    "test:backend": "gradle -p src/backend-kotlin test"
+    "test:backend": "gradle -p src/backend test"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

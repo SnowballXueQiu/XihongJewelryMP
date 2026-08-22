@@ -5,8 +5,7 @@
 ## 项目结构
 
 - `src/miniprogram`：Taro 4 + React + TypeScript 微信小程序
-- `src/backend-kotlin`：Kotlin 2 + Spring Boot 4、JPA、Flyway，提供商城、管理后台和微信支付 API
-- `src/backend`：旧版 FastAPI，仅作为迁移源保留，生产运行时不再启动
+- `src/backend`：Kotlin 2 + Spring Boot 4、JPA、Flyway，提供商城、管理后台和微信支付 API
 - `src/backstage`：Next.js 运营后台
 
 本次商城开发不包含 AR 预览功能；仓库中原有 AR 文件保持独立，不属于商城验收范围。
@@ -72,7 +71,6 @@ ADMIN_JWT_SECRET=<另一随机长密钥>
 - `PUBLIC_BASE_URL` 公网 HTTPS 可达；后端会在支付/退款请求中分别携带 `/payments/wechat/notify` 与 `/payments/wechat/refund-notify`
 - 小程序已接入“订单发货管理”，商户完成发货结算规则确认
 - 小程序“消息推送”URL 配置为 `https://api.xihongzhubao.com/wechat/miniprogram/message-push`，数据格式选择 JSON，消息加密方式选择“安全模式”，Token 与 EncodingAESKey 和服务器环境一致
-- 旧 `/api/wechat/miniprogram/message-push` 与 `/api/payments/wechat/*` 仅作为迁移期兼容入口；新配置和新请求统一使用无 `/api` 的回调路径
 - 商户已开通微信电子发票自建/第三方能力；本系统使用同步响应与主动查询，不配置发票回调
 
 ## 验证
@@ -81,7 +79,7 @@ ADMIN_JWT_SECRET=<另一随机长密钥>
 pnpm build:miniprogram
 pnpm --dir src/backstage lint
 pnpm build:backstage
-gradle -p src/backend-kotlin test
+gradle -p src/backend test
 docker compose config --quiet
 ```
 
