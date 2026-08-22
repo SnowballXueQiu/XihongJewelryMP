@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import Taro, { useDidShow } from '@tarojs/taro'
 import { Button, Text, View } from '@tarojs/components'
-import { fetchOrders, formatMoney, syncWechatInvoice } from '@/services/api'
+import { fetchWechatSyncedOrders, formatMoney, syncWechatInvoice } from '@/services/api'
 import { Order } from '@/types/domain'
 import IconFont from '@/components/IconFont'
 import LuxuryLoader from '@/components/LuxuryLoader'
@@ -13,10 +13,23 @@ const statusText: Record<string, string> = {
   pending_title: '等待微信发票抬头',
   title_pending_sync: '抬头已提交，待同步',
   title_received: '抬头已同步，待开具',
+  issue_accepted: '税务开票处理中',
+  issue_failed: '税务开票失败',
+  insert_accepted: '发票正在插入微信卡包',
   card_insert_accepted: '发票正在插入微信卡包',
   inserted: '已进入微信卡包',
+  discard_accepted: '卡券移除处理中',
+  discarded: '卡券已移除（不等于冲红）',
+  issued: '电子发票已开具',
+  reverse_accepted: '税务冲红处理中',
+  reverse_failed: '税务冲红失败',
+  partially_reversed: '部分发票已冲红，仍需处理',
+  reversed: '电子发票已冲红',
   card_updated: '卡包状态已更新',
   delivery_failed: '发票交付失败',
+  delivery_reconciling: '交付结果核验中',
+  delivery_submitted: '已提交微信卡包',
+  delivery_rejected: '微信拒绝交付',
   not_available_for_free_order: '零元订单不可开票'
 }
 
@@ -28,7 +41,7 @@ export default function WechatInvoicesPage() {
   async function load() {
     setLoading(true)
     try {
-      const result = await fetchOrders()
+      const result = await fetchWechatSyncedOrders()
       setOrders(result.filter((order) => order.invoice_requested))
     } catch (error) {
       Taro.showToast({ title: error instanceof Error ? error.message : '发票记录加载失败', icon: 'none' })
@@ -51,11 +64,11 @@ export default function WechatInvoicesPage() {
   return <View className='page wechat-invoice-page'>
     <View className='wechat-invoice-head'>
       <Text>WECHAT INVOICE</Text><Text>微信电子发票</Text>
-      <Text>抬头由微信统一保存和复用；完成支付后，请在微信支付凭证或支付成功消息中进入“开发票”。</Text>
+      <Text>订单在微信确认收货后方可申请开票；抬头由微信统一保存和复用，发票开具后进入微信卡包。</Text>
     </View>
     <View className='invoice-guide'>
-      <View><Text>01</Text><Text>支付时选择电子发票</Text></View>
-      <View><Text>02</Text><Text>在微信凭证填写个人或企业抬头</Text></View>
+      <View><Text>01</Text><Text>先在微信完成确认收货</Text></View>
+      <View><Text>02</Text><Text>进入订单详情申请电子发票</Text></View>
       <View><Text>03</Text><Text>开具后自动进入微信卡包</Text></View>
     </View>
     {loading ? <LuxuryLoader label='正在读取微信发票记录' /> : orders.length ? <View className='wechat-invoice-list'>
@@ -66,14 +79,14 @@ export default function WechatInvoicesPage() {
         </View>
         <View className='invoice-card-main'>
           <View className='invoice-card-icon'><IconFont name='order' /></View>
-          <View><Text>{order.invoice_buyer_name || '抬头将在微信中填写'}</Text><Text>{order.invoice_buyer_type === 'ORGANIZATION' ? '企业发票' : order.invoice_buyer_type === 'INDIVIDUAL' ? '个人发票' : '微信支付电子发票'} · {formatMoney(order.total_cents)}</Text>{order.invoice_buyer_taxpayer_id && <Text>税号 {order.invoice_buyer_taxpayer_id}</Text>}</View>
+          <View><Text>{order.invoice_buyer_name || '抬头将在微信中填写'}</Text><Text>{order.invoice_buyer_type === 'ORGANIZATION' ? '企业发票' : order.invoice_buyer_type === 'INDIVIDUAL' ? '个人发票' : '微信电子发票'} · {formatMoney(order.total_cents)}</Text>{order.invoice_buyer_taxpayer_id && <Text>税号 {order.invoice_buyer_taxpayer_id}</Text>}</View>
         </View>
         {order.invoice_error && <Text className='invoice-error'>{order.invoice_error}</Text>}
         <View className='invoice-card-actions'>
           <Button onClick={() => Taro.navigateTo({ url: orderDetailUrl(order.order_no) })}>查看订单</Button>
-          {order.invoice_apply_id && !['inserted', 'card_insert_accepted'].includes(order.invoice_status) && <Button className='primary' loading={syncing === order.id} disabled={syncing === order.id} onClick={() => sync(order)}>同步微信抬头</Button>}
+          {order.invoice_apply_id && ['apply_failed', 'pending_title', 'title_pending_sync'].includes(order.invoice_status) && <Button className='primary' loading={syncing === order.id} disabled={syncing === order.id} onClick={() => sync(order)}>同步微信抬头</Button>}
         </View>
       </View>)}
-    </View> : <View className='invoice-empty'><IconFont name='order' /><Text>还没有微信发票记录</Text><Text>结算时选择“微信电子发票”，支付后即可在微信凭证中填写抬头。</Text></View>}
+    </View> : <View className='invoice-empty'><IconFont name='order' /><Text>还没有微信发票记录</Text><Text>订单确认收货后，可在订单详情中申请微信电子发票。</Text></View>}
   </View>
 }

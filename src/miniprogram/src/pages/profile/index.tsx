@@ -5,11 +5,11 @@ import {
   bindWechatPhone,
   fetchCoupons,
   fetchFavorites,
-  fetchOrders,
   fetchPet,
   fetchProducts,
   fetchStoreConfig,
   fetchUser,
+  fetchWechatSyncedOrders,
   formatMoney,
   petAction
 } from '@/services/api'
@@ -45,7 +45,7 @@ export default function ProfilePage() {
   useDidShow(() => {
     setLoading(true)
     Promise.allSettled([
-      fetchUser(), fetchPet(), fetchOrders(), fetchFavorites(), fetchCoupons(),
+      fetchUser(), fetchPet(), fetchWechatSyncedOrders(), fetchFavorites(), fetchCoupons(),
       fetchProducts({ featured: true }), fetchStoreConfig()
     ]).then(([userResult, petResult, orderResult, favoriteResult, couponResult, productResult, storeResult]) => {
       if (userResult.status === 'fulfilled') {
@@ -113,7 +113,7 @@ export default function ProfilePage() {
   const maskedPhone = user?.phone ? `${user.phone.slice(0, 3)}****${user.phone.slice(-4)}` : ''
   const menu = [
     { icon: 'location' as const, label: '收货地址', copy: '管理常用收件人', value: '', url: '/pages/addresses/index' },
-    { icon: 'order' as const, label: '微信电子发票', copy: '查询抬头与卡包状态', value: '', url: '/pages/invoice-titles/index' },
+    { icon: 'order' as const, label: '微信电子发票', copy: '确认收货后申请，查询卡包状态', value: '', url: '/pages/invoice-titles/index' },
     { icon: 'heart' as const, label: '心选收藏', copy: '重温心动作品', value: String(favoriteCount || ''), url: '/pages/favorites/index' },
     { icon: 'gift' as const, label: '优惠礼券', copy: '查看会员专属礼遇', value: String(couponCount || ''), url: '/pages/coupons/index' },
     { icon: 'cart' as const, label: '购物袋', copy: '继续未完成的挑选', value: '', url: '/pages/cart/index' }
@@ -149,7 +149,7 @@ export default function ProfilePage() {
         <View className='order-shortcuts'>
           <Button onClick={() => Taro.navigateTo({ url: '/pages/orders/index?status=pending_payment' })}><View className='shortcut-icon'><IconFont name='wallet' /></View><Text>待支付</Text>{orderCount(['pending_payment']) > 0 && <Text className='count'>{orderCount(['pending_payment'])}</Text>}</Button>
           <Button onClick={() => Taro.navigateTo({ url: '/pages/orders/index?status=processing' })}><View className='shortcut-icon'><IconFont name='package' /></View><Text>待发货</Text>{orderCount(['paid', 'preparing']) > 0 && <Text className='count'>{orderCount(['paid', 'preparing'])}</Text>}</Button>
-          <Button onClick={() => Taro.navigateTo({ url: '/pages/orders/index?status=shipped' })}><View className='shortcut-icon'><IconFont name='shipping' /></View><Text>待收货</Text>{orderCount(['shipped']) > 0 && <Text className='count'>{orderCount(['shipped'])}</Text>}</Button>
+          <Button onClick={() => Taro.navigateTo({ url: '/pages/orders/index?status=shipped' })}><View className='shortcut-icon'><IconFont name='shipping' /></View><Text>待收货</Text>{orderCount(['in_transit', 'shipped']) > 0 && <Text className='count'>{orderCount(['in_transit', 'shipped'])}</Text>}</Button>
           <Button openType='contact'><View className='shortcut-icon'><IconFont name='service' /></View><Text>售后咨询</Text></Button>
         </View>
 
@@ -184,7 +184,7 @@ export default function ProfilePage() {
         </View>
 
         <View className='section-head'><Text>客户服务</Text><Text /></View>
-        <View className='service-menu'>{menu.map((item) => <Button key={item.label} hoverClass='menu-press' onClick={() => item.url === '/pages/cart/index' ? Taro.switchTab({ url: item.url }) : Taro.navigateTo({ url: item.url })}><View className='menu-icon'><IconFont name={item.icon} /></View><View><Text>{item.label}</Text><Text>{item.copy}</Text></View>{item.value && <Text className='menu-value'>{item.value}</Text>}<IconFont name='chevronRight' className='arrow' /></Button>)}</View>
+        <View className='service-menu'>{menu.map((item) => <Button key={item.label} hoverClass='menu-press' onClick={() => item.url === '/pages/cart/index' ? Taro.switchTab({ url: item.url }) : Taro.navigateTo({ url: item.url })}><View className='menu-icon'><IconFont name={item.icon} /></View><View className='menu-copy'><Text>{item.label}</Text><Text>{item.copy}</Text></View><View className='menu-tail'>{item.value && <Text className='menu-value'>{item.value}</Text>}<IconFont name='chevronRight' className='arrow' /></View></Button>)}</View>
         <View className='profile-assurance'><Text>终身保养 · 正品承诺 · 专属顾问</Text><Text>XIHONG JEWELRY</Text></View>
       </View>
 

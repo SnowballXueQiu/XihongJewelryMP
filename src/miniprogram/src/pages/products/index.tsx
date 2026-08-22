@@ -55,6 +55,8 @@ export default function ProductsPage() {
       ])
       setCategories(nextCategories)
       setProducts(nextProducts)
+    } catch (error) {
+      Taro.showToast({ title: error instanceof Error ? error.message : '商品加载失败', icon: 'none' })
     } finally { setLoading(false) }
   }, [search, material, inStock, minPrice, maxPrice, sort])
 

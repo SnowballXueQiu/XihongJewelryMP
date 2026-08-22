@@ -1,7 +1,20 @@
 import { useState } from 'react'
 import Taro, { useDidShow, useRouter } from '@tarojs/taro'
 import { Button, Text, View } from '@tarojs/components'
-import { cancelOrder, confirmWechatOrderReceipt, fetchOrderByNumber, formatMoney, orderStatusLabel, syncWechatInvoice } from '@/services/api'
+import {
+  applyWechatInvoice,
+  cancelOrder,
+  canApplyWechatInvoice,
+  canConfirmWechatReceipt,
+  canRequestOrderRefund,
+  confirmWechatOrderReceipt,
+  displayOrderStatus,
+  fetchWechatSyncedOrderByNumber,
+  formatMoney,
+  requestWechatRefund,
+  syncWechatInvoice,
+  syncWechatOrder
+} from '@/services/api'
 import { performOrderPayment, presentPaymentError } from '@/services/payment'
 import { paymentResultUrl } from '@/services/routes'
 import { Order } from '@/types/domain'
@@ -10,7 +23,16 @@ import LuxuryLoader from '@/components/LuxuryLoader'
 import './index.scss'
 
 const statusCopy: Record<string, string> = {
-  pending_payment: '为你保留库存，请在订单关闭前完成支付', paid: '款项已确认，店员即将开始为你备货', preparing: '作品正在仔细质检与包装', shipped: '作品已交付物流，请留意签收', completed: '感谢你的珍藏，愿它陪伴每个重要时刻', cancelled: '订单已取消，库存与优惠券已退回', refunding: '退款正在处理中', refunded: '款项已按原支付路径退回', failed: '支付状态异常，请联系客户服务'
+  pending_payment: '为你保留库存，请在订单关闭前完成支付', paid: '款项已确认，店员即将开始为你备货', preparing: '作品正在仔细质检与包装', in_transit: '作品正在运输途中，物流进度由微信同步', shipped: '作品已交付物流，请留意签收', received: '微信已确认收货，可申请电子发票', completed: '感谢你的珍藏，愿它陪伴每个重要时刻', cancelled: '订单已取消，库存与优惠券已退回', refunding: '退款正在处理中', refunded: '款项已按原支付路径退回', failed: '支付状态异常，请联系客户服务'
+}
+
+const invoiceStatusText: Record<string, string> = {
+  pending_title: '等待填写微信抬头', title_pending_sync: '抬头待同步', title_received: '待商家开具',
+  issue_accepted: '税务开票处理中', issue_failed: '税务开票失败', insert_accepted: '正在插入微信卡包',
+  card_insert_accepted: '正在插入微信卡包', inserted: '已进入微信卡包', discard_accepted: '卡券移除处理中', card_updated: '卡包状态已更新',
+  discarded: '卡券已移除（不等于冲红）', issued: '电子发票已开具', reverse_accepted: '税务冲红处理中',
+  reverse_failed: '税务冲红失败', partially_reversed: '部分发票已冲红，仍需处理', reversed: '电子发票已冲红', delivery_failed: '交付失败', delivery_reconciling: '交付结果核验中',
+  delivery_submitted: '已提交微信卡包', delivery_rejected: '微信拒绝交付'
 }
 
 export default function OrderDetailPage() {
@@ -23,7 +45,13 @@ export default function OrderDetailPage() {
   async function load() {
     try {
       if (!orderNumber) throw new Error('商户订单号缺失')
-      setOrder(await fetchOrderByNumber(orderNumber))
+      const fetched = await fetchWechatSyncedOrderByNumber(orderNumber)
+      if (fetched.invoice_requested && fetched.invoice_apply_id &&
+        ['pending_title', 'title_pending_sync'].includes(fetched.invoice_status)) {
+        setOrder(await syncWechatInvoice(fetched.id).catch(() => fetched))
+      } else {
+        setOrder(fetched)
+      }
     } catch (error) {
       Taro.showToast({ title: error instanceof Error ? error.message : '订单加载失败', icon: 'none' })
     } finally { setLoading(false) }
@@ -57,13 +85,66 @@ export default function OrderDetailPage() {
     try {
       const updated = await confirmWechatOrderReceipt(order)
       setOrder(updated)
-      if (updated.status === 'completed') Taro.showToast({ title: '收货状态已确认', icon: 'success' })
-      else Taro.showToast({ title: '尚未在微信确认收货', icon: 'none' })
+      if (['received', 'completed'].includes(updated.status)) Taro.showToast({ title: '微信收货状态已同步', icon: 'success' })
+      else Taro.showToast({ title: '微信状态同步中，请稍后刷新', icon: 'none' })
     } catch (error) {
       const message = error instanceof Error ? error.message : String((error as { errMsg?: string })?.errMsg || '')
       if (!message.includes('cancel')) Taro.showToast({ title: message || '操作失败', icon: 'none' })
+      void syncWechatOrder(order.order_no).catch(() => undefined)
+      Taro.redirectTo({ url: '/pages/orders/index?status=shipped' })
     }
     finally { setActing(false) }
+  }
+
+  async function refund() {
+    if (!order) return
+    const modal = await Taro.showModal({
+      title: '申请退款',
+      content: '退款将按原支付路径退回，并同步进入微信退款流程。提交后请留意微信退款通知。',
+      confirmText: '确认申请',
+      confirmColor: '#74252D'
+    })
+    if (!modal.confirm) return
+    setActing(true)
+    try {
+      setOrder(await requestWechatRefund(order.order_no))
+      Taro.showToast({ title: '退款申请已提交', icon: 'success' })
+    } catch (error) {
+      Taro.showToast({ title: error instanceof Error ? error.message : '退款申请失败', icon: 'none' })
+    } finally { setActing(false) }
+  }
+
+  async function applyInvoice() {
+    if (!order) return
+    const modal = await Taro.showModal({
+      title: '申请微信电子发票',
+      content: '确认后将进入微信电子发票流程，个人或企业抬头由微信统一保存并复用。',
+      confirmText: '确认申请',
+      confirmColor: '#74252D'
+    })
+    if (!modal.confirm) return
+    setActing(true)
+    try {
+      const updated = await applyWechatInvoice(order.order_no)
+      setOrder(updated)
+      if (updated.invoice_miniprogram_appid && updated.invoice_miniprogram_path) {
+        try {
+          await Taro.navigateToMiniProgram({
+            appId: updated.invoice_miniprogram_appid,
+            path: updated.invoice_miniprogram_path
+          })
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String((error as { errMsg?: string })?.errMsg || '')
+          if (!message.toLowerCase().includes('cancel')) {
+            Taro.showToast({ title: message || '微信抬头页面打开失败', icon: 'none' })
+          }
+        }
+      } else {
+        Taro.showToast({ title: '微信抬头入口生成中，请稍后重试', icon: 'none' })
+      }
+    } catch (error) {
+      Taro.showToast({ title: error instanceof Error ? error.message : '开票申请失败', icon: 'none' })
+    } finally { setActing(false) }
   }
 
   async function syncInvoice() {
@@ -82,9 +163,12 @@ export default function OrderDetailPage() {
 
   return (
     <View className='order-detail-page'>
-      <View className={`status-hero hero-${order.status}`}><Text>ORDER STATUS</Text><Text>{orderStatusLabel[order.status]}</Text><Text>{statusCopy[order.status]}</Text><View className='status-ring' /></View>
-      {order.logistics_company && <View className='detail-block logistics' onClick={() => order.tracking_no && Taro.setClipboardData({ data: order.tracking_no })}>
-        <View className='block-title'><Text>物流进度</Text><View className='copy-action'><Text>复制单号</Text><IconFont name='chevronRight' /></View></View><Text>{order.logistics_company}</Text><Text>{order.tracking_no}</Text>
+      <View className={`status-hero hero-${order.status}`}><Text>ORDER STATUS</Text><Text>{displayOrderStatus(order)}</Text><Text>{statusCopy[order.status] || '订单状态已与微信同步'}</Text><View className='status-ring' /></View>
+      {order.fulfillment_type === 'delivery' && (order.tracking_no || order.platform_shipping_uploaded_at) && <View className='detail-block logistics' onClick={() => order.tracking_no && Taro.setClipboardData({ data: order.tracking_no })}>
+        <View className='block-title'><Text>微信物流进度</Text><View className='copy-action'><Text>{order.tracking_no ? '复制运单号' : '微信已同步'}</Text>{order.tracking_no && <IconFont name='chevronRight' />}</View></View>
+        <Text>{order.logistics_status || order.platform_order_state_label || '发货信息已同步至微信'}</Text>
+        {order.tracking_no && <Text>运单号 · {order.tracking_no}</Text>}
+        {order.logistics_description && <Text className='logistics-description'>{order.logistics_description}</Text>}
       </View>}
       <View className='detail-block address'><View className='block-title'><Text>{order.fulfillment_type === 'pickup' ? '自提门店' : '收货信息'}</Text><Text>{order.fulfillment_type === 'pickup' ? 'PICKUP' : 'DELIVERY'}</Text></View><Text>{order.receiver_name} · {order.receiver_phone}</Text><Text>{order.receiver_address}</Text></View>
       {order.fulfillment_type === 'pickup' && <View className='detail-block pickup-code-block'><View className='block-title'><Text>到店自提</Text><Text>凭口令提货</Text></View><Text>{order.pickup_code}</Text><Text>预约时间 · {order.pickup_slot}</Text><Text>到店后向店员出示提货口令；贵重商品请同时携带本人有效证件。</Text></View>}
@@ -96,15 +180,20 @@ export default function OrderDetailPage() {
       </View>
       {order.buyer_note && <View className='detail-block note'><Text>订单备注</Text><Text>{order.buyer_note}</Text></View>}
       {order.invoice_requested && <View className='detail-block invoice-detail'>
-        <View className='block-title'><Text>微信电子发票</Text><Text>{order.invoice_status === 'inserted' ? '已入卡包' : '微信开票'}</Text></View>
-        <Text>{order.invoice_buyer_name || '抬头请在微信支付凭证中填写'}</Text>
+        <View className='block-title'><Text>微信电子发票</Text><Text>{invoiceStatusText[order.invoice_status] || '微信开票'}</Text></View>
+        <Text>{order.invoice_buyer_name || '抬头请在微信电子发票页面填写'}</Text>
         {order.invoice_buyer_taxpayer_id && <Text>纳税人识别号 · {order.invoice_buyer_taxpayer_id}</Text>}
         <Text>抬头与联系方式由微信统一保存和复用，本小程序不自建发票抬头簿。</Text>
-        {order.invoice_apply_id && order.invoice_status !== 'inserted' && <Button disabled={acting} onClick={syncInvoice}>同步微信发票状态</Button>}
+        {['pending_title', 'title_pending_sync', 'apply_failed'].includes(order.invoice_status) && <Button disabled={acting} onClick={applyInvoice}>填写或修改微信抬头</Button>}
+        {order.invoice_apply_id && ['apply_failed', 'pending_title', 'title_pending_sync'].includes(order.invoice_status) && <Button disabled={acting} onClick={syncInvoice}>同步微信发票抬头</Button>}
+      </View>}
+      {canApplyWechatInvoice(order) && <View className='detail-block invoice-apply'>
+        <View><IconFont name='order' /><View><Text>申请微信电子发票</Text><Text>确认收货后开放，抬头由微信统一保存</Text></View></View>
+        <Button disabled={acting} onClick={applyInvoice}>申请开票</Button>
       </View>}
       <View className='detail-meta'><Text>订单编号 {order.order_no}</Text><Text>下单时间 {order.created_at?.replace('T', ' ').slice(0, 19)}</Text>{order.paid_at && <Text>支付时间 {order.paid_at.replace('T', ' ').slice(0, 19)}</Text>}</View>
       <View className='detail-service'><Text>需要帮助？</Text><Button openType='contact'>联系专属顾问</Button></View>
-      {(order.can_pay || order.can_cancel || order.status === 'shipped') && <View className='detail-footer'>{order.can_cancel && <Button disabled={acting} onClick={cancel}>取消订单</Button>}{order.status === 'shipped' && <Button className='strong' disabled={acting} onClick={receive}>确认收货</Button>}{order.can_pay && <Button className='strong' loading={acting} onClick={pay}>微信支付</Button>}</View>}
+      {(order.can_pay || order.can_cancel || canRequestOrderRefund(order) || canConfirmWechatReceipt(order)) && <View className='detail-footer'>{order.can_cancel && <Button disabled={acting} onClick={cancel}>取消订单</Button>}{canRequestOrderRefund(order) && <Button className='refund' disabled={acting} onClick={refund}>申请退款</Button>}{canConfirmWechatReceipt(order) && <Button className='strong' disabled={acting} onClick={receive}>微信确认收货</Button>}{order.can_pay && <Button className='strong' loading={acting} onClick={pay}>微信支付</Button>}</View>}
     </View>
   )
 }

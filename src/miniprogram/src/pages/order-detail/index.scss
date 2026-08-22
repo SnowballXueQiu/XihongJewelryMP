@@ -4,7 +4,7 @@
 .status-hero > text:first-child { font-family: Arial,sans-serif; font-size: 18px; letter-spacing: 5px; opacity: .65; }
 .status-hero > text:nth-child(2) { margin-top: 20px; font-size: 52px; }
 .status-hero > text:nth-child(3) { max-width: 490px; margin-top: 15px; font-family: "PingFang SC",sans-serif; font-size: 23px; line-height: 1.7; opacity: .82; }
-.hero-completed, .hero-cancelled, .hero-refunded { background: #34312e; }
+.hero-received, .hero-completed, .hero-cancelled, .hero-refunded { background: #34312e; }
 .status-ring { position: absolute; right: -40px; bottom: -88px; width: 260px; height: 260px; border: 2px solid rgba(255,245,225,.26); border-radius: 50%; box-shadow: inset 0 0 0 42px rgba(255,255,255,.03); }
 .detail-block { margin: 20px 24px 0; padding: 30px; border: 1px solid #ddd4c7; background: #fffdf8; }
 .block-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 26px; padding-bottom: 20px; border-bottom: 1px solid #ece5db; }
@@ -12,6 +12,7 @@
 .block-title text:last-child { color: #8e8479; font-family: Arial,sans-serif; font-size: 19px; letter-spacing: 1px; }
 .address > text, .logistics > text { display: block; font-family: "PingFang SC",sans-serif; font-size: 25px; line-height: 1.65; }
 .address > text:last-child, .logistics > text:last-child { margin-top: 8px; color: #756e67; }
+.logistics > .logistics-description { margin-top: 14px; padding-top: 14px; border-top: 1px solid #ece5db; color: #8b8178; font-size: 20px; }
 .detail-item { display: grid; grid-template-columns: 86px 1fr auto; gap: 20px; align-items: center; padding: 15px 0; }
 .item-gem { display: flex; width: 86px; height: 86px; align-items: center; justify-content: center; border-radius: 50%; background: #ede2d5; color: #74252d; font-size: 32px; }
 .detail-item view:nth-child(2) text { display: block; font-size: 27px; }
@@ -28,12 +29,21 @@
 .pickup-code-block > text:last-child { margin-top: 15px; padding-top: 15px; border-top: 1px solid #ece5db; font-size: 18px; }
 .invoice-detail > text + text { margin-top: 8px; }
 .invoice-detail > button { display: flex; width: 100%; height: 64px; align-items: center; justify-content: center; margin-top: 18px; border: 1px solid #c9b8ad; border-radius: 32px; color: #742a32; font-size: 17px; line-height: 1.2; }
+.invoice-apply { display: flex; align-items: center; justify-content: space-between; gap: 22px; }
+.invoice-apply > view { display: flex; min-width: 0; align-items: center; gap: 18px; }
+.invoice-apply > view > .xh-icon { display: flex; width: 52px; height: 52px; flex: 0 0 52px; align-items: center; justify-content: center; border: 1px solid #cdbeb2; border-radius: 50%; color: #74252d; font-size: 24px; }
+.invoice-apply > view > view { min-width: 0; }
+.invoice-apply text { display: block; font-family: "PingFang SC",sans-serif; }
+.invoice-apply text:first-child { color: #342521; font-size: 25px; }
+.invoice-apply text:last-child { margin-top: 7px; color: #8b8178; font-size: 17px; line-height: 1.45; }
+.invoice-apply > button { display: flex !important; min-width: 150px; height: 64px; flex: 0 0 150px; align-items: center !important; justify-content: center !important; border: 1px solid #74252d; border-radius: 32px; color: #74252d; font-size: 19px; line-height: 1.2 !important; }
 .detail-meta { padding: 30px 54px; }
 .detail-meta text { display: block; margin: 8px 0; color: #91887f; font-family: Arial,"PingFang SC",sans-serif; font-size: 19px; }
 .detail-service { display: flex; align-items: center; justify-content: space-between; margin: 0 24px; padding: 28px 30px; border-top: 1px solid #d9d0c4; border-bottom: 1px solid #d9d0c4; font-size: 25px; }
 .detail-service button { color: #74252d; font-family: "PingFang SC",sans-serif; font-size: 23px; }
 .detail-footer { position: fixed; z-index: 8; right: 0; bottom: 0; left: 0; display: flex; justify-content: flex-end; gap: 14px; padding: 18px 24px calc(18px + env(safe-area-inset-bottom)); border-top: 1px solid #ddd4c7; background: rgba(255,253,248,.96); }
 .detail-footer button { display: flex !important; height: 72px; align-items: center !important; justify-content: center !important; padding: 0 30px; border: 1px solid #afa69d; border-radius: 36px; font-size: 22px; line-height: 1.2 !important; }
+.detail-footer .refund { border-color: #b88d88; color: #74252d; }
 .detail-footer .strong { border-color: #74252d; background: #74252d; color: #fff; }
 .detail-loading, .detail-missing { display: flex; min-height: 100vh; align-items: center; justify-content: center; background: #f7f3ec; }
 .detail-loading view { width: 66px; height: 66px; border: 3px solid #ddd4c7; border-top-color: #74252d; border-radius: 50%; animation: spin .8s linear infinite; }

@@ -16,7 +16,6 @@ import {
   StoreConfig,
   User
 } from '@/types/domain'
-import { mockCategories, mockPet, mockProducts, mockUser } from './mock'
 
 declare const __API_BASE__: string
 const API_BASE = __API_BASE__.replace(/\/$/, '')
@@ -29,27 +28,6 @@ function moneyToCents(value?: string): number | undefined {
   if (!value) return undefined
   const n = Number(value)
   return Number.isFinite(n) ? Math.round(n * 100) : undefined
-}
-
-function applyProductFilters(products: Product[], filters: ProductFilters): Product[] {
-  const minPrice = moneyToCents(filters.minPrice)
-  const maxPrice = moneyToCents(filters.maxPrice)
-  const filtered = products.filter((product) => {
-    const matchCategory = !filters.category || filters.category === 'all' || product.category_slug === filters.category
-    const query = filters.q?.trim().toLowerCase()
-    const matchQuery = !query || [product.name, product.subtitle, product.material, ...product.tags].some((value) => value.toLowerCase().includes(query))
-    const matchMaterial = !filters.material || filters.material === 'all' || product.material === filters.material
-    const matchStock = !filters.inStock || product.stock > 0
-    const matchFeatured = !filters.featured || product.is_featured
-    const matchMinPrice = minPrice === undefined || product.price_cents >= minPrice
-    const matchMaxPrice = maxPrice === undefined || product.price_cents <= maxPrice
-    return matchCategory && matchQuery && matchMaterial && matchStock && matchFeatured && matchMinPrice && matchMaxPrice
-  })
-
-  if (filters.sort === 'price_asc') return [...filtered].sort((a, b) => a.price_cents - b.price_cents)
-  if (filters.sort === 'price_desc') return [...filtered].sort((a, b) => b.price_cents - a.price_cents)
-  if (filters.sort === 'sales') return [...filtered].sort((a, b) => b.sales - a.sales)
-  return filtered
 }
 
 export async function ensureSession(): Promise<string> {
@@ -113,12 +91,8 @@ export interface ProductFilters {
 }
 
 export async function fetchCategories(): Promise<Category[]> {
-  try {
-    const categories = await request<Category[]>('/api/categories', {}, false)
-    return [{ id: 0, name: '全部', slug: 'all', sort_order: 0 }, ...categories]
-  } catch {
-    return mockCategories
-  }
+  const categories = await request<Category[]>('/api/categories', {}, false)
+  return [{ id: 0, name: '全部', slug: 'all', sort_order: 0 }, ...categories]
 }
 
 export async function fetchProducts(filters: ProductFilters = {}): Promise<Product[]> {
@@ -133,21 +107,11 @@ export async function fetchProducts(filters: ProductFilters = {}): Promise<Produ
     sort: filters.sort
   }).filter(([, value]) => value !== undefined && value !== '' && value !== 'all')
   const query = params.map(([key, value]) => `${key}=${encodeURIComponent(String(value))}`).join('&')
-  try {
-    return await request<Product[]>(`/api/products${query ? `?${query}` : ''}`, {}, false)
-  } catch {
-    return applyProductFilters(mockProducts, filters)
-  }
+  return request<Product[]>(`/api/products${query ? `?${query}` : ''}`, {}, false)
 }
 
 export async function fetchProduct(id: number): Promise<Product> {
-  try {
-    return await request<Product>(`/api/products/${id}`, {}, false)
-  } catch {
-    const product = mockProducts.find((item) => item.id === id)
-    if (!product) throw new Error('商品不存在')
-    return product
-  }
+  return request<Product>(`/api/products/${id}`, {}, false)
 }
 
 export async function fetchBanners(placement = 'home_hero'): Promise<Banner[]> {
@@ -190,7 +154,6 @@ export const createOrder = (payload: {
   buyer_note?: string
   fulfillment_type?: 'delivery' | 'pickup'
   pickup_slot?: string
-  invoice_requested?: boolean
   client_request_id?: string
 }) => request<Order>('/api/orders', { method: 'POST', data: payload })
 
@@ -201,40 +164,95 @@ export const fetchOrders = (status?: OrderStatus) => request<Order[]>(`/api/orde
 export const fetchOrder = (orderId: number) => request<Order>(`/api/orders/${orderId}`)
 export const fetchOrderByNumber = (orderNumber: string) => request<Order>(`/api/orders/by-number/${encodeURIComponent(orderNumber)}`)
 export const cancelOrder = (orderId: number) => request<Order>(`/api/orders/${orderId}/cancel`, { method: 'POST' })
-export const completeOrder = (orderId: number) => request<Order>(`/api/orders/${orderId}/complete`, { method: 'POST' })
-export const syncPlatformOrder = (orderId: number) => request<Order>(`/api/orders/${orderId}/platform-sync`, { method: 'POST' })
 export const syncWechatInvoice = (orderId: number) => request<Order>(`/api/orders/${orderId}/invoice-sync`, { method: 'POST' })
 
+export const syncWechatOrder = (orderNumber: string) => request<Order>(
+  `/api/orders/by-number/${encodeURIComponent(orderNumber)}/wechat/sync`,
+  { method: 'POST' }
+)
+
+export const requestWechatRefund = (orderNumber: string) => request<Order>(
+  `/api/orders/by-number/${encodeURIComponent(orderNumber)}/refund`,
+  { method: 'POST', data: { reason: '用户在小程序申请退款' } }
+)
+
+export const applyWechatInvoice = (orderNumber: string) => request<Order>(
+  `/api/orders/by-number/${encodeURIComponent(orderNumber)}/invoice/apply`,
+  { method: 'POST' }
+)
+
+function shouldSyncWechatOrder(order: Order): boolean {
+  return Boolean(order.payment_transaction_id || order.platform_order_state) &&
+    ['paid', 'preparing', 'in_transit', 'shipped', 'received', 'refunding'].includes(order.status)
+}
+
+export async function fetchWechatSyncedOrders(): Promise<Order[]> {
+  const orders = await fetchOrders()
+  const synced = await Promise.all(orders.map(async (order) => {
+    if (!shouldSyncWechatOrder(order)) return order
+    try { return await syncWechatOrder(order.order_no) } catch { return order }
+  }))
+  return synced
+}
+
+export async function fetchWechatSyncedOrderByNumber(orderNumber: string): Promise<Order> {
+  const order = await fetchOrderByNumber(orderNumber)
+  if (!shouldSyncWechatOrder(order)) return order
+  try { return await syncWechatOrder(order.order_no) } catch { return order }
+}
+
+export function canRequestOrderRefund(order: Order): boolean {
+  if (order.total_cents <= 0 || !order.payment_transaction_id) return false
+  if (typeof order.can_refund === 'boolean') return order.can_refund
+  return ['paid', 'preparing', 'in_transit', 'shipped', 'received', 'completed'].includes(order.status)
+}
+
+export function canConfirmWechatReceipt(order: Order): boolean {
+  if (!order.payment_transaction_id) return false
+  if (typeof order.can_confirm_receipt === 'boolean') return order.can_confirm_receipt
+  return ['in_transit', 'shipped'].includes(order.status) &&
+    ![3, 4].includes(order.platform_order_state)
+}
+
+export function canApplyWechatInvoice(order: Order): boolean {
+  if (order.total_cents <= 0) return false
+  if (typeof order.can_apply_invoice === 'boolean') return order.can_apply_invoice
+  return ['received', 'completed'].includes(order.status) && !order.invoice_requested && order.total_cents > 0
+}
+
+export function displayOrderStatus(order: Order): string {
+  if (['cancelled', 'refunding', 'refunded', 'failed'].includes(order.status)) {
+    return orderStatusLabel[order.status]
+  }
+  if (order.status === 'in_transit') return order.logistics_status || orderStatusLabel.in_transit
+  if (order.platform_order_state > 0 && order.platform_order_state_label) return order.platform_order_state_label
+  return orderStatusLabel[order.status] || '状态同步中'
+}
+
 export async function confirmWechatOrderReceipt(order: Order): Promise<Order> {
-  if (!order.payment_transaction_id) return completeOrder(order.id)
-  await (Taro as typeof Taro & {
-    openBusinessView: (options: { businessType: string; extraData: { transaction_id: string } }) => Promise<unknown>
-  }).openBusinessView({
+  if (!order.payment_transaction_id) throw new Error('订单缺少微信支付流水，暂不能打开微信确认收货')
+  const taroApi = Taro as typeof Taro & {
+    openBusinessView?: (options: { businessType: string; extraData: { transaction_id: string } }) => Promise<unknown>
+  }
+  if (typeof taroApi.openBusinessView !== 'function') throw new Error('当前微信版本暂不支持确认收货，请升级微信后重试')
+  await taroApi.openBusinessView({
     businessType: 'weappOrderConfirm',
     extraData: { transaction_id: order.payment_transaction_id }
   })
-  return syncPlatformOrder(order.id)
+  return syncWechatOrder(order.order_no)
 }
 
 export async function fetchUser(): Promise<User> {
-  try {
-    return await request<User>('/api/me')
-  } catch {
-    return mockUser
-  }
+  return request<User>('/api/me')
 }
 
 export const bindWechatPhone = (code: string) => request<User>('/api/me/phone', { method: 'POST', data: { code } })
 
 export async function fetchPet(): Promise<Pet> {
-  try {
-    return await request<Pet>('/api/pet')
-  } catch {
-    return mockPet
-  }
+  return request<Pet>('/api/pet')
 }
 
-export async function petAction(action: 'feed' | 'pet' | 'checkin' | 'order_reward'): Promise<Pet> {
+export async function petAction(action: 'feed' | 'pet' | 'checkin'): Promise<Pet> {
   return request<Pet>('/api/pet/action', { method: 'POST', data: { action } })
 }
 
@@ -247,7 +265,9 @@ export const orderStatusLabel: Record<OrderStatus, string> = {
   pending_payment: '待支付',
   paid: '已支付',
   preparing: '备货中',
+  in_transit: '运输中',
   shipped: '已发货',
+  received: '已收货',
   completed: '已完成',
   cancelled: '已取消',
   refunding: '退款中',

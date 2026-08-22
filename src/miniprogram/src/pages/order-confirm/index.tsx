@@ -37,7 +37,6 @@ export default function OrderConfirmPage() {
   const [addressId, setAddressId] = useState<number | null>(null)
   const [fulfillmentType, setFulfillmentType] = useState<FulfillmentType>('delivery')
   const [pickupIndex, setPickupIndex] = useState(0)
-  const [invoiceRequested, setInvoiceRequested] = useState(false)
   const [coupons, setCoupons] = useState<Coupon[]>([])
   const [couponIndex, setCouponIndex] = useState(0)
   const [buyerNote, setBuyerNote] = useState('')
@@ -109,7 +108,6 @@ export default function OrderConfirmPage() {
         items: lines.map((item) => ({ product_id: item.product_id, quantity: item.quantity })),
         address_id: fulfillmentType === 'delivery' ? addressId : null, coupon_id: selectedCoupon?.id || null, buyer_note: buyerNote.trim(),
         fulfillment_type: fulfillmentType, pickup_slot: fulfillmentType === 'pickup' ? pickupSlots[pickupIndex] : '',
-        invoice_requested: total > 0 && invoiceRequested,
         client_request_id: clientRequestId
       } as const
       const order = createdOrderId.current ? await fetchOrder(createdOrderId.current) : await createOrder(payload)
@@ -165,16 +163,7 @@ export default function OrderConfirmPage() {
     </View>
 
     <View className='checkout-block options-block'>
-      <View className='block-heading'><Text>03</Text><Text>发票与优惠</Text><Text /></View>
-      <Button
-        className={invoiceRequested && total > 0 ? 'wechat-invoice-row active' : 'wechat-invoice-row'}
-        disabled={total === 0}
-        onClick={() => setInvoiceRequested((current) => !current)}
-      >
-        <View className='wechat-invoice-check' />
-        <View><Text>微信电子发票</Text><Text>{total === 0 ? '零元订单不支持开票' : '支付后在微信支付凭证中填写个人或企业抬头'}</Text></View>
-        <Text>{invoiceRequested && total > 0 ? '已选择' : '暂不需要'}</Text>
-      </Button>
+      <View className='block-heading'><Text>03</Text><Text>优惠与备注</Text><Text /></View>
       <Picker mode='selector' range={couponLabels} value={couponIndex} onChange={(event) => setCouponIndex(Number(event.detail.value))}><View className='option-row'><Text>优惠券</Text><View className={selectedCoupon ? 'option-value accent' : 'option-value'}><Text>{couponLabels[couponIndex] || '暂无可用'}</Text><IconFont name='chevronRight' /></View></View></Picker>
       <View className='note-row'><Text>订单备注</Text><Input value={buyerNote} maxlength={200} placeholder='选填，给店员留言' onInput={(event) => setBuyerNote(String(event.detail.value))} /></View>
     </View>

@@ -57,7 +57,9 @@ export type OrderStatus =
   | 'pending_payment'
   | 'paid'
   | 'preparing'
+  | 'in_transit'
   | 'shipped'
+  | 'received'
   | 'completed'
   | 'cancelled'
   | 'refunding'
@@ -105,6 +107,8 @@ export interface Order {
   invoice_media_id: string
   invoice_card_status: string
   invoice_error: string
+  invoice_miniprogram_appid?: string
+  invoice_miniprogram_path?: string
   logistics_company: string
   tracking_no: string
   payment_transaction_id: string
@@ -114,8 +118,15 @@ export interface Order {
   platform_shipping_error: string
   platform_confirm_receive_reminded_at?: string | null
   platform_special_order_type: number
+  platform_order_state_label?: string
+  logistics_status?: string
+  logistics_description?: string
+  logistics_updated_at?: string | null
   can_pay: boolean
   can_cancel: boolean
+  can_refund?: boolean
+  can_confirm_receipt?: boolean
+  can_apply_invoice?: boolean
   created_at?: string | null
   paid_at?: string | null
   shipped_at?: string | null

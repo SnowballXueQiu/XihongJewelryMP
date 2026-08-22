@@ -25,15 +25,20 @@ export default function HomePage() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [featuredItems, newestItems, banners] = await Promise.all([
-      fetchProducts({ featured: true, sort: 'recommended' }),
-      fetchProducts({ sort: 'newest' }),
-      fetchBanners('home_hero')
-    ])
-    setFeatured(featuredItems.slice(0, 4))
-    setNewest(newestItems[0] || null)
-    setHero(banners[0] || null)
-    setLoading(false)
+    try {
+      const [featuredItems, newestItems, banners] = await Promise.all([
+        fetchProducts({ featured: true, sort: 'recommended' }),
+        fetchProducts({ sort: 'newest' }),
+        fetchBanners('home_hero')
+      ])
+      setFeatured(featuredItems.slice(0, 4))
+      setNewest(newestItems[0] || null)
+      setHero(banners[0] || null)
+    } catch (error) {
+      Taro.showToast({ title: error instanceof Error ? error.message : '首页加载失败', icon: 'none' })
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => {
