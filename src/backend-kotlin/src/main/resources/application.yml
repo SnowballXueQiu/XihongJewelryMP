@@ -1,0 +1,93 @@
+server:
+  port: 8000
+  forward-headers-strategy: framework
+  error:
+    include-message: never
+
+spring:
+  application:
+    name: xihong-jewelry-backend
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://postgres:5432/xihong}
+    username: ${DATABASE_USER:xihong}
+    password: ${DATABASE_PASSWORD:xihong}
+    hikari:
+      maximum-pool-size: ${DATABASE_POOL_SIZE:12}
+      minimum-idle: 2
+      connection-timeout: 10000
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+        order_inserts: true
+        order_updates: true
+  flyway:
+    enabled: true
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2s
+      repositories:
+        enabled: false
+  servlet:
+    multipart:
+      max-file-size: 15MB
+      max-request-size: 16MB
+  http:
+    converters:
+      preferred-json-mapper: jackson2
+  jackson2:
+    property-naming-strategy: SNAKE_CASE
+    default-property-inclusion: non_null
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+app:
+  production: ${APP_PRODUCTION:false}
+  public-base-url: ${PUBLIC_BASE_URL:http://127.0.0.1:8000}
+  uploads-dir: ${UPLOADS_DIR:/app/uploads}
+  legacy-sqlite-path: ${LEGACY_SQLITE_PATH:}
+  allow-mock-user: ${ALLOW_MOCK_USER:false}
+  user-token-secret: ${USER_TOKEN_SECRET:}
+  admin-token-secret: ${ADMIN_JWT_SECRET:}
+  admin-bootstrap-email: ${ADMIN_BOOTSTRAP_EMAIL:}
+  admin-bootstrap-password: ${ADMIN_BOOTSTRAP_PASSWORD:}
+  admin-bootstrap-name: ${ADMIN_BOOTSTRAP_NAME:超级管理员}
+  company-name-zh: ${COMPANY_NAME_ZH:天津玺鸿珠宝贸易有限公司}
+  company-name-en: ${COMPANY_NAME_EN:Xihong Jewelry & Gold Trading Co., Ltd}
+  shipping-fee-cents: ${SHIPPING_FEE_CENTS:1500}
+  free-shipping-threshold-cents: ${FREE_SHIPPING_THRESHOLD_CENTS:100000}
+  cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:https://xihongzhubao.com}
+  wechat:
+    original-id: ${WECHAT_ORIGINAL_ID:}
+    app-id: ${WECHAT_APPID:}
+    app-secret: ${WECHAT_APP_SECRET:}
+    message-token: ${WECHAT_MESSAGE_TOKEN:}
+    message-aes-key: ${WECHAT_MESSAGE_AES_KEY:}
+    message-callback-url: ${WECHAT_MESSAGE_CALLBACK_URL:https://api.xihongzhubao.com/api/wechat/miniprogram/message-push}
+  pay:
+    mock: ${WX_PAY_MOCK:false}
+    app-id: ${WX_PAY_APPID:}
+    merchant-id: ${WX_PAY_MCH_ID:}
+    api-v3-key: ${WX_PAY_API_V3_KEY:}
+    serial-no: ${WX_PAY_SERIAL_NO:}
+    private-key-path: ${WX_PAY_PRIVATE_KEY_PATH:/run/secrets/wechatpay/apiclient_key.pem}
+    platform-public-key-id: ${WX_PAY_PUBLIC_KEY_ID:}
+    platform-public-key-path: ${WX_PAY_PUBLIC_KEY_PATH:/run/secrets/wechatpay/pub_key.pem}
+    notify-url: ${WX_PAY_NOTIFY_URL:https://api.xihongzhubao.com/api/payments/wechat/notify}
+    refund-notify-url: ${WX_PAY_REFUND_NOTIFY_URL:https://api.xihongzhubao.com/api/payments/wechat/refund-notify}
+    invoice-notify-url: ${WX_PAY_INVOICE_NOTIFY_URL:https://api.xihongzhubao.com/api/payments/wechat/invoice-notify}
