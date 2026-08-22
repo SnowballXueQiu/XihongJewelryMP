@@ -194,12 +194,12 @@ export default function ProfilePage() {
           <View className='auth-head'><View><Text className='auth-brand'>玺鸿珠宝</Text><Text className='auth-title'>登录会员账户</Text></View><Button className='auth-close' onClick={closeAuth}><IconFont name='close' /></Button></View>
           <Text className='auth-copy'>授权玺鸿获取你的微信绑定手机号，用于识别会员身份、同步订单与提供售后服务。</Text>
           <View className='auth-benefits'><View><IconFont name='shipping' /><Text>保价配送</Text></View><View><IconFont name='gift' /><Text>会员礼遇</Text></View><View><IconFont name='service' /><Text>专属顾问</Text></View></View>
-          <Button className={`privacy-check ${privacyAccepted ? 'checked' : ''}`} onClick={() => setPrivacyAccepted((value) => !value)}>
-            <View>{privacyAccepted && <IconFont name='success' />}</View><Text>我已阅读并同意</Text><Text className='privacy-link' onClick={(event) => { event.stopPropagation(); openPrivacy() }}>《隐私保护指引》</Text><Text>与《用户协议》</Text>
+          <Button className={`privacy-check ${privacyAccepted ? 'checked' : ''}`} hoverClass='none' onClick={() => setPrivacyAccepted((value) => !value)}>
+            <View /><Text>我已阅读并同意</Text><Text className='privacy-link' onClick={(event) => { event.stopPropagation(); openPrivacy() }}>《隐私保护指引》</Text><Text>与《用户协议》</Text>
           </Button>
           <Text className='age-copy'>继续即表示你已满 14 周岁；手机号不会在未经允许的情况下用于无关营销。</Text>
           <Button className='phone-auth-button' openType='getPhoneNumber' disabled={!privacyAccepted || binding} loading={binding} onGetPhoneNumber={bindPhone}>授权并绑定手机号</Button>
-          <Button className='auth-later' onClick={closeAuth}>暂不绑定</Button>
+          <Button className='auth-later' hoverClass='none' onClick={closeAuth}>暂不绑定</Button>
         </View>
       </View>}
     </View>

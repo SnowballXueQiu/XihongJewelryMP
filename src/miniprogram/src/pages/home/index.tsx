@@ -56,7 +56,7 @@ export default function HomePage() {
           <Text className='masthead-eyebrow'>XIHONG · TIANJIN</Text>
           <Text className='masthead-name'>玺鸿珠宝</Text>
         </View>
-        <Button className='masthead-cart' hoverClass='round-press' onClick={() => Taro.switchTab({ url: '/pages/cart/index' })}>
+        <Button className='masthead-cart' hoverClass='none' onClick={() => Taro.switchTab({ url: '/pages/cart/index' })}>
           <IconFont name='cart' />购物袋
         </Button>
       </View>

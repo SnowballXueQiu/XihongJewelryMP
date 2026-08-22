@@ -178,7 +178,7 @@ export default function ProductsPage() {
     <View className='products-page' animation={pageAnimation}>
       <View className='catalog-head'>
         <View><Text className='catalog-eyebrow'>THE COLLECTION</Text><Text className='catalog-title'>珠宝分类</Text><Text className='catalog-subtitle'>从形制与材质，遇见适合你的作品</Text></View>
-        <Button className='catalog-bag' hoverClass='round-press' ariaLabel='购物袋' onClick={() => Taro.switchTab({ url: '/pages/cart/index' })}><IconFont name='cart' /></Button>
+        <Button className='catalog-bag' hoverClass='none' ariaLabel='购物袋' onClick={() => Taro.switchTab({ url: '/pages/cart/index' })}><IconFont name='cart' /></Button>
       </View>
 
       <View className='search-shell'>
