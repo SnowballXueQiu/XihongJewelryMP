@@ -16,6 +16,7 @@ deploy/ar_h5/dist/
 .env.*
 !.env.example
 !.env.template
+secrets/
 
 # backend runtime data
 src/backend/data/
@@ -31,6 +32,10 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 
+# Kotlin / Gradle
+.gradle/
+build/
+
 # Taro / webpack / tooling caches
 .cache/
 .swc/
@@ -45,6 +50,7 @@ src/backstage/.cache/
 # test and coverage output
 coverage/
 .nyc_output/
+/test_models/
 
 # logs
 *.log
