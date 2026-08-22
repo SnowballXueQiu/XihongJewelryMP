@@ -171,6 +171,7 @@ def _payment_params(intent: PaymentIntent, mock: bool) -> PaymentParams:
         package=intent.package,
         paySign=intent.pay_sign,
         prepayId=intent.prepay_id,
+        outTradeNo=intent.out_trade_no,
         mock=mock,
     )
 

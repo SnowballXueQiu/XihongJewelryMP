@@ -5,6 +5,7 @@ import { fetchOrders, formatMoney, syncWechatInvoice } from '@/services/api'
 import { Order } from '@/types/domain'
 import IconFont from '@/components/IconFont'
 import LuxuryLoader from '@/components/LuxuryLoader'
+import { orderDetailUrl } from '@/services/routes'
 import './index.scss'
 
 const statusText: Record<string, string> = {
@@ -69,7 +70,7 @@ export default function WechatInvoicesPage() {
         </View>
         {order.invoice_error && <Text className='invoice-error'>{order.invoice_error}</Text>}
         <View className='invoice-card-actions'>
-          <Button onClick={() => Taro.navigateTo({ url: `/pages/order-detail/index?id=${order.id}` })}>查看订单</Button>
+          <Button onClick={() => Taro.navigateTo({ url: orderDetailUrl(order.order_no) })}>查看订单</Button>
           {order.invoice_apply_id && !['inserted', 'card_insert_accepted'].includes(order.invoice_status) && <Button className='primary' loading={syncing === order.id} disabled={syncing === order.id} onClick={() => sync(order)}>同步微信抬头</Button>}
         </View>
       </View>)}

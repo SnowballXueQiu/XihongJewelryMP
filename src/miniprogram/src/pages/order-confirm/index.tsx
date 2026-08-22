@@ -6,6 +6,7 @@ import IconFont from '@/components/IconFont'
 import LuxuryLoader from '@/components/LuxuryLoader'
 import { createAddress, createOrder, fetchAddresses, fetchCoupons, fetchOrder, fetchProduct, fetchStoreConfig, formatMoney } from '@/services/api'
 import { performOrderPayment, presentPaymentError } from '@/services/payment'
+import { paymentResultUrl } from '@/services/routes'
 import { usePageEntranceAnimation } from '@/hooks/useSubtleAnimation'
 import { Address, Coupon, Product, StoreConfig } from '@/types/domain'
 import './index.scss'
@@ -47,6 +48,7 @@ export default function OrderConfirmPage() {
   const pageAnimation = usePageEntranceAnimation()
   const clientRequestId = useRef(`checkout_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`).current
   const createdOrderId = useRef(0)
+  const createdOrderNo = useRef('')
 
   const rawItems = useMemo(() => {
     try { return JSON.parse(decodeURIComponent(String(router.params.items || '[]'))) as Array<{ product_id: number; quantity: number }> }
@@ -112,15 +114,16 @@ export default function OrderConfirmPage() {
       } as const
       const order = createdOrderId.current ? await fetchOrder(createdOrderId.current) : await createOrder(payload)
       createdOrderId.current = order.id
+      createdOrderNo.current = order.order_no
       if (order.status !== 'pending_payment') {
-        Taro.redirectTo({ url: `/pages/payment-result/index?orderId=${order.id}&result=success` })
+        Taro.redirectTo({ url: paymentResultUrl(order.order_no, 'success') })
         return
       }
       const result = await performOrderPayment(order.id)
-      if (result === 'cancelled') Taro.redirectTo({ url: '/pages/orders/index?status=pending_payment' })
-      else Taro.redirectTo({ url: `/pages/payment-result/index?orderId=${order.id}&result=${result}` })
+      if (result.status === 'cancelled') Taro.redirectTo({ url: '/pages/orders/index?status=pending_payment' })
+      else Taro.redirectTo({ url: paymentResultUrl(result.orderNo, result.status) })
     } catch (error) {
-      if (createdOrderId.current) await presentPaymentError(error)
+      if (createdOrderNo.current) await presentPaymentError(error, createdOrderNo.current)
       else await Taro.showModal({ title: '订单未完成', content: error instanceof Error ? error.message : '订单提交状态未知，请到订单中心查看。', showCancel: false, confirmText: '查看订单', confirmColor: '#74252D' })
       await Taro.redirectTo({ url: `/pages/orders/index?status=${createdOrderId.current ? 'pending_payment' : 'all'}` })
     } finally { setSubmitting(false) }

@@ -1,7 +1,9 @@
 import Taro from '@tarojs/taro'
 import { confirmMockPayment, fetchPaymentStatus, startOrderPayment } from './api'
+import { orderDetailUrl } from './routes'
 
-export type PaymentFlowResult = 'success' | 'pending' | 'cancelled'
+export type PaymentFlowStatus = 'success' | 'pending' | 'cancelled'
+export type PaymentFlowResult = { status: PaymentFlowStatus; orderNo: string }
 export type PaymentErrorCode = 'capability_restricted' | 'request_failed'
 
 export class PaymentFlowError extends Error {
@@ -25,19 +27,19 @@ function paymentSucceeded(status: { order_status?: string } | null): boolean {
   return Boolean(status && ['paid', 'preparing', 'shipped', 'completed'].includes(String(status.order_status)))
 }
 
-export async function presentPaymentError(error: unknown, orderId?: number): Promise<void> {
+export async function presentPaymentError(error: unknown, orderNo?: string): Promise<void> {
   const restricted = error instanceof PaymentFlowError && error.code === 'capability_restricted'
   if (restricted) {
     const modal = await Taro.showModal({
       title: '当前无法使用微信支付',
       content: error.message,
-      confirmText: orderId ? '查看订单' : '我知道了',
-      cancelText: orderId ? '稍后处理' : undefined,
-      showCancel: Boolean(orderId),
+      confirmText: orderNo ? '查看订单' : '我知道了',
+      cancelText: orderNo ? '稍后处理' : undefined,
+      showCancel: Boolean(orderNo),
       confirmColor: '#74252D'
     })
-    if (orderId && modal.confirm) {
-      await Taro.redirectTo({ url: `/pages/order-detail/index?id=${orderId}` })
+    if (orderNo && modal.confirm) {
+      await Taro.redirectTo({ url: orderDetailUrl(orderNo) })
     }
     return
   }
@@ -60,9 +62,9 @@ export async function performOrderPayment(orderId: number): Promise<PaymentFlowR
       cancelText: '稍后支付',
       confirmColor: '#74252D'
     })
-    if (!modal.confirm) return 'cancelled'
+    if (!modal.confirm) return { status: 'cancelled', orderNo: payment.outTradeNo }
     await confirmMockPayment(orderId)
-    return 'success'
+    return { status: 'success', orderNo: payment.outTradeNo }
   }
 
   try {
@@ -75,10 +77,10 @@ export async function performOrderPayment(orderId: number): Promise<PaymentFlowR
     })
   } catch (error) {
     const message = paymentErrorText(error)
-    if (/cancel/i.test(message)) return 'cancelled'
+    if (/cancel/i.test(message)) return { status: 'cancelled', orderNo: payment.outTradeNo }
 
     const status = await fetchPaymentStatus(orderId).catch(() => null)
-    if (paymentSucceeded(status)) return 'success'
+    if (paymentSucceeded(status)) return { status: 'success', orderNo: payment.outTradeNo }
 
     if (/violated platform rules|unable to use pay|payment.*restricted|支付.{0,8}(受限|违规|停用)/i.test(message)) {
       throw new PaymentFlowError(
@@ -90,5 +92,5 @@ export async function performOrderPayment(orderId: number): Promise<PaymentFlowR
   }
 
   const status = await fetchPaymentStatus(orderId).catch(() => null)
-  return paymentSucceeded(status) ? 'success' : 'pending'
+  return { status: paymentSucceeded(status) ? 'success' : 'pending', orderNo: payment.outTradeNo }
 }

@@ -493,6 +493,7 @@ def serialize_order(order: Order, session: Session, include_payment: bool = Fals
                 package=intent.package,
                 paySign=intent.pay_sign,
                 prepayId=intent.prepay_id,
+                outTradeNo=intent.out_trade_no,
                 mock=settings.wx_pay_mock,
             )
     return OrderRead(

@@ -245,8 +245,10 @@ def get_order_detail_path() -> str:
 
 def set_order_detail_path(path: str = DEFAULT_ORDER_DETAIL_PATH) -> str:
     normalized = path.strip()
-    if "${商品订单号}" not in normalized:
-        raise WechatPlatformError("微信购物订单详情路径必须包含 ${商品订单号}")
+    if not normalized.startswith("pages/") or ".html" in normalized.split("?", 1)[0]:
+        raise WechatPlatformError("微信购物订单详情路径必须使用小程序页面路径，不能包含 .html")
+    if "orderNo=${商品订单号}" not in normalized:
+        raise WechatPlatformError("微信购物订单详情路径必须通过 orderNo 传入 ${商品订单号}")
     _post("/wxa/sec/order/update_order_detail_path", {"path": normalized})
     return normalized
 

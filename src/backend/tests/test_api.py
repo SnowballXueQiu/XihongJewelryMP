@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 from datetime import datetime, timedelta, timezone
 import re
 
+import pytest
 from sqlmodel import Session, select
 
 from app import services, wechat_invoice, wechat_platform
@@ -63,6 +64,7 @@ def test_order_payment_and_query_flow():
         payment = client.post(f"/api/orders/{order['id']}/pay").json()
         assert payment["provider"] == "wechat_pay"
         assert payment["mock"] is True
+        assert payment["outTradeNo"] == order["order_no"]
 
         paid = client.post(f"/api/orders/{order['id']}/mock-pay").json()
         assert paid["status"] == "paid"
@@ -315,6 +317,10 @@ def test_order_center_detail_path_configuration(monkeypatch):
             {"path": "pages/order-detail/index?orderNo=${商品订单号}"},
         ),
     ]
+    with pytest.raises(wechat_platform.WechatPlatformError, match="不能包含 .html"):
+        wechat_platform.set_order_detail_path("pages/order-detail/index.html?id=${商品订单号}")
+    with pytest.raises(wechat_platform.WechatPlatformError, match="orderNo"):
+        wechat_platform.set_order_detail_path("pages/order-detail/index?id=${商品订单号}")
 
 
 def test_admin_product_and_banner_flow():

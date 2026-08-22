@@ -3,6 +3,7 @@ import Taro, { useDidShow, usePullDownRefresh, useRouter } from '@tarojs/taro'
 import { Button, ScrollView, Text, View } from '@tarojs/components'
 import { cancelOrder, confirmWechatOrderReceipt, fetchOrders, formatMoney, orderStatusLabel } from '@/services/api'
 import { performOrderPayment, presentPaymentError } from '@/services/payment'
+import { orderDetailUrl, paymentResultUrl } from '@/services/routes'
 import { Order, OrderStatus } from '@/types/domain'
 import IconFont from '@/components/IconFont'
 import LuxuryLoader from '@/components/LuxuryLoader'
@@ -52,9 +53,9 @@ export default function OrdersPage() {
     setActing(order.id)
     try {
       const result = await performOrderPayment(order.id)
-      if (result !== 'cancelled') Taro.navigateTo({ url: `/pages/payment-result/index?orderId=${order.id}&result=${result}` })
+      if (result.status !== 'cancelled') Taro.navigateTo({ url: paymentResultUrl(result.orderNo, result.status) })
     } catch (error) {
-      await presentPaymentError(error, order.id)
+      await presentPaymentError(error, order.order_no)
     } finally { setActing(0) }
   }
 
@@ -93,7 +94,7 @@ export default function OrdersPage() {
       <View className='order-list'>
         {loading && <LuxuryLoader label='正在整理你的订单' />}
         {!loading && visibleOrders.map((order) => (
-          <View className='order-card' key={order.id} onClick={() => Taro.navigateTo({ url: `/pages/order-detail/index?id=${order.id}` })}>
+          <View className='order-card' key={order.id} onClick={() => Taro.navigateTo({ url: orderDetailUrl(order.order_no) })}>
             <View className='order-top'><View><Text>{order.order_no}</Text><Text>{order.created_at ? order.created_at.slice(0, 10) : ''}</Text></View><Text className={`status status-${order.status}`}>{orderStatusLabel[order.status]}</Text></View>
             <View className='order-products'>
               {order.items.slice(0, 2).map((item) => <View className='order-product' key={`${item.product_id}-${item.product_name}`}><View className='product-monogram'>{item.product_name.slice(0, 1)}</View><View><Text>{item.product_name}</Text><Text>{formatMoney(item.unit_price_cents)} × {item.quantity}</Text></View></View>)}

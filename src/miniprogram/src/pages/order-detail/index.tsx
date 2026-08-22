@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import Taro, { useDidShow, useRouter } from '@tarojs/taro'
 import { Button, Text, View } from '@tarojs/components'
-import { cancelOrder, confirmWechatOrderReceipt, fetchOrder, fetchOrderByNumber, formatMoney, orderStatusLabel, syncWechatInvoice } from '@/services/api'
+import { cancelOrder, confirmWechatOrderReceipt, fetchOrderByNumber, formatMoney, orderStatusLabel, syncWechatInvoice } from '@/services/api'
 import { performOrderPayment, presentPaymentError } from '@/services/payment'
+import { paymentResultUrl } from '@/services/routes'
 import { Order } from '@/types/domain'
 import IconFont from '@/components/IconFont'
 import LuxuryLoader from '@/components/LuxuryLoader'
@@ -14,7 +15,6 @@ const statusCopy: Record<string, string> = {
 
 export default function OrderDetailPage() {
   const route = useRouter()
-  const id = Number(route.params.id || 0)
   const orderNumber = String(route.params.orderNo || '').trim()
   const [order, setOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
@@ -22,8 +22,8 @@ export default function OrderDetailPage() {
 
   async function load() {
     try {
-      if (!id && !orderNumber) throw new Error('订单编号缺失')
-      setOrder(orderNumber ? await fetchOrderByNumber(orderNumber) : await fetchOrder(id))
+      if (!orderNumber) throw new Error('商户订单号缺失')
+      setOrder(await fetchOrderByNumber(orderNumber))
     } catch (error) {
       Taro.showToast({ title: error instanceof Error ? error.message : '订单加载失败', icon: 'none' })
     } finally { setLoading(false) }
@@ -35,8 +35,8 @@ export default function OrderDetailPage() {
     setActing(true)
     try {
       const result = await performOrderPayment(order.id)
-      if (result !== 'cancelled') Taro.redirectTo({ url: `/pages/payment-result/index?orderId=${order.id}&result=${result}` })
-    } catch (error) { await presentPaymentError(error) }
+      if (result.status !== 'cancelled') Taro.redirectTo({ url: paymentResultUrl(result.orderNo, result.status) })
+    } catch (error) { await presentPaymentError(error, order.order_no) }
     finally { setActing(false) }
   }
 

@@ -49,6 +49,7 @@ export interface PaymentParams {
   signType: 'RSA'
   paySign: string
   prepayId: string
+  outTradeNo: string
   mock: boolean
 }
 

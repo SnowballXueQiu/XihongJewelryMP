@@ -143,6 +143,7 @@ class PaymentParams(BaseModel):
     signType: str = "RSA"
     paySign: str
     prepayId: str
+    outTradeNo: str
     mock: bool = True
 
 
