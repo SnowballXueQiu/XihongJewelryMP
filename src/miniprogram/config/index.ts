@@ -32,7 +32,7 @@ export default defineConfig(async (merge) => {
     },
     cssMinimizer: 'csso',
     terser: {
-      enable: false
+      enable: true
     },
     csso: {
       enable: true
