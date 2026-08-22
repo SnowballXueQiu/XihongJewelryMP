@@ -39,6 +39,7 @@ dependencies {
     runtimeOnly("org.xerial:sqlite-jdbc:3.50.3.0")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")
+    testImplementation("org.xerial:sqlite-jdbc:3.50.3.0")
 }
 
 kotlin {
