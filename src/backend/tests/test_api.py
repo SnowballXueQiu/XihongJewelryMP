@@ -379,3 +379,39 @@ def test_admin_fulfillment_coupon_and_refund_flow():
         assert refund.json()["status"] == "success"
         refunded = client.get(f"/api/orders/{paid['id']}").json()
         assert refunded["status"] == "refunded"
+
+
+def test_admin_member_points_and_asset_lifecycle():
+    with client:
+        login = client.post(
+            "/api/admin/auth/login",
+            json={"email": "admin@xihong.local", "password": "XihongAdmin123!"},
+        )
+        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+        user = client.get("/api/admin/users", headers=headers).json()[0]
+        adjusted = client.post(
+            f"/api/admin/users/{user['id']}/points",
+            headers=headers,
+            json={"delta": 7, "note": "后台功能测试"},
+        )
+        assert adjusted.status_code == 200
+        assert adjusted.json()["points"] == user["points"] + 7
+
+        invalid = client.post(
+            f"/api/admin/users/{user['id']}/points",
+            headers=headers,
+            json={"delta": -(adjusted.json()["points"] + 1), "note": "不应成功"},
+        )
+        assert invalid.status_code == 400
+
+        uploaded = client.post(
+            "/api/admin/assets",
+            headers=headers,
+            files={"file": ("admin-test.png", b"test-image", "image/png")},
+        )
+        assert uploaded.status_code == 200
+        asset_id = uploaded.json()["id"]
+        deleted = client.delete(f"/api/admin/assets/{asset_id}", headers=headers)
+        assert deleted.status_code == 200
+        assert all(item["id"] != asset_id for item in client.get("/api/admin/assets", headers=headers).json())

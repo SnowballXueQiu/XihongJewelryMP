@@ -291,6 +291,8 @@ class RefundRead(BaseModel):
 
 
 class PetRead(BaseModel):
+    id: int
+    user_id: int
     name: str
     level: int
     exp: int
@@ -313,6 +315,11 @@ class UserRead(BaseModel):
     wechat_openid: str | None
     points: int
     created_at: datetime
+
+
+class UserPointsUpdate(BaseModel):
+    delta: int = Field(ge=-1000000, le=1000000)
+    note: str = Field(default="后台人工调整", max_length=120)
 
 
 class UserTokenRead(BaseModel):

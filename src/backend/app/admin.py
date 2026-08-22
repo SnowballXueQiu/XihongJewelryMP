@@ -9,7 +9,7 @@ from app.auth import create_admin_token, get_admin_by_email, get_current_admin, 
 from app.database import get_session
 from app import wechat_pay
 from app import wechat_platform
-from app.models import AdminUser, Asset, Banner, Category, Coupon, Order, OrderStatus, PaymentIntent, PaymentStatus, PetProfile, Product, ProductStatus, Refund, SiteSetting, User
+from app.models import AdminUser, Asset, Banner, Category, Coupon, Order, OrderStatus, PaymentIntent, PaymentStatus, PetProfile, PointLedger, Product, ProductStatus, Refund, SiteSetting, User
 from app.schemas import (
     AdminLoginRequest,
     AdminTokenRead,
@@ -36,6 +36,7 @@ from app.schemas import (
     SettingRead,
     SettingWrite,
     UserRead,
+    UserPointsUpdate,
 )
 from app.security import hash_password, verify_password
 from app.services import (
@@ -437,6 +438,30 @@ def list_admin_users(session: Session = Depends(get_session), _: AdminUser = Dep
     return session.exec(select(User).order_by(col(User.created_at).desc())).all()
 
 
+@router.post("/users/{user_id}/points", response_model=UserRead)
+def adjust_admin_user_points(
+    user_id: int,
+    payload: UserPointsUpdate,
+    session: Session = Depends(get_session),
+    admin: AdminUser = Depends(get_current_admin),
+) -> User:
+    user = session.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if payload.delta == 0:
+        return user
+    next_points = user.points + payload.delta
+    if next_points < 0:
+        raise HTTPException(status_code=400, detail="调整后积分不能小于 0")
+    user.points = next_points
+    ledger = PointLedger(user_id=user_id, action="admin_adjust", points=payload.delta, note=payload.note.strip() or "后台人工调整")
+    session.add_all([user, ledger])
+    write_audit_log(session, admin, "adjust_points", "user", str(user_id), f"{payload.delta:+d} {ledger.note}")
+    session.commit()
+    session.refresh(user)
+    return user
+
+
 @router.get("/pets", response_model=list[PetRead])
 def list_admin_pets(session: Session = Depends(get_session), _: AdminUser = Depends(get_current_admin)) -> list[PetRead]:
     pets = session.exec(select(PetProfile).order_by(col(PetProfile.updated_at).desc())).all()
@@ -489,6 +514,19 @@ async def upload_asset(file: UploadFile = File(...), session: Session = Depends(
     write_audit_log(session, admin, "upload", "asset", str(asset.id or ""), asset.original_name)
     session.commit()
     return _asset_read(asset)
+
+
+@router.delete("/assets/{asset_id}")
+def delete_asset(asset_id: int, session: Session = Depends(get_session), admin: AdminUser = Depends(get_current_admin)) -> dict[str, bool]:
+    asset = session.get(Asset, asset_id)
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    path = Path(settings.uploads_dir) / asset.filename
+    session.delete(asset)
+    write_audit_log(session, admin, "delete", "asset", str(asset_id), asset.original_name)
+    session.commit()
+    path.unlink(missing_ok=True)
+    return {"ok": True}
 
 
 @router.get("/settings", response_model=list[SettingRead])
