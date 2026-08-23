@@ -1,8 +1,11 @@
+# syntax=docker/dockerfile:1.7
 FROM gradle:9.1-jdk21-alpine AS build
 WORKDIR /workspace
+ENV GRADLE_USER_HOME=/home/gradle/.gradle
 COPY settings.gradle.kts build.gradle.kts ./
 COPY src ./src
-RUN gradle --no-daemon clean bootJar
+RUN --mount=type=cache,id=xihong-gradle-cache,target=/home/gradle/.gradle,uid=1000,gid=1000,sharing=locked \
+    gradle --no-daemon --build-cache bootJar
 
 FROM eclipse-temurin:21-jre-alpine
 RUN addgroup -S app && adduser -S app -G app
