@@ -18,6 +18,9 @@ java {
 }
 
 repositories {
+    // Prefer a mainland mirror for production builds; Maven Central remains the
+    // authoritative fallback when a newly published artifact has not synced yet.
+    maven { url = uri("https://maven.aliyun.com/repository/public") }
     mavenCentral()
 }
 
