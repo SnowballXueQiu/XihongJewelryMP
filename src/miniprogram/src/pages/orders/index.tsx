@@ -14,25 +14,28 @@ import {
 } from '@/services/api'
 import { performOrderPayment, presentPaymentError } from '@/services/payment'
 import { orderDetailUrl, paymentResultUrl } from '@/services/routes'
-import { Order, OrderStatus } from '@/types/domain'
+import { Order } from '@/types/domain'
 import IconFont from '@/components/IconFont'
 import LuxuryLoader from '@/components/LuxuryLoader'
 import './index.scss'
 
-type OrderGroup = 'all' | 'pending_payment' | 'processing' | 'shipped' | 'completed'
+type OrderGroup = 'all' | 'pending_payment' | 'processing' | 'pickup' | 'shipped' | 'completed'
 
 const tabs: Array<{ key: OrderGroup; label: string }> = [
   { key: 'all', label: '全部' },
   { key: 'pending_payment', label: '待支付' },
   { key: 'processing', label: '待发货' },
+  { key: 'pickup', label: '待取货' },
   { key: 'shipped', label: '待收货' },
   { key: 'completed', label: '已完成' }
 ]
 
-function matchesGroup(status: OrderStatus, group: OrderGroup) {
+function matchesGroup(order: Order, group: OrderGroup) {
+  const { status, fulfillment_type: fulfillmentType } = order
   if (group === 'all') return true
-  if (group === 'processing') return status === 'paid' || status === 'preparing'
-  if (group === 'shipped') return status === 'in_transit' || status === 'shipped'
+  if (group === 'processing') return fulfillmentType === 'delivery' && (status === 'paid' || status === 'preparing')
+  if (group === 'pickup') return fulfillmentType === 'pickup' && status === 'pickup_ready'
+  if (group === 'shipped') return fulfillmentType === 'delivery' && (status === 'in_transit' || status === 'shipped')
   if (group === 'completed') return status === 'received' || status === 'completed'
   return status === group
 }
@@ -59,7 +62,7 @@ export default function OrdersPage() {
 
   useDidShow(() => { load() })
   usePullDownRefresh(() => { load(false) })
-  const visibleOrders = useMemo(() => orders.filter((order) => matchesGroup(order.status, active)), [orders, active])
+  const visibleOrders = useMemo(() => orders.filter((order) => matchesGroup(order, active)), [orders, active])
 
   async function pay(order: Order) {
     setActing(order.id)

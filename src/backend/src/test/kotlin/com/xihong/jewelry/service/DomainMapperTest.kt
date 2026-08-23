@@ -44,6 +44,8 @@ class DomainMapperTest {
         val dto = mapper.order(order)
 
         assertEquals(successfulPayment.transactionId, dto.paymentTransactionId)
+        assertEquals("pickup_ready", dto.status)
+        assertEquals("待取货", dto.platformOrderStateLabel)
         assertTrue(dto.canConfirmReceipt)
     }
 

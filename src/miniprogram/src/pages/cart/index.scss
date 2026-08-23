@@ -1,9 +1,9 @@
 .cart-page { padding: 42px 24px 180px; background: #f6f0e8; }
 .cart-head { display: flex; align-items: flex-end; justify-content: space-between; padding: 8px 6px 34px; }
-.cart-eyebrow { display: block; color: #90796e; font-family: sans-serif; font-size: 15px; letter-spacing: 4px; }
+.cart-eyebrow { display: block; color: #90796e; font-family: sans-serif; font-size: 17px; letter-spacing: 4px; }
 .cart-title { display: block; margin-top: 10px; color: #2c1e1b; font-size: 56px; }
-.cart-clear { color: #8d6f67; font-family: "PingFang SC", sans-serif; font-size: 18px; }
-.shipping-card { margin-bottom: 26px; padding: 22px 24px; border-radius: 14px; background: #e8ddd2; color: #694d47; font-family: "PingFang SC", sans-serif; font-size: 18px; }
+.cart-clear { color: #8d6f67; font-family: "PingFang SC", sans-serif; font-size: 20px; }
+.shipping-card { margin-bottom: 26px; padding: 22px 24px; border-radius: 14px; background: #e8ddd2; color: #694d47; font-family: "PingFang SC", sans-serif; font-size: 20px; }
 .shipping-track { overflow: hidden; height: 4px; margin-top: 16px; background: rgba(90,55,50,.15); }
 .shipping-progress { height: 100%; background: #7a2630; transition: width 280ms ease; }
 .cart-list { border-top: 1px solid #d3c5bb; }
@@ -12,15 +12,15 @@
 .cart-visual { overflow: hidden; height: 260px; }
 .cart-visual .jewelry-visual { min-height: 260px; }
 .cart-info { display: flex; min-width: 0; flex-direction: column; }
-.cart-material { color: #9a8277; font-family: sans-serif; font-size: 14px; letter-spacing: 2px; }
+.cart-material { color: #9a8277; font-family: sans-serif; font-size: 16px; letter-spacing: 2px; }
 .cart-name { overflow: hidden; margin-top: 10px; color: #342320; font-size: 29px; text-overflow: ellipsis; white-space: nowrap; }
-.cart-subtitle { overflow: hidden; margin-top: 8px; color: #88746c; font-family: "PingFang SC", sans-serif; font-size: 17px; text-overflow: ellipsis; white-space: nowrap; }
+.cart-subtitle { overflow: hidden; margin-top: 8px; color: #88746c; font-family: "PingFang SC", sans-serif; font-size: 19px; text-overflow: ellipsis; white-space: nowrap; }
 .cart-price { margin-top: 18px; color: #7b2831; font-family: sans-serif; font-size: 24px; font-weight: 600; }
 .item-actions { display: flex; align-items: center; justify-content: space-between; margin-top: auto; }
 .quantity-row { display: grid; width: 174px; height: 54px; align-items: center; border: 1px solid #ccbcb1; grid-template-columns: 1fr 1fr 1fr; text-align: center; }
 .quantity-row button, .quantity-row text { display: flex; height: 52px; align-items: center; justify-content: center; color: #55413c; font-family: sans-serif; font-size: 20px; }
 .quantity-row button:disabled { opacity: .3; }
-.remove-btn { color: #9a8178; font-family: "PingFang SC", sans-serif; font-size: 17px; text-decoration: underline; }
+.remove-btn { color: #9a8178; font-family: "PingFang SC", sans-serif; font-size: 19px; text-decoration: underline; }
 .cart-empty { display: flex; min-height: 760px; align-items: center; flex-direction: column; justify-content: center; padding: 60px; text-align: center; }
 .empty-bag { display: flex; width: 144px; height: 144px; align-items: center; justify-content: center; border: 1px solid #c9b79f; border-radius: 50%; background: #fffaf2; color: #a38562; font-size: 72px; }
 .empty-title { margin-top: 54px; color: #392724; font-size: 35px; }
@@ -29,9 +29,9 @@
 .cart-loading { display: grid; gap: 20px; }
 .cart-loading view { height: 300px; background: #e5d9cf; animation: cart-pulse 1s infinite alternate; }
 .cart-footer { position: fixed; right: 0; bottom: 0; left: 0; z-index: 20; display: grid; min-height: 106px; align-items: center; padding: 0 20px env(safe-area-inset-bottom); border-top: 1px solid #cfc0b5; background: rgba(250,246,240,.96); grid-template-columns: 112px 1fr 210px; backdrop-filter: blur(16px); }
-.footer-select { display: flex; align-items: center; gap: 5px; color: #745d56; font-family: "PingFang SC", sans-serif; font-size: 17px; }
+.footer-select { display: flex; align-items: center; gap: 5px; color: #745d56; font-family: "PingFang SC", sans-serif; font-size: 19px; }
 .footer-total { text-align: right; }
-.footer-total text:first-child { display: block; color: #968078; font-family: "PingFang SC", sans-serif; font-size: 15px; }
+.footer-total text:first-child { display: block; color: #968078; font-family: "PingFang SC", sans-serif; font-size: 17px; }
 .footer-total text:last-child { display: block; margin-top: 5px; color: #6f2730; font-family: sans-serif; font-size: 28px; font-weight: 600; }
 .checkout { display: flex; height: 76px; align-items: center; justify-content: center; margin-left: 18px; border-radius: 12px; background: #572b2e; color: #fff9ef; font-family: "PingFang SC", sans-serif; font-size: 21px; }
 @keyframes cart-in { from { opacity: 0; transform: translateY(12px); } }

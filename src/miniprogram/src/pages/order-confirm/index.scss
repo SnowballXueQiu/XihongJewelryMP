@@ -1,56 +1,56 @@
 .order-page { padding: 34px 24px calc(250px + env(safe-area-inset-bottom)); background: #f5efe7; }
 .checkout-head { padding: 4px 8px 28px; }
-.checkout-kicker { display: block; color: #927b70; font-family: sans-serif; font-size: 14px; letter-spacing: 4px; }
+.checkout-kicker { display: block; color: #927b70; font-family: sans-serif; font-size: 16px; letter-spacing: 4px; }
 .checkout-title { display: block; margin-top: 8px; color: #2d201d; font-size: 42px; }
 .checkout-block, .price-summary { overflow: hidden; margin-bottom: 22px; border: 1px solid #ddd0c4; border-radius: 20px; background: #fffaf4; box-shadow: 0 10px 30px rgba(83,50,42,.045); }
 .block-heading { display: grid; min-height: 78px; align-items: center; padding: 0 24px; border-bottom: 1px solid #e5d9cf; color: #493733; grid-template-columns: 54px 1fr auto; }
-.block-heading text:first-child { color: #a48a7e; font-family: sans-serif; font-size: 14px; }
+.block-heading text:first-child { color: #a48a7e; font-family: sans-serif; font-size: 16px; }
 .block-heading text:nth-child(2) { font-size: 25px; }
-.block-heading text:last-child { color: #8e786f; font-family: "PingFang SC",sans-serif; font-size: 17px; }
+.block-heading text:last-child { color: #8e786f; font-family: "PingFang SC",sans-serif; font-size: 19px; }
 .method-switch { display: grid; gap: 14px; padding: 20px; grid-template-columns: 1fr 1fr; }
 .method-switch button { display: grid; min-height: 116px; align-content: center; justify-items: center; gap: 7px; border: 1px solid #dfd2c7; border-radius: 15px; color: #6e5c55; }
 .method-switch button.active { border-color: #742a32; background: #f3e5df; color: #742a32; box-shadow: inset 0 0 0 1px #742a32; }
 .method-switch .xh-icon { font-size: 26px; }
 .method-switch button text:nth-child(2) { font-family: "PingFang SC",sans-serif; font-size: 20px; font-weight: 600; }
-.method-switch button text:last-child { color: #96847c; font-family: "PingFang SC",sans-serif; font-size: 14px; }
+.method-switch button text:last-child { color: #96847c; font-family: "PingFang SC",sans-serif; font-size: 16px; }
 .fulfillment-panel, .pickup-panel { padding: 0 20px 22px; }
 .address-row { display: grid; gap: 14px; align-items: center; padding: 22px 4px; border-top: 1px solid #eadfd6; grid-template-columns: 34px 1fr 26px; }
 .address-row view text { display: block; color: #3c2b27; font-family: "PingFang SC",sans-serif; font-size: 19px; font-weight: 600; }
-.address-row view text:last-child { margin-top: 8px; color: #806e67; font-size: 17px; font-weight: 400; line-height: 1.55; }
-.wechat-import { display: flex; min-height: 68px; align-items: center; justify-content: center; gap: 8px; border: 1px solid #d7c8bc; border-radius: 12px; color: #742a32; font-family: "PingFang SC",sans-serif; font-size: 18px; line-height: 1.2; }
+.address-row view text:last-child { margin-top: 8px; color: #806e67; font-size: 19px; font-weight: 400; line-height: 1.55; }
+.wechat-import { display: flex; min-height: 68px; align-items: center; justify-content: center; gap: 8px; border: 1px solid #d7c8bc; border-radius: 12px; color: #742a32; font-family: "PingFang SC",sans-serif; font-size: 20px; line-height: 1.2; }
 .store-card { display: grid; gap: 14px; align-items: start; padding: 22px 4px; border-top: 1px solid #eadfd6; grid-template-columns: 34px 1fr; }
 .store-card view text { display: block; color: #3d2a26; font-family: "PingFang SC",sans-serif; font-size: 20px; font-weight: 600; }
-.store-card view text + text { margin-top: 7px; color: #806e67; font-size: 16px; font-weight: 400; }
-.slot-row { display: flex; min-height: 76px; align-items: center; justify-content: space-between; padding: 0 4px; border-top: 1px solid #eadfd6; font-family: "PingFang SC",sans-serif; font-size: 18px; }
+.store-card view text + text { margin-top: 7px; color: #806e67; font-size: 18px; font-weight: 400; }
+.slot-row { display: flex; min-height: 76px; align-items: center; justify-content: space-between; padding: 0 4px; border-top: 1px solid #eadfd6; font-family: "PingFang SC",sans-serif; font-size: 20px; }
 .slot-row > view { display: flex; max-width: 68%; align-items: center; gap: 8px; color: #742a32; text-align: right; }
-.pickup-tip { display: block; padding: 16px 18px; border-radius: 10px; background: #f0e5da; color: #78645c; font-family: "PingFang SC",sans-serif; font-size: 15px; line-height: 1.6; }
+.pickup-tip { display: block; padding: 16px 18px; border-radius: 10px; background: #f0e5da; color: #78645c; font-family: "PingFang SC",sans-serif; font-size: 17px; line-height: 1.6; }
 .checkout-line { display: grid; gap: 22px; min-height: 240px; padding: 24px; border-bottom: 1px solid #e2d6cc; grid-template-columns: 184px 1fr; }
 .checkout-line:last-child { border-bottom: 0; }
 .line-visual { overflow: hidden; height: 196px; border-radius: 12px; }
 .line-visual .jewelry-visual { min-height: 196px; }
 .line-copy { display: flex; min-width: 0; flex-direction: column; }
-.line-material { color: #9a8277; font-family: sans-serif; font-size: 14px; letter-spacing: 2px; }
+.line-material { color: #9a8277; font-family: sans-serif; font-size: 16px; letter-spacing: 2px; }
 .line-name { margin-top: 9px; color: #3a2824; font-size: 26px; }
-.line-sub { overflow: hidden; margin-top: 7px; color: #8c776f; font-family: "PingFang SC",sans-serif; font-size: 17px; text-overflow: ellipsis; white-space: nowrap; }
-.line-shipping { align-self: flex-start; margin-top: 9px; padding: 4px 9px; border-radius: 6px; background: #eee1d4; color: #742a32; font-family: "PingFang SC",sans-serif; font-size: 14px; }
+.line-sub { overflow: hidden; margin-top: 7px; color: #8c776f; font-family: "PingFang SC",sans-serif; font-size: 19px; text-overflow: ellipsis; white-space: nowrap; }
+.line-shipping { align-self: flex-start; margin-top: 9px; padding: 4px 9px; border-radius: 6px; background: #eee1d4; color: #742a32; font-family: "PingFang SC",sans-serif; font-size: 16px; }
 .line-price { display: flex; align-items: baseline; justify-content: space-between; margin-top: auto; color: #722932; font-family: sans-serif; font-size: 23px; }
-.line-price text:last-child { color: #907c73; font-size: 17px; }
-.option-row, .note-row { display: grid; min-height: 84px; align-items: center; padding: 0 24px; border-top: 1px solid #e0d4ca; color: #59443f; font-family: "PingFang SC",sans-serif; font-size: 18px; grid-template-columns: 150px 1fr; }
+.line-price text:last-child { color: #907c73; font-size: 19px; }
+.option-row, .note-row { display: grid; min-height: 84px; align-items: center; padding: 0 24px; border-top: 1px solid #e0d4ca; color: #59443f; font-family: "PingFang SC",sans-serif; font-size: 20px; grid-template-columns: 150px 1fr; }
 .option-value { display: flex; min-width: 0; align-items: center; justify-content: flex-end; gap: 8px; color: #8b776e; text-align: right; }
 .option-value > text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .option-value.accent { color: #7a2831; }
-.note-row input { text-align: right; font-size: 17px; }
+.note-row input { text-align: right; font-size: 19px; }
 .price-summary { padding: 22px 24px; }
-.price-summary > view { display: flex; align-items: center; justify-content: space-between; min-height: 52px; color: #735f58; font-family: "PingFang SC",sans-serif; font-size: 18px; }
+.price-summary > view { display: flex; align-items: center; justify-content: space-between; min-height: 52px; color: #735f58; font-family: "PingFang SC",sans-serif; font-size: 20px; }
 .price-summary .discount { color: #7a2831; }
 .price-summary .summary-total { min-height: 80px; margin-top: 14px; border-top: 1px solid #ded1c7; color: #352420; font-size: 21px; }
 .summary-total text:last-child { color: #732932; font-family: sans-serif; font-size: 34px; font-weight: 600; }
 .payment-assurance { display: flex; gap: 14px; align-items: center; margin: 10px 0 46px; padding: 22px 24px; border: 1px solid #e2d7ce; border-radius: 16px; background: rgba(255,250,244,.7); color: #7e6961; font-family: "PingFang SC",sans-serif; }
 .payment-assurance > .xh-icon { color: #37604c; font-size: 30px; }
 .payment-assurance text { display: block; color: #274c3a; font-size: 19px; }
-.payment-assurance text:last-child { margin-top: 5px; color: #8a7770; font-size: 15px; }
+.payment-assurance text:last-child { margin-top: 5px; color: #8a7770; font-size: 17px; }
 .checkout-footer { position: fixed; z-index: 20; right: 0; bottom: 0; left: 0; display: grid; min-height: 126px; align-items: center; padding: 18px 22px calc(18px + env(safe-area-inset-bottom)); border-top: 1px solid #cfc0b5; background: rgba(250,246,240,.97); grid-template-columns: 1fr 260px; backdrop-filter: blur(16px); }
-.checkout-footer > view text:first-child { color: #8e7a72; font-family: "PingFang SC",sans-serif; font-size: 16px; }
+.checkout-footer > view text:first-child { color: #8e7a72; font-family: "PingFang SC",sans-serif; font-size: 18px; }
 .checkout-footer > view text:last-child { margin-left: 14px; color: #742a32; font-family: sans-serif; font-size: 32px; font-weight: 600; }
 .checkout-footer button { display: flex !important; height: 78px; align-items: center !important; justify-content: center !important; margin-left: 18px; border-radius: 14px; background: #572b2e; color: #fff9ef; font-family: "PingFang SC",sans-serif; font-size: 21px; line-height: 1.2 !important; }
 .checkout-footer button:disabled { opacity: .5; }

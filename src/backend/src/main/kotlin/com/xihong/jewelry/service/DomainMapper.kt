@@ -71,8 +71,15 @@ class DomainMapper(
                 !it.outTradeNo.startsWith("mock_")
         }
         val payload = runCatching { mapper.readTree(entity.platformOrderPayload.ifBlank { "{}" }) }.getOrElse { mapper.createObjectNode() }
-        val platformLabel = when (entity.platformOrderState) {
-            1 -> "待发货"; 2 -> "已发货"; 3 -> "已确认收货"; 4 -> "交易完成"; 5 -> "已退款"; else -> "尚未同步"
+        val platformLabel = when {
+            entity.fulfillmentType == "pickup" && entity.platformOrderState in setOf(1, 2) -> "待取货"
+            entity.fulfillmentType == "pickup" && entity.platformOrderState in setOf(3, 4) -> "已完成"
+            entity.platformOrderState == 1 -> "待发货"
+            entity.platformOrderState == 2 -> "已发货"
+            entity.platformOrderState == 3 -> "已确认收货"
+            entity.platformOrderState == 4 -> "交易完成"
+            entity.platformOrderState == 5 -> "已退款"
+            else -> "尚未同步"
         }
         val description = entity.logisticsDescription.ifBlank { logisticsDescription(payload) }
         val displayStatus = authoritativeStatus(entity)
@@ -100,7 +107,7 @@ class DomainMapper(
             platformOrderStateLabel = platformLabel, logisticsStatus = entity.logisticsStatus,
             logisticsDescription = description, logisticsUpdatedAt = entity.logisticsUpdatedAt ?: entity.platformOrderStateUpdatedAt,
             canPay = displayStatus == "pending_payment", canCancel = displayStatus == "pending_payment",
-            canRefund = displayStatus in setOf("paid", "preparing", "in_transit", "shipped", "received", "completed") &&
+            canRefund = displayStatus in setOf("paid", "preparing", "pickup_ready", "in_transit", "shipped", "received", "completed") &&
                 InvoiceWorkflowPolicy.canRefundWithoutTaxReversal(entity.invoiceStatus),
             // Both delivery (logistics_type=1) and in-store pickup (logistics_type=4) are platform
             // orders. Receipt confirmation belongs to WeChat and is gated by its state, not by our
@@ -117,6 +124,8 @@ class DomainMapper(
         entity.status in setOf("cancelled", "refunding", "refunded", "failed") -> entity.status
         // 对外沿用后台/小程序既有状态枚举；更细的微信物流阶段通过 platformLogisticsStatus 展示。
         entity.platformOrderState in setOf(3, 4) -> "completed"
+        entity.fulfillmentType == "pickup" && entity.paidAt != null &&
+            entity.status in setOf("paid", "preparing", "shipped", "in_transit") -> "pickup_ready"
         entity.platformOrderState == 2 -> "shipped"
         entity.platformOrderState == 1 -> if (entity.paidAt != null) "paid" else entity.status
         else -> entity.status

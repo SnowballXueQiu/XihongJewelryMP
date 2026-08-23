@@ -183,7 +183,7 @@ export const applyWechatInvoice = (orderNumber: string) => request<Order>(
 
 function shouldSyncWechatOrder(order: Order): boolean {
   return Boolean(order.payment_transaction_id || order.platform_order_state) &&
-    ['paid', 'preparing', 'in_transit', 'shipped', 'received', 'refunding'].includes(order.status)
+    ['paid', 'preparing', 'pickup_ready', 'in_transit', 'shipped', 'received', 'refunding'].includes(order.status)
 }
 
 export async function fetchWechatSyncedOrders(): Promise<Order[]> {
@@ -204,13 +204,13 @@ export async function fetchWechatSyncedOrderByNumber(orderNumber: string): Promi
 export function canRequestOrderRefund(order: Order): boolean {
   if (order.total_cents <= 0 || !order.payment_transaction_id) return false
   if (typeof order.can_refund === 'boolean') return order.can_refund
-  return ['paid', 'preparing', 'in_transit', 'shipped', 'received', 'completed'].includes(order.status)
+  return ['paid', 'preparing', 'pickup_ready', 'in_transit', 'shipped', 'received', 'completed'].includes(order.status)
 }
 
 export function canConfirmWechatReceipt(order: Order): boolean {
   if (!order.payment_transaction_id) return false
   if (typeof order.can_confirm_receipt === 'boolean') return order.can_confirm_receipt
-  return ['in_transit', 'shipped'].includes(order.status) &&
+  return ['pickup_ready', 'in_transit', 'shipped'].includes(order.status) &&
     ![3, 4].includes(order.platform_order_state)
 }
 
@@ -224,6 +224,7 @@ export function displayOrderStatus(order: Order): string {
   if (['cancelled', 'refunding', 'refunded', 'failed'].includes(order.status)) {
     return orderStatusLabel[order.status]
   }
+  if (order.status === 'pickup_ready') return orderStatusLabel.pickup_ready
   if (order.status === 'in_transit') return order.logistics_status || orderStatusLabel.in_transit
   if (order.platform_order_state > 0 && order.platform_order_state_label) return order.platform_order_state_label
   return orderStatusLabel[order.status] || '状态同步中'
@@ -265,6 +266,7 @@ export const orderStatusLabel: Record<OrderStatus, string> = {
   pending_payment: '待支付',
   paid: '已支付',
   preparing: '备货中',
+  pickup_ready: '待取货',
   in_transit: '运输中',
   shipped: '已发货',
   received: '已收货',

@@ -30,7 +30,7 @@
 .orbit-b { inset: 18px; border-color: rgba(116, 37, 45, .3); animation: loaderOrbit 1.1s linear infinite reverse; }
 .orbit-b view { top: auto; right: -4px; bottom: 4px; left: auto; width: 7px; height: 7px; background: #74252d; }
 .loader-core { position: absolute; top: 50%; left: 50%; width: 18px; height: 18px; transform: translate(-50%, -50%) rotate(45deg); background: linear-gradient(135deg, #f0d79a, #9c6d33); box-shadow: 0 8px 22px rgba(85, 45, 38, .22); animation: loaderPulse 1.4s ease-in-out infinite; }
-.luxury-loader-label { margin-top: 27px; color: #806f66; font-family: "PingFang SC", sans-serif; font-size: 17px; letter-spacing: 3px; }
+.luxury-loader-label { margin-top: 27px; color: #806f66; font-family: "PingFang SC", sans-serif; font-size: 19px; letter-spacing: 3px; }
 .luxury-loader-line { width: 122px; height: 1px; overflow: hidden; margin-top: 18px; background: #ded2c6; }
 .luxury-loader-line view { width: 48%; height: 100%; background: #74252d; animation: loaderSweep 1.35s ease-in-out infinite; }
 

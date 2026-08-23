@@ -1,26 +1,26 @@
 .profile-page { min-height: 100vh; padding-bottom: 0; background: #f7f3ec; }
 .profile-hero { position: relative; overflow: hidden; padding: 62px 34px 32px; background: #171615; color: #fff8ed; }
 .profile-hero::after { position: absolute; right: -150px; top: -120px; width: 430px; height: 430px; border: 1px solid rgba(210,181,117,.16); border-radius: 50%; box-shadow: inset 0 0 0 58px rgba(210,181,117,.025); content: ""; }
-.profile-kicker { position: relative; z-index: 1; color: #d2b575; font-family: Arial,sans-serif; font-size: 17px; letter-spacing: 5px; }
+.profile-kicker { position: relative; z-index: 1; color: #d2b575; font-family: Arial,sans-serif; font-size: 19px; letter-spacing: 5px; }
 .member-row { position: relative; z-index: 1; display: flex; align-items: center; margin-top: 34px; }
 .avatar { display: flex; width: 100px; height: 100px; align-items: center; justify-content: center; margin-right: 25px; border: 1px solid #d2b575; border-radius: 50%; }
 .avatar text { color: #fff8ed; font-size: 40px; }
 .nickname, .member-tier { display: block; }
 .nickname { font-size: 40px; }
-.member-tier { margin-top: 10px; color: rgba(255,248,237,.58); font-family: Arial,"PingFang SC",sans-serif; font-size: 18px; letter-spacing: 1px; }
+.member-tier { margin-top: 10px; color: rgba(255,248,237,.58); font-family: Arial,"PingFang SC",sans-serif; font-size: 20px; letter-spacing: 1px; }
 .member-stats { display: grid; grid-template-columns: repeat(3,1fr); margin-top: 42px; padding: 28px 0; border-top: 1px solid rgba(255,255,255,.12); border-bottom: 1px solid rgba(255,255,255,.12); }
 .member-stats view { text-align: center; }
 .member-stats view + view { border-left: 1px solid rgba(255,255,255,.12); }
 .member-stats text { display: block; }
 .member-stats text:first-child { font-family: Georgia,serif; font-size: 34px; }
-.member-stats text:last-child { margin-top: 7px; color: rgba(255,248,237,.55); font-family: "PingFang SC",sans-serif; font-size: 18px; }
-.member-number { display: flex; justify-content: space-between; padding-top: 24px; color: rgba(255,248,237,.4); font-family: Arial,sans-serif; font-size: 15px; letter-spacing: 1px; }
+.member-stats text:last-child { margin-top: 7px; color: rgba(255,248,237,.55); font-family: "PingFang SC",sans-serif; font-size: 20px; }
+.member-number { display: flex; justify-content: space-between; padding-top: 24px; color: rgba(255,248,237,.4); font-family: Arial,sans-serif; font-size: 17px; letter-spacing: 1px; }
 .profile-content { padding: 0 28px; }
 .member-identity { min-width: 0; flex: 1; }
-.bound-phone { display: block; margin-top: 12px; color: rgba(255,248,237,.46); font-family: Arial,sans-serif; font-size: 17px; letter-spacing: 2px; }
-.hero-bind { display: flex; width: 210px; height: 58px; align-items: center; justify-content: center; margin-top: 18px; border: 1px solid rgba(210,181,117,.65); border-radius: 30px; color: #ead39c; font-family: "PingFang SC",sans-serif; font-size: 18px; }
+.bound-phone { display: block; margin-top: 12px; color: rgba(255,248,237,.46); font-family: Arial,sans-serif; font-size: 19px; letter-spacing: 2px; }
+.hero-bind { display: flex; width: 210px; height: 58px; align-items: center; justify-content: center; margin-top: 18px; border: 1px solid rgba(210,181,117,.65); border-radius: 30px; color: #ead39c; font-family: "PingFang SC",sans-serif; font-size: 20px; }
 .member-benefits { display: grid; overflow: hidden; margin-top: 24px; border: 1px solid #ddd4c7; border-radius: 18px; background: #fffdf8; grid-template-columns: repeat(4,1fr); }
-.member-benefits view { display: flex; min-height: 115px; align-items: center; justify-content: center; flex-direction: column; gap: 12px; color: #6c3e3d; font-family: "PingFang SC",sans-serif; font-size: 17px; }
+.member-benefits view { display: flex; min-height: 115px; align-items: center; justify-content: center; flex-direction: column; gap: 12px; color: #6c3e3d; font-family: "PingFang SC",sans-serif; font-size: 19px; }
 .member-benefits view + view { border-left: 1px solid #ebe2d8; }
 .member-benefits .xh-icon { font-size: 27px; }
 .section-head { display: flex; align-items: center; justify-content: space-between; padding: 46px 6px 22px; }
@@ -29,26 +29,26 @@
 .order-shortcuts { display: grid; grid-template-columns: repeat(4,1fr); gap: 4px; padding: 24px 8px; border: 1px solid #ddd4c7; border-radius: 18px; background: #fffdf8; }
 .order-shortcuts button { position: relative; display: flex; min-height: 118px; flex-direction: column; align-items: center; justify-content: center; overflow: visible; border-radius: 12px; color: #49443f; font-family: "PingFang SC",sans-serif; font-size: 20px; }
 .shortcut-icon { display: flex; width: 58px; height: 58px; align-items: center; justify-content: center; margin-bottom: 13px; border: 1px solid rgba(116,37,45,.52); border-radius: 50%; background: #fffaf3; color: #74252d; font-size: 29px; }
-.count { position: absolute; top: -10px; right: 15px; display: flex; width: 31px; height: 31px; align-items: center; justify-content: center; border-radius: 50%; background: #74252d; color: #fff; font-family: Arial,sans-serif; font-size: 16px; }
+.count { position: absolute; top: -10px; right: 15px; display: flex; width: 31px; height: 31px; align-items: center; justify-content: center; border-radius: 50%; background: #74252d; color: #fff; font-family: Arial,sans-serif; font-size: 18px; }
 .editorial-head > view text { display: block; }
-.editorial-head > view text:last-child { margin-top: 7px; color: #8b8279; font-family: "PingFang SC",sans-serif; font-size: 18px; }
+.editorial-head > view text:last-child { margin-top: 7px; color: #8b8279; font-family: "PingFang SC",sans-serif; font-size: 20px; }
 .recommend-scroll { width: calc(100vw - 28px); margin-right: -28px; }
 .recommend-track { display: inline-flex; gap: 14px; padding: 0 28px 12px 0; }
 .recommend-card { width: 270px; flex: 0 0 auto; overflow: hidden; padding-bottom: 24px; border-radius: 16px; background: #fffdf8; box-shadow: 0 14px 32px rgba(69,44,38,.08); }
 .recommend-card .jewelry-visual { height: 260px; }
 .recommend-name, .recommend-meta, .recommend-price { display: block; margin-right: 18px; margin-left: 18px; }
 .recommend-name { overflow: hidden; margin-top: 18px; color: #291e1c; font-size: 24px; text-overflow: ellipsis; white-space: nowrap; }
-.recommend-meta { margin-top: 8px; color: #92857c; font-family: "PingFang SC",sans-serif; font-size: 16px; }
+.recommend-meta { margin-top: 8px; color: #92857c; font-family: "PingFang SC",sans-serif; font-size: 18px; }
 .recommend-price { margin-top: 17px; color: #74252d; font-family: Georgia,serif; font-size: 23px; }
 .appointment-panel { position: relative; overflow: hidden; margin-top: 44px; padding: 36px 30px; border-radius: 18px; background: #171615; color: #fff9f0; }
 .appointment-panel::after { position: absolute; right: -70px; bottom: -100px; width: 230px; height: 230px; border: 1px solid rgba(210,181,117,.2); border-radius: 50%; content: ""; }
-.appointment-kicker { display: block; color: #d2b575; font-family: Arial,sans-serif; font-size: 14px; letter-spacing: 4px; }
+.appointment-kicker { display: block; color: #d2b575; font-family: Arial,sans-serif; font-size: 16px; letter-spacing: 4px; }
 .appointment-title { display: block; margin-top: 15px; font-size: 34px; }
-.appointment-copy { display: block; max-width: 560px; margin-top: 16px; color: rgba(255,249,240,.62); font-family: "PingFang SC",sans-serif; font-size: 18px; line-height: 1.75; }
+.appointment-copy { display: block; max-width: 560px; margin-top: 16px; color: rgba(255,249,240,.62); font-family: "PingFang SC",sans-serif; font-size: 20px; line-height: 1.75; }
 .appointment-actions { position: relative; z-index: 1; display: flex; gap: 12px; margin-top: 25px; }
-.appointment-actions button { display: flex; height: 65px; align-items: center; justify-content: center; gap: 9px; padding: 0 25px; border: 1px solid rgba(255,255,255,.28); border-radius: 34px; font-family: "PingFang SC",sans-serif; font-size: 18px; }
+.appointment-actions button { display: flex; height: 65px; align-items: center; justify-content: center; gap: 9px; padding: 0 25px; border: 1px solid rgba(255,255,255,.28); border-radius: 34px; font-family: "PingFang SC",sans-serif; font-size: 20px; }
 .appointment-actions button:first-child { border-color: #d2b575; background: #d2b575; color: #171615; }
-.store-address { position: relative; z-index: 1; display: block; margin-top: 24px; color: rgba(255,249,240,.42); font-family: "PingFang SC",sans-serif; font-size: 15px; }
+.store-address { position: relative; z-index: 1; display: block; margin-top: 24px; color: rgba(255,249,240,.42); font-family: "PingFang SC",sans-serif; font-size: 17px; }
 .pet-heading > view text { display: block; }
 .pet-heading > view text:last-child { margin-top: 6px; color: #8b8279; font-family: "PingFang SC",sans-serif; font-size: 20px; }
 .pet-heading > text { color: #74252d; font-family: Georgia,serif; font-size: 26px; }
@@ -78,12 +78,12 @@
 .menu-copy text { display: block; font-size: 28px; }
 .menu-copy text:last-child { overflow: hidden; margin-top: 8px; color: #8c847b; font-family: "PingFang SC",sans-serif; font-size: 19px; text-overflow: ellipsis; white-space: nowrap; }
 .menu-tail { display: flex; width: 78px; align-items: center; justify-content: flex-end; gap: 12px; }
-.menu-value { display: flex; width: 38px; height: 38px; align-items: center; justify-content: center; border-radius: 50%; background: #74252d; color: #fff; font-family: Arial,sans-serif; font-size: 18px; }
+.menu-value { display: flex; width: 38px; height: 38px; align-items: center; justify-content: center; border-radius: 50%; background: #74252d; color: #fff; font-family: Arial,sans-serif; font-size: 20px; }
 .arrow { width: 24px; flex: 0 0 24px; color: #9b9289; font-size: 23px; }
 .menu-press { background: rgba(116,37,45,.04); }
 .profile-assurance { padding: 60px 0 20px; color: #958b81; text-align: center; }
 .profile-assurance text { display: block; font-family: "PingFang SC",sans-serif; font-size: 19px; }
-.profile-assurance text:last-child { margin-top: 13px; font-family: Arial,sans-serif; font-size: 15px; letter-spacing: 4px; }
+.profile-assurance text:last-child { margin-top: 13px; font-family: Arial,sans-serif; font-size: 17px; letter-spacing: 4px; }
 @keyframes petOrbit { to { transform: rotate(360deg); } }
 
 .auth-layer { position: fixed; z-index: 90; top: 0; right: 0; bottom: 0; left: 0; width: 100vw; height: 100vh; }
@@ -91,19 +91,19 @@
 .auth-sheet { position: fixed; z-index: 1; right: 0; bottom: 0; left: 0; padding: 36px 34px calc(24px + env(safe-area-inset-bottom)); border-radius: 30px 30px 0 0; background: #fbf8f2; animation: authUp .34s cubic-bezier(.2,.8,.2,1) both; }
 .auth-head { display: flex; align-items: flex-start; justify-content: space-between; }
 .auth-brand, .auth-title { display: block; }
-.auth-brand { color: #8f6f52; font-family: Arial,"PingFang SC",sans-serif; font-size: 16px; letter-spacing: 4px; }
+.auth-brand { color: #8f6f52; font-family: Arial,"PingFang SC",sans-serif; font-size: 18px; letter-spacing: 4px; }
 .auth-title { margin-top: 13px; color: #201918; font-size: 40px; }
 .auth-close { display: flex; width: 62px; height: 62px; align-items: center; justify-content: center; border-radius: 50%; background: #eee5dc; color: #5a4943; font-size: 27px; }
 .auth-copy { display: block; margin-top: 26px; color: #746a64; font-family: "PingFang SC",sans-serif; font-size: 19px; line-height: 1.75; }
 .auth-benefits { display: grid; margin-top: 28px; padding: 23px 0; border-top: 1px solid #dfd4c8; border-bottom: 1px solid #dfd4c8; grid-template-columns: repeat(3,1fr); }
-.auth-benefits view { display: flex; align-items: center; justify-content: center; gap: 9px; color: #5f403e; font-family: "PingFang SC",sans-serif; font-size: 17px; }
-.privacy-check { display: flex; min-height: 74px; align-items: center; justify-content: flex-start; flex-wrap: wrap; margin-top: 20px; color: #6d625c; font-family: "PingFang SC",sans-serif; font-size: 17px; text-align: left; }
+.auth-benefits view { display: flex; align-items: center; justify-content: center; gap: 9px; color: #5f403e; font-family: "PingFang SC",sans-serif; font-size: 19px; }
+.privacy-check { display: flex; min-height: 74px; align-items: center; justify-content: flex-start; flex-wrap: wrap; margin-top: 20px; color: #6d625c; font-family: "PingFang SC",sans-serif; font-size: 19px; text-align: left; }
 .privacy-check > view { display: flex; width: 30px; height: 30px; flex: 0 0 auto; margin-right: 10px; border: 1px solid #a7978d; border-radius: 5px; }
 .privacy-check.checked > view { border-color: #74252d; background: #74252d; }
 .privacy-link { color: #74252d; text-decoration: underline; }
-.age-copy { display: block; color: #a0938b; font-family: "PingFang SC",sans-serif; font-size: 15px; line-height: 1.6; }
+.age-copy { display: block; color: #a0938b; font-family: "PingFang SC",sans-serif; font-size: 17px; line-height: 1.6; }
 .phone-auth-button { display: flex; height: 82px; align-items: center; justify-content: center; margin-top: 24px; border-radius: 12px; background: #74252d; color: #fffaf2; font-family: "PingFang SC",sans-serif; font-size: 22px; }
 .phone-auth-button[disabled] { background: #d8cec4; color: #9f938b; opacity: 1; }
-.auth-later { display: flex; width: 176px; height: 70px; align-items: center; justify-content: center; margin: 0 auto; color: #857970; font-family: "PingFang SC",sans-serif; font-size: 18px; }
+.auth-later { display: flex; width: 176px; height: 70px; align-items: center; justify-content: center; margin: 0 auto; color: #857970; font-family: "PingFang SC",sans-serif; font-size: 20px; }
 @keyframes authFade { from { opacity: 0; } }
 @keyframes authUp { from { transform: translateY(100%); } }

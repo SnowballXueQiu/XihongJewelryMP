@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 FROM node:22-alpine AS dependencies
 
 WORKDIR /app
@@ -16,7 +17,8 @@ COPY src/backstage ./src/backstage
 ARG NEXT_PUBLIC_API_BASE=https://api.xihongzhubao.com
 ENV NEXT_PUBLIC_API_BASE=$NEXT_PUBLIC_API_BASE
 
-RUN pnpm --dir src/backstage build
+RUN --mount=type=cache,id=xihong-next-cache,target=/app/src/backstage/.next/cache,sharing=locked \
+    pnpm --dir src/backstage build
 
 FROM node:22-alpine AS runner
 

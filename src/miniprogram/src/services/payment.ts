@@ -24,7 +24,7 @@ function paymentErrorText(error: unknown): string {
 }
 
 function paymentSucceeded(status: { order_status?: string } | null): boolean {
-  return Boolean(status && ['paid', 'preparing', 'shipped', 'completed'].includes(String(status.order_status)))
+  return Boolean(status && ['paid', 'preparing', 'pickup_ready', 'shipped', 'completed'].includes(String(status.order_status)))
 }
 
 export async function presentPaymentError(error: unknown, orderNo?: string): Promise<void> {

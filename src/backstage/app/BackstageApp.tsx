@@ -1,6 +1,6 @@
 'use client'
 
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react'
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:8000'
@@ -68,7 +68,7 @@ type Banner = {
 type Order = {
   id: number
   order_no: string
-  status: 'pending_payment' | 'paid' | 'preparing' | 'shipped' | 'in_transit' | 'received' | 'completed' | 'cancelled' | 'refunding' | 'refunded' | 'failed'
+  status: 'pending_payment' | 'paid' | 'preparing' | 'pickup_ready' | 'shipped' | 'in_transit' | 'received' | 'completed' | 'cancelled' | 'refunding' | 'refunded' | 'failed'
   total_cents: number
   subtotal_cents: number
   shipping_fee_cents: number
@@ -332,7 +332,7 @@ function downloadCsv(filename: string, rows: Array<Array<string | number | null 
 }
 
 const orderStatusText: Record<Order['status'], string> = {
-  pending_payment: '待支付', paid: '待发货', preparing: '待发货', shipped: '已发货', in_transit: '运输中', received: '已收货', completed: '已完成',
+  pending_payment: '待支付', paid: '待发货', preparing: '待发货', pickup_ready: '待取货', shipped: '已发货', in_transit: '运输中', received: '已收货', completed: '已完成',
   cancelled: '已取消', refunding: '退款中', refunded: '已退款', failed: '支付异常'
 }
 
@@ -814,10 +814,11 @@ export default function BackstagePage() {
         : `将${delivery?.delivery_name || '所选物流公司'}运单 ${draft.tracking} 上报微信并开始履约跟踪。`,
       cancelled: '取消后订单不再继续履约，并将尝试同步微信订单状态。'
     }
+    const actionStatusLabel = status === 'shipped' && order.fulfillment_type === 'pickup' ? '待取货' : orderStatusText[status]
     openConfirmation({
-      title: `将订单更新为“${orderStatusText[status]}”`,
+      title: `将订单更新为“${actionStatusLabel}”`,
       description: `${order.order_no} · ${descriptions[status] || '请确认本次订单状态变更。'}`,
-      confirmLabel: `确认${orderStatusText[status]}`,
+      confirmLabel: `确认${actionStatusLabel}`,
       danger: status === 'cancelled',
       onConfirm: async () => updateOrderStatus(order, status)
     })
@@ -1076,14 +1077,15 @@ export default function BackstagePage() {
                     {order.fulfillment_type === 'delivery' ? <><CourierSelect companies={deliveryCompanies} value={draft.deliveryId} disabled={!['paid', 'preparing'].includes(order.status)} onChange={(deliveryId) => setLogisticsDraft((current) => ({ ...current, [order.id]: { ...draft, deliveryId } }))} /><label><span>运单号</span><input value={draft.tracking} disabled={!['paid', 'preparing'].includes(order.status)} onChange={(event) => setLogisticsDraft((current) => ({ ...current, [order.id]: { ...draft, tracking: event.target.value } }))} placeholder="填写所选物流公司的运单号" /></label></> : <div className="pickup-fulfillment"><span>履约方式</span><strong>到店自提</strong></div>}
                   </div>
                   <div className="order-status-actions">
-                    {order.status === 'paid' && <button onClick={() => askOrderStatus(order, 'preparing')}>确认待发货</button>}
-                    {['paid', 'preparing'].includes(order.status) && <button className="primary-action" onClick={() => askOrderStatus(order, 'shipped')}>确认发货</button>}
-                    {(['shipped', 'in_transit'] as Order['status'][]).includes(order.status) && <button className="primary-action" onClick={() => askSyncReceipt(order)}>同步收货状态</button>}
+                    {order.fulfillment_type === 'delivery' && order.status === 'paid' && <button onClick={() => askOrderStatus(order, 'preparing')}>确认待发货</button>}
+                    {order.fulfillment_type === 'delivery' && ['paid', 'preparing'].includes(order.status) && <button className="primary-action" onClick={() => askOrderStatus(order, 'shipped')}>确认发货</button>}
+                    {order.fulfillment_type === 'pickup' && order.status === 'pickup_ready' && order.platform_order_state < 2 && <button className="primary-action" onClick={() => askOrderStatus(order, 'shipped')}>确认可取货</button>}
+                    {((order.fulfillment_type === 'delivery' && (['shipped', 'in_transit'] as Order['status'][]).includes(order.status)) || (order.fulfillment_type === 'pickup' && order.status === 'pickup_ready' && order.platform_order_state >= 2)) && <button className="primary-action" onClick={() => askSyncReceipt(order)}>{order.fulfillment_type === 'pickup' ? '同步取货状态' : '同步收货状态'}</button>}
                     {(['pending_payment', 'failed'] as Order['status'][]).includes(order.status) && <button className="danger-outline" onClick={() => askOrderStatus(order, 'cancelled')}>取消订单</button>}
-                    {(['paid', 'preparing', 'shipped', 'in_transit', 'received', 'completed'] as Order['status'][]).includes(order.status) && <button className="danger-outline" onClick={() => askRefund(order)}>发起退款</button>}
+                    {(['paid', 'preparing', 'pickup_ready', 'shipped', 'in_transit', 'received', 'completed'] as Order['status'][]).includes(order.status) && <button className="danger-outline" onClick={() => askRefund(order)}>发起退款</button>}
                   </div>
                 </div>
-                {order.payment_transaction_id && <div className="platform-order-actions"><span>{order.platform_logistics_updated_at ? `微信物流更新于 ${new Date(order.platform_logistics_updated_at).toLocaleString('zh-CN')}` : '订单状态以微信回调为准'}</span><button onClick={() => syncPlatformOrder(order).catch((error) => setMessage(error.message))}>同步微信状态</button>{(['shipped', 'in_transit'] as Order['status'][]).includes(order.status) && !order.platform_confirm_receive_reminded_at && <button onClick={() => askReceiveReminder(order)}>提醒确认收货</button>}</div>}
+                {order.payment_transaction_id && <div className="platform-order-actions"><span>{order.platform_logistics_updated_at ? `微信物流更新于 ${new Date(order.platform_logistics_updated_at).toLocaleString('zh-CN')}` : '订单状态以微信回调为准'}</span><button onClick={() => syncPlatformOrder(order).catch((error) => setMessage(error.message))}>同步微信状态</button>{order.fulfillment_type === 'delivery' && (['shipped', 'in_transit'] as Order['status'][]).includes(order.status) && !order.platform_confirm_receive_reminded_at && <button onClick={() => askReceiveReminder(order)}>提醒确认收货</button>}</div>}
               </article>
             })}{!visibleOrders.length && <Empty text="没有符合条件的订单" />}</div>
             {filteredOrders.length > 8 && <div className="pagination"><button disabled={orderPage <= 1} onClick={() => setOrderPage((page) => Math.max(1, page - 1))}>上一页</button><span>{orderPage} / {orderPageCount}</span><button disabled={orderPage >= orderPageCount} onClick={() => setOrderPage((page) => Math.min(orderPageCount, page + 1))}>下一页</button></div>}
@@ -1243,6 +1245,7 @@ function Empty({ text }: { text: string }) {
 function CourierSelect({ companies, value, disabled, onChange }: { companies: DeliveryCompany[]; value: string; disabled: boolean; onChange: (value: string) => void }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
+  const rootRef = useRef<HTMLDivElement>(null)
   const selected = companies.find((item) => item.delivery_id === value)
   const normalized = query.trim().toLowerCase()
   const common = companies.filter((item) => item.common)
@@ -1255,7 +1258,23 @@ function CourierSelect({ companies, value, disabled, onChange }: { companies: De
     setQuery('')
   }
 
-  return <div className="courier-field">
+  useEffect(() => {
+    if (!open) return
+    function closeOnOutside(event: PointerEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('pointerdown', closeOnOutside)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutside)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [open])
+
+  return <div ref={rootRef} className={`courier-field ${open ? 'is-open' : ''}`}>
     <span>物流公司</span>
     <button type="button" className="courier-trigger" disabled={disabled} onClick={() => setOpen((current) => !current)}><strong>{selected?.delivery_name || '选择微信物流公司'}</strong><small>{selected?.delivery_id || '来自微信官方运力列表'}</small><i /></button>
     {open && <div className="courier-popover">

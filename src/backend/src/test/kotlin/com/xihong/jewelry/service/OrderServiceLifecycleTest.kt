@@ -1,6 +1,7 @@
 package com.xihong.jewelry.service
 
 import com.xihong.jewelry.config.AppProperties
+import com.xihong.jewelry.domain.CartItemEntity
 import com.xihong.jewelry.domain.OrderEntity
 import com.xihong.jewelry.domain.OrderItemEntity
 import com.xihong.jewelry.domain.PaymentIntentEntity
@@ -79,6 +80,7 @@ class OrderServiceLifecycleTest {
         val order = OrderEntity(id = 1, orderNo = "XH26082200000001", userId = 10, status = "pending_payment", totalCents = 1_000)
         val item = OrderItemEntity(id = 1, orderId = 1, productId = 100, productName = "戒指", unitPriceCents = 1_000, quantity = 2)
         val product = ProductEntity(id = 100, name = "戒指", stock = 8, sales = 3)
+        val cartItem = CartItemEntity(id = 12, userId = 10, productId = 100, quantity = 2)
         val user = UserEntity(id = 10, nickname = "测试会员", points = 5)
         val payment = PaymentIntentEntity(id = 8, orderId = 1, status = "pending", outTradeNo = order.orderNo)
         `when`(orders.lockById(1)).thenReturn(order)
@@ -86,6 +88,7 @@ class OrderServiceLifecycleTest {
         `when`(products.lockAllById(listOf(100L))).thenReturn(listOf(product))
         `when`(users.findById(10)).thenReturn(Optional.of(user))
         `when`(payments.lockAllByOrderIdOrderByCreatedAtDesc(1)).thenReturn(listOf(payment))
+        `when`(cartItems.findAllByUserIdAndProductIdIn(10, listOf(100L))).thenReturn(listOf(cartItem))
 
         service.paymentSucceeded(1, "4200000000001", Instant.parse("2026-08-22T10:00:00Z"))
         service.paymentSucceeded(1, "4200000000001", Instant.parse("2026-08-22T10:00:00Z"))
@@ -96,6 +99,7 @@ class OrderServiceLifecycleTest {
         assertEquals("succeeded", payment.status)
         verify(pointLedgers, times(1)).save(any())
         verify(orderItems, times(1)).findAllByOrderIdOrderByIdAsc(1)
+        verify(cartItems, times(1)).deleteAll(listOf(cartItem))
     }
 
     @Test

@@ -58,6 +58,7 @@ export type OrderStatus =
   | 'pending_payment'
   | 'paid'
   | 'preparing'
+  | 'pickup_ready'
   | 'in_transit'
   | 'shipped'
   | 'received'

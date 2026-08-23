@@ -1,6 +1,6 @@
 .address-edit-page { padding: 48px 28px 100px; background: #f6f0e8; }
 .edit-head { padding: 0 4px 44px; }
-.edit-kicker { display: block; color: #927b70; font-family: sans-serif; font-size: 15px; letter-spacing: 4px; }
+.edit-kicker { display: block; color: #927b70; font-family: sans-serif; font-size: 17px; letter-spacing: 4px; }
 .edit-title { display: block; margin-top: 12px; color: #2d201d; font-size: 52px; }
 .address-form { border-top: 1px solid #d3c5bb; }
 .form-field { display: grid; min-height: 104px; align-items: center; border-bottom: 1px solid #d3c5bb; color: #58443f; font-family: "PingFang SC", sans-serif; font-size: 20px; grid-template-columns: 150px 1fr; }
@@ -10,7 +10,7 @@
 .detail-field input { height: 128px; }
 .default-row { display: flex; min-height: 126px; align-items: center; justify-content: space-between; border-bottom: 1px solid #d3c5bb; }
 .default-row text:first-child { display: block; color: #493633; font-family: "PingFang SC", sans-serif; font-size: 21px; }
-.default-row text:last-child { display: block; margin-top: 8px; color: #948078; font-family: "PingFang SC", sans-serif; font-size: 16px; }
+.default-row text:last-child { display: block; margin-top: 8px; color: #948078; font-family: "PingFang SC", sans-serif; font-size: 18px; }
 .save-address { display: flex; height: 82px; align-items: center; justify-content: center; margin-top: 44px; background: #572b2e; color: #fff9ef; font-family: "PingFang SC", sans-serif; font-size: 21px; }
 .delete-address { display: flex; height: 72px; align-items: center; justify-content: center; margin-top: 18px; color: #8b333a; font-family: "PingFang SC", sans-serif; font-size: 19px; text-decoration: underline; }
 .region-value { display: flex; min-width: 0; align-items: center; justify-content: flex-end; gap: 8px; color: #7f6c65; }

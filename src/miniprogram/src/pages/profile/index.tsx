@@ -109,7 +109,9 @@ export default function ProfilePage() {
     }
   }
 
-  const orderCount = (statuses: string[]) => orders.filter((order) => statuses.includes(order.status)).length
+  const orderCount = (statuses: string[], fulfillmentType?: Order['fulfillment_type']) => orders.filter((order) =>
+    statuses.includes(order.status) && (!fulfillmentType || order.fulfillment_type === fulfillmentType)
+  ).length
   const maskedPhone = user?.phone ? `${user.phone.slice(0, 3)}****${user.phone.slice(-4)}` : ''
   const menu = [
     { icon: 'location' as const, label: '收货地址', copy: '管理常用收件人', value: '', url: '/pages/addresses/index' },
@@ -148,9 +150,9 @@ export default function ProfilePage() {
         <View className='section-head'><Text>订单中心</Text><Button onClick={() => Taro.navigateTo({ url: '/pages/orders/index' })}>全部订单 <IconFont name='chevronRight' /></Button></View>
         <View className='order-shortcuts'>
           <Button onClick={() => Taro.navigateTo({ url: '/pages/orders/index?status=pending_payment' })}><View className='shortcut-icon'><IconFont name='wallet' /></View><Text>待支付</Text>{orderCount(['pending_payment']) > 0 && <Text className='count'>{orderCount(['pending_payment'])}</Text>}</Button>
-          <Button onClick={() => Taro.navigateTo({ url: '/pages/orders/index?status=processing' })}><View className='shortcut-icon'><IconFont name='package' /></View><Text>待发货</Text>{orderCount(['paid', 'preparing']) > 0 && <Text className='count'>{orderCount(['paid', 'preparing'])}</Text>}</Button>
-          <Button onClick={() => Taro.navigateTo({ url: '/pages/orders/index?status=shipped' })}><View className='shortcut-icon'><IconFont name='shipping' /></View><Text>待收货</Text>{orderCount(['in_transit', 'shipped']) > 0 && <Text className='count'>{orderCount(['in_transit', 'shipped'])}</Text>}</Button>
-          <Button openType='contact'><View className='shortcut-icon'><IconFont name='service' /></View><Text>售后咨询</Text></Button>
+          <Button onClick={() => Taro.navigateTo({ url: '/pages/orders/index?status=processing' })}><View className='shortcut-icon'><IconFont name='package' /></View><Text>待发货</Text>{orderCount(['paid', 'preparing'], 'delivery') > 0 && <Text className='count'>{orderCount(['paid', 'preparing'], 'delivery')}</Text>}</Button>
+          <Button onClick={() => Taro.navigateTo({ url: '/pages/orders/index?status=pickup' })}><View className='shortcut-icon'><IconFont name='location' /></View><Text>待取货</Text>{orderCount(['pickup_ready'], 'pickup') > 0 && <Text className='count'>{orderCount(['pickup_ready'], 'pickup')}</Text>}</Button>
+          <Button onClick={() => Taro.navigateTo({ url: '/pages/orders/index?status=shipped' })}><View className='shortcut-icon'><IconFont name='shipping' /></View><Text>待收货</Text>{orderCount(['in_transit', 'shipped'], 'delivery') > 0 && <Text className='count'>{orderCount(['in_transit', 'shipped'], 'delivery')}</Text>}</Button>
         </View>
 
         {recommended.length > 0 && <View className='recommend-section'>

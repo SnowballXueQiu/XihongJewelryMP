@@ -181,13 +181,14 @@ class AdminService(
         val current = domain.authoritativeStatus(order)
         val saved = when (value.status) {
             "preparing" -> {
-                require(current in setOf("paid", "preparing")) { "只有已付款订单可以进入待发货" }
+                require(order.fulfillmentType == "delivery") { "到店自提订单无需进入待发货" }
+                require(order.status in setOf("paid", "preparing")) { "只有已付款订单可以进入待发货" }
                 order.status = "preparing"
                 order.updatedAt = Instant.now()
                 orders.save(order)
             }
             "shipped" -> {
-                require(current in setOf("paid", "preparing")) { "只有待发货订单可以提交微信发货信息" }
+                require(order.status in setOf("paid", "preparing")) { "只有已付款订单可以提交微信履约信息" }
                 if (order.fulfillmentType == "delivery") {
                     require(value.trackingNo.isNotBlank()) { "请填写运单号" }
                     require(value.deliveryId.isNotBlank()) { "请选择微信官方物流公司" }

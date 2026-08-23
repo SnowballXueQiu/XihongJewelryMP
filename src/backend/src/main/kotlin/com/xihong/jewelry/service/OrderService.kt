@@ -146,8 +146,6 @@ class OrderService(
             userCoupon.usedAt = now
             userCoupons.save(userCoupon)
         }
-        cartItems.deleteAll(cartItems.findAllByUserIdAndProductIdIn(userId, merged.keys))
-
         if (total == 0) {
             payments.save(PaymentIntentEntity(
                 orderId = order.id!!,
@@ -464,7 +462,7 @@ class OrderService(
         val prepared = inTransaction {
             val order = orders.lockByOrderNoAndUserId(synced.orderNo, userId) ?: notFound("订单不存在")
             val displayStatus = mapper.authoritativeStatus(order)
-            require(displayStatus in setOf("paid", "preparing", "shipped", "in_transit", "received", "completed")) { "当前订单状态不能申请退款" }
+            require(displayStatus in setOf("paid", "preparing", "pickup_ready", "shipped", "in_transit", "received", "completed")) { "当前订单状态不能申请退款" }
             require(InvoiceWorkflowPolicy.canRefundWithoutTaxReversal(order.invoiceStatus)) {
                 "该订单的电子发票已进入开具或交付流程，请联系客服先完成税务冲红后再退款"
             }
@@ -757,6 +755,10 @@ class OrderService(
         order.cancellationReason = ""
         order.updatedAt = paidAt
         orders.save(order)
+        // Creating an order must not mutate the shopping bag: the user may cancel or abandon
+        // WeChat Pay. Remove purchased products only after payment has been authoritatively
+        // confirmed (callbacks, active reconciliation and free orders all converge here).
+        cartItems.deleteAll(cartItems.findAllByUserIdAndProductIdIn(order.userId, items.map { it.productId }.distinct()))
         val reward = (order.totalCents / 1000).coerceAtLeast(0)
         if (reward > 0) users.findById(order.userId).orElse(null)?.let { user ->
             user.points += reward

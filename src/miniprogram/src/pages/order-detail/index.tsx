@@ -23,7 +23,7 @@ import LuxuryLoader from '@/components/LuxuryLoader'
 import './index.scss'
 
 const statusCopy: Record<string, string> = {
-  pending_payment: '为你保留库存，请在订单关闭前完成支付', paid: '款项已确认，店员即将开始为你备货', preparing: '作品正在仔细质检与包装', in_transit: '作品正在运输途中，物流进度由微信同步', shipped: '作品已交付物流，请留意签收', received: '微信已确认收货，可申请电子发票', completed: '感谢你的珍藏，愿它陪伴每个重要时刻', cancelled: '订单已取消，库存与优惠券已退回', refunding: '退款正在处理中', refunded: '款项已按原支付路径退回', failed: '支付状态异常，请联系客户服务'
+  pending_payment: '为你保留库存，请在订单关闭前完成支付', paid: '款项已确认，店员即将开始为你备货', preparing: '作品正在仔细质检与包装', pickup_ready: '作品已备妥，请按预约时间到店出示提货口令', in_transit: '作品正在运输途中，物流进度由微信同步', shipped: '作品已交付物流，请留意签收', received: '微信已确认收货，可申请电子发票', completed: '感谢你的珍藏，愿它陪伴每个重要时刻', cancelled: '订单已取消，库存与优惠券已退回', refunding: '退款正在处理中', refunded: '款项已按原支付路径退回', failed: '支付状态异常，请联系客户服务'
 }
 
 const invoiceStatusText: Record<string, string> = {
@@ -91,7 +91,7 @@ export default function OrderDetailPage() {
       const message = error instanceof Error ? error.message : String((error as { errMsg?: string })?.errMsg || '')
       if (!message.includes('cancel')) Taro.showToast({ title: message || '操作失败', icon: 'none' })
       void syncWechatOrder(order.order_no).catch(() => undefined)
-      Taro.redirectTo({ url: '/pages/orders/index?status=shipped' })
+      Taro.redirectTo({ url: `/pages/orders/index?status=${order.fulfillment_type === 'pickup' ? 'pickup' : 'shipped'}` })
     }
     finally { setActing(false) }
   }
