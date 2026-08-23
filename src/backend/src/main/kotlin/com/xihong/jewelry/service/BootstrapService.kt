@@ -51,6 +51,32 @@ class BootstrapService(
                 ProductEntity(name = "鸢尾方糖戒指", subtitle = "18K 金 / 紫晶 / 白钻", description = "几何方糖与鸢尾紫晶相遇。", categorySlug = "rings", material = "18K金", priceCents = 328000, originalPriceCents = 358000, stock = 16, sales = 41, isFeatured = true, imageColor = "#756079", tags = mapper.writeValueAsString(listOf("限量", "18K金"))),
             ))
         }
+        if (products.findFirstByName("双生星环戒指｜影像陈列样品") == null) {
+            val mediaBase = "https://api.xihongzhubao.com/showcase"
+            products.save(ProductEntity(
+                name = "双生星环戒指｜影像陈列样品",
+                subtitle = "925 银 / 双环叠戴 / 影像陈列",
+                description = """两枚素面银环以不同弧度彼此回应，灵感来自夜空中相互牵引的双星轨迹。镜面与柔光拉丝表面在移动时交替捕捉光线，可单独佩戴，也可叠戴形成更有层次的轮廓。
+
+此页面专为商品详情样式预览准备：首屏包含一段近景视频，随后展示多张工艺与佩戴氛围图片。作品采用舒适内弧设计，边缘经多道抛光处理；日常佩戴后请用柔软干布轻拭，并与其他首饰分开收纳。
+
+陈列样品的影像素材仅用于小程序界面与交互测试，实际商品材质、尺寸、证书和交付信息请以上架时最终填写的商品资料为准。""".trimIndent(),
+                categorySlug = "rings",
+                material = "925银 / 合成立方氧化锆（陈列样品）",
+                priceCents = 268000,
+                originalPriceCents = 298000,
+                stock = 12,
+                sales = 36,
+                isFeatured = true,
+                freeShipping = true,
+                imageColor = "#827970",
+                tags = mapper.writeValueAsString(listOf("影像陈列", "叠戴", "新品")),
+                coverUrl = "$mediaBase/ring-story-01.jpg",
+                videoUrl = "$mediaBase/ring-story.mp4",
+                galleryUrls = mapper.writeValueAsString((1..4).map { "$mediaBase/ring-story-0$it.jpg" }),
+                sortOrder = -20,
+            ))
+        }
         if (coupons.count() == 0L) {
             coupons.save(CouponEntity(code = "WELCOME88", name = "新客礼遇", description = "满 800 元减 88 元", amountCents = 8800, minimumCents = 80000, totalQuantity = 10000, validUntil = Instant.now().plus(365, ChronoUnit.DAYS)))
         }

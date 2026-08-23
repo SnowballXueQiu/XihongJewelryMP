@@ -28,24 +28,27 @@ import java.util.concurrent.atomic.AtomicInteger
 
 class WechatPlatformShippingTest {
     @Test
-    fun `waybill token survives a later carrier query failure and no remote call holds a transaction`() {
+    fun `waybill and selected carrier survive a later upload failure and no remote call holds a transaction`() {
         val fixture = Fixture()
         fixture.answerRemote { path ->
             when (path) {
+                DELIVERY_LIST_PATH -> DELIVERY_LIST_RESPONSE
                 FOLLOW_PATH -> """{"waybill_token":"token-41"}"""
-                TRACE_PATH -> throw WechatPlatformException("trace timeout")
+                UPLOAD_PATH -> throw WechatPlatformException("upload timeout")
+                ORDER_PATH -> throw WechatPlatformException("authority timeout")
                 else -> error("unexpected remote path $path")
             }
         }
 
         assertThrows(WechatPlatformException::class.java) {
-            fixture.service.uploadShipping(fixture.order, fixture.trackingNo, false)
+            fixture.service.uploadShipping(fixture.order, fixture.trackingNo, "SF")
         }
 
         assertEquals("token-41", fixture.order.waybillToken)
         assertEquals(fixture.trackingNo, fixture.order.trackingNo)
-        assertEquals("", fixture.order.wechatDeliveryId)
-        assertTrue(fixture.order.platformShippingError.contains("trace timeout"))
+        assertEquals("SF", fixture.order.wechatDeliveryId)
+        assertEquals("顺丰速运", fixture.order.wechatDeliveryName)
+        assertTrue(fixture.order.platformShippingError.contains("停止自动重试"))
         assertFalse(fixture.tx.active())
     }
 
@@ -56,6 +59,7 @@ class WechatPlatformShippingTest {
         val queryCalls = AtomicInteger()
         fixture.answerRemote { path ->
             when (path) {
+                DELIVERY_LIST_PATH -> DELIVERY_LIST_RESPONSE
                 FOLLOW_PATH -> """{"waybill_token":"token-41"}"""
                 TRACE_PATH -> """{"delivery_info":{"delivery_id":"SF","delivery_name":"顺丰速运"}}"""
                 UPLOAD_PATH -> {
@@ -71,7 +75,7 @@ class WechatPlatformShippingTest {
             }
         }
 
-        val saved = fixture.service.uploadShipping(fixture.order, fixture.trackingNo, false)
+        val saved = fixture.service.uploadShipping(fixture.order, fixture.trackingNo, "SF")
 
         assertEquals(2, uploadCalls.get())
         assertEquals(1, queryCalls.get())
@@ -89,6 +93,7 @@ class WechatPlatformShippingTest {
         val uploadCalls = AtomicInteger()
         fixture.answerRemote { path ->
             when (path) {
+                DELIVERY_LIST_PATH -> DELIVERY_LIST_RESPONSE
                 FOLLOW_PATH -> """{"waybill_token":"token-41"}"""
                 TRACE_PATH -> """{"delivery_info":{"delivery_id":"SF","delivery_name":"顺丰速运"}}"""
                 UPLOAD_PATH -> {
@@ -100,7 +105,7 @@ class WechatPlatformShippingTest {
             }
         }
 
-        val saved = fixture.service.uploadShipping(fixture.order, fixture.trackingNo, false)
+        val saved = fixture.service.uploadShipping(fixture.order, fixture.trackingNo, "SF")
 
         assertEquals(1, uploadCalls.get())
         assertEquals(2, saved.platformOrderState)
@@ -115,6 +120,7 @@ class WechatPlatformShippingTest {
         val uploadCalls = AtomicInteger()
         fixture.answerRemote { path ->
             when (path) {
+                DELIVERY_LIST_PATH -> DELIVERY_LIST_RESPONSE
                 FOLLOW_PATH -> """{"waybill_token":"token-41"}"""
                 TRACE_PATH -> """{"delivery_info":{"delivery_id":"SF","delivery_name":"顺丰速运"}}"""
                 UPLOAD_PATH -> {
@@ -127,7 +133,7 @@ class WechatPlatformShippingTest {
         }
 
         val error = assertThrows(WechatPlatformException::class.java) {
-            fixture.service.uploadShipping(fixture.order, fixture.trackingNo, false)
+            fixture.service.uploadShipping(fixture.order, fixture.trackingNo, "SF")
         }
 
         assertEquals(1, uploadCalls.get())
@@ -224,9 +230,11 @@ class WechatPlatformShippingTest {
 
     private companion object {
         const val FOLLOW_PATH = "/cgi-bin/express/delivery/open_msg/follow_waybill"
+        const val DELIVERY_LIST_PATH = "/cgi-bin/express/delivery/open_msg/get_delivery_list"
         const val TRACE_PATH = "/cgi-bin/express/delivery/open_msg/query_trace"
         const val UPLOAD_PATH = "/wxa/sec/order/upload_shipping_info"
         const val ORDER_PATH = "/wxa/sec/order/get_order"
+        const val DELIVERY_LIST_RESPONSE = """{"delivery_list":[{"delivery_id":"SF","delivery_name":"顺丰速运"}]}"""
 
         @Suppress("UNCHECKED_CAST")
         fun <T> anyKotlin(): T {

@@ -1,4 +1,5 @@
 import './globals.scss'
+import BackstageApp from './BackstageApp'
 
 export const metadata = {
   title: '玺鸿珠宝后台',
@@ -8,7 +9,10 @@ export const metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="zh-CN">
-      <body>{children}</body>
+      <body>
+        <BackstageApp />
+        {children}
+      </body>
     </html>
   )
 }

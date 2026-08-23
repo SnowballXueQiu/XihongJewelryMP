@@ -21,7 +21,7 @@ class DomainMapper(
         entity.priceCents, entity.originalPriceCents, entity.stock, entity.sales, entity.isFeatured,
         entity.freeShipping, stringList(entity.tags), entity.imageColor, entity.supportsAr, entity.arModelUrl,
         entity.arScale, entity.arRotation, entity.arPosition, entity.arAutoSync, entity.status, entity.coverUrl,
-        stringList(entity.galleryUrls), entity.sortOrder,
+        entity.videoUrl, stringList(entity.galleryUrls), entity.sortOrder,
     )
 
     fun apply(entity: ProductEntity, value: ProductWrite): ProductEntity = entity.apply {
@@ -30,7 +30,7 @@ class DomainMapper(
         stock = value.stock; sales = value.sales; isFeatured = value.isFeatured; freeShipping = value.freeShipping
         tags = mapper.writeValueAsString(value.tags); imageColor = value.imageColor; supportsAr = value.supportsAr
         arModelUrl = value.arModelUrl; arScale = value.arScale; arRotation = value.arRotation; arPosition = value.arPosition
-        arAutoSync = value.arAutoSync; status = value.status; coverUrl = value.coverUrl
+        arAutoSync = value.arAutoSync; status = value.status; coverUrl = value.coverUrl; videoUrl = value.videoUrl
         galleryUrls = mapper.writeValueAsString(value.galleryUrls); sortOrder = value.sortOrder
     }
 
@@ -49,7 +49,10 @@ class DomainMapper(
         entity.id!!, entity.orderId, entity.outRefundNo, entity.refundId, entity.amountCents, entity.reason,
         entity.previousStatus, entity.status, entity.createdAt, entity.updatedAt, entity.businessAppliedAt,
     )
-    fun payment(entity: PaymentIntentEntity) = PaymentAdminDto(entity.id!!, entity.orderId, entity.provider, entity.status, entity.outTradeNo, entity.transactionId, entity.failureReason, entity.createdAt, entity.updatedAt, entity.notifiedAt)
+    fun payment(entity: PaymentIntentEntity) = PaymentAdminDto(
+        entity.id!!, entity.orderId, entity.provider, entity.status, entity.outTradeNo, entity.transactionId,
+        safePaymentFailure(entity.failureReason), entity.createdAt, entity.updatedAt, entity.notifiedAt,
+    )
     fun pet(entity: PetProfileEntity): PetDto {
         val levels = listOf(1 to 0, 2 to 100, 3 to 300, 4 to 700, 5 to 1300)
         val next = levels.firstOrNull { it.second > entity.exp }?.second ?: entity.exp
@@ -80,7 +83,7 @@ class DomainMapper(
                 OrderItemDto(it.productId, it.productName, it.unitPriceCents, it.quantity)
             }, payment = payment, receiverName = entity.receiverName, receiverPhone = entity.receiverPhone,
             receiverAddress = entity.receiverAddress, buyerNote = entity.buyerNote, fulfillmentType = entity.fulfillmentType,
-            pickupSlot = entity.pickupSlot, pickupCode = entity.pickupCode, testOrder = entity.testOrder,
+            pickupSlot = entity.pickupSlot, pickupCode = entity.pickupCode,
             invoiceRequested = entity.invoiceRequested, invoiceStatus = entity.invoiceStatus, invoiceApplyId = entity.invoiceApplyId,
             invoiceBuyerType = entity.invoiceBuyerType, invoiceBuyerName = entity.invoiceBuyerName,
             invoiceBuyerTaxpayerId = entity.invoiceBuyerTaxpayerId, invoiceBuyerAddress = entity.invoiceBuyerAddress,
@@ -89,6 +92,8 @@ class DomainMapper(
             invoiceUserMessage = entity.invoiceUserMessage, invoiceFapiaoId = entity.invoiceFapiaoId,
             invoiceMediaId = entity.invoiceMediaId, invoiceCardStatus = entity.invoiceCardStatus, invoiceError = entity.invoiceError,
             invoiceMiniprogramAppid = entity.invoiceMiniprogramAppid, invoiceMiniprogramPath = entity.invoiceMiniprogramPath,
+            logisticsCompany = entity.wechatDeliveryName, wechatDeliveryId = entity.wechatDeliveryId,
+            wechatDeliveryName = entity.wechatDeliveryName,
             trackingNo = entity.trackingNo, paymentTransactionId = confirmedPayment?.transactionId ?: "",
             platformShippingUploadedAt = entity.platformShippingUploadedAt, platformOrderState = entity.platformOrderState,
             platformOrderStateUpdatedAt = entity.platformOrderStateUpdatedAt, platformShippingError = entity.platformShippingError,
@@ -128,5 +133,12 @@ class DomainMapper(
     }
 
     private fun entityText(root: JsonNode, vararg keys: String): String = keys.firstNotNullOfOrNull { key -> root.path(key).asText().takeIf(String::isNotBlank) } ?: ""
+    private fun safePaymentFailure(value: String): String = when {
+        value.isBlank() -> ""
+        value.contains("time_expire", ignoreCase = true) -> "微信支付参数校验失败：交易结束时间格式不正确"
+        value.contains("Authorization", ignoreCase = true) || value.contains("signature=", ignoreCase = true) ||
+            value.contains("HttpRequest", ignoreCase = true) -> "微信支付请求失败（敏感请求详情已隐藏）"
+        else -> value.take(240)
+    }
     private fun stringList(value: String): List<String> = runCatching { mapper.readValue(value, object : TypeReference<List<String>>() {}) }.getOrDefault(emptyList())
 }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import Taro, { useRouter, useShareAppMessage } from '@tarojs/taro'
-import { Button, Text, View } from '@tarojs/components'
+import { Button, Image, Swiper, SwiperItem, Text, Video, View } from '@tarojs/components'
 import JewelryVisual from '@/components/JewelryVisual'
 import LuxuryLoader from '@/components/LuxuryLoader'
 import IconFont from '@/components/IconFont'
@@ -15,6 +15,7 @@ export default function ProductDetailPage() {
   const [quantity, setQuantity] = useState(1)
   const [favorite, setFavorite] = useState(false)
   const [adding, setAdding] = useState(false)
+  const [mediaIndex, setMediaIndex] = useState(0)
   const [storeConfig, setStoreConfig] = useState<StoreConfig>({ company_name_zh: '', company_name_en: '', shipping_fee_cents: 1500, free_shipping_threshold_cents: 100000, pickup_store_name: '', pickup_store_address: '', pickup_store_phone: '' })
   const pageAnimation = usePageEntranceAnimation()
 
@@ -34,6 +35,10 @@ export default function ProductDetailPage() {
   const saving = useMemo(() => product && product.original_price_cents > product.price_cents
     ? product.original_price_cents - product.price_cents
     : 0, [product])
+  const gallery = useMemo(() => product
+    ? [...new Set([product.cover_url, ...(product.gallery_urls || [])].filter(Boolean) as string[])]
+    : [], [product])
+  const mediaCount = gallery.length + (product?.video_url ? 1 : 0)
 
   async function handleAddCart() {
     if (!product || adding || product.stock <= 0) return
@@ -71,11 +76,15 @@ export default function ProductDetailPage() {
   }
 
   return (
-    <View className='page detail-page' animation={pageAnimation}>
+    <View className='page detail-page'>
+      <View className='detail-scroll-content' animation={pageAnimation}>
       <View className='detail-visual-wrap'>
-        <JewelryVisual product={product} showLabel />
+        {mediaCount > 0 ? <Swiper className='detail-media' circular={mediaCount > 1} indicatorDots={false} onChange={(event) => setMediaIndex(event.detail.current)}>
+          {product.video_url && <SwiperItem><Video className='detail-video' src={product.video_url} poster={product.cover_url || gallery[0]} controls objectFit='cover' showCenterPlayBtn enableProgressGesture /></SwiperItem>}
+          {gallery.map((url, index) => <SwiperItem key={url}><Image className='detail-image' src={url} mode='aspectFill' lazyLoad={index > 0} /></SwiperItem>)}
+        </Swiper> : <JewelryVisual product={product} showLabel />}
         <Button className={`detail-favorite ${favorite ? 'active' : ''}`} hoverClass='favorite-press' onClick={favoriteProduct}><IconFont name={favorite ? 'heartFilled' : 'heart'} /></Button>
-        <Text className='visual-count'>01 / {Math.max(1, (product.gallery_urls?.length || 0) + 1)}</Text>
+        <Text className='visual-count'>{String(mediaIndex + 1).padStart(2, '0')} / {String(Math.max(1, mediaCount)).padStart(2, '0')}</Text>
       </View>
 
       <View className='detail-main'>
@@ -118,6 +127,7 @@ export default function ProductDetailPage() {
       <View className='detail-note'>
         <Text>JEWELRY CARE</Text>
         <Text>避免香水与化学品直接接触，佩戴后以柔软干布轻拭，并单独收纳。</Text>
+      </View>
       </View>
 
       <View className='detail-actions'>

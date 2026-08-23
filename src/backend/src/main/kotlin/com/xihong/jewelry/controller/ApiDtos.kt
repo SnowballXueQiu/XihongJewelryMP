@@ -32,7 +32,7 @@ data class ProductDto(
     val isFeatured: Boolean, val freeShipping: Boolean, val tags: List<String>, val imageColor: String,
     val supportsAr: Boolean, val arModelUrl: String?, val arScale: String, val arRotation: String,
     val arPosition: String, val arAutoSync: Int, val status: String, val coverUrl: String,
-    val galleryUrls: List<String>, val sortOrder: Int,
+    val videoUrl: String, val galleryUrls: List<String>, val sortOrder: Int,
 )
 
 data class ProductWrite(
@@ -42,7 +42,7 @@ data class ProductWrite(
     val isFeatured: Boolean = false, val freeShipping: Boolean = false, val tags: List<String> = emptyList(),
     val imageColor: String = "#D8B46A", val supportsAr: Boolean = false, val arModelUrl: String? = null,
     val arScale: String = "0.22 0.22 0.22", val arRotation: String = "0 0 0", val arPosition: String = "0 0.08 0",
-    val arAutoSync: Int = 9, val status: String = "active", val coverUrl: String = "",
+    val arAutoSync: Int = 9, val status: String = "active", val coverUrl: String = "", val videoUrl: String = "",
     val galleryUrls: List<String> = emptyList(), val sortOrder: Int = 0,
 )
 
@@ -121,17 +121,18 @@ data class OrderDto(
     val shippingFeeCents: Int, val discountCents: Int, val couponId: Long?, val items: List<OrderItemDto>,
     val payment: PaymentParamsDto? = null, val receiverName: String, val receiverPhone: String,
     val receiverAddress: String, val buyerNote: String, val fulfillmentType: String, val pickupSlot: String,
-    val pickupCode: String, val testOrder: Boolean, val invoiceRequested: Boolean, val invoiceStatus: String,
+    val pickupCode: String, val invoiceRequested: Boolean, val invoiceStatus: String,
     val invoiceApplyId: String, val invoiceBuyerType: String, val invoiceBuyerName: String,
     val invoiceBuyerTaxpayerId: String, val invoiceBuyerAddress: String, val invoiceBuyerTelephone: String,
     val invoiceBuyerBankName: String, val invoiceBuyerBankAccount: String, val invoiceBillType: String,
     val invoiceUserMessage: String, val invoiceFapiaoId: String, val invoiceMediaId: String,
     val invoiceCardStatus: String, val invoiceError: String,
     val invoiceMiniprogramAppid: String = "", val invoiceMiniprogramPath: String = "",
-    val logisticsCompany: String = "", val trackingNo: String, val paymentTransactionId: String,
+    val logisticsCompany: String = "", val wechatDeliveryId: String = "", val wechatDeliveryName: String = "",
+    val trackingNo: String, val paymentTransactionId: String,
     val platformShippingUploadedAt: Instant?, val platformOrderState: Int, val platformOrderStateUpdatedAt: Instant?,
     val platformShippingError: String, val platformConfirmReceiveRemindedAt: Instant? = null,
-    val platformSpecialOrderType: Int = 0, val platformOrderStateLabel: String,
+    val platformOrderStateLabel: String,
     val platformOrderStatusText: String = platformOrderStateLabel,
     val logisticsStatus: String, val logisticsDescription: String,
     val logisticsUpdatedAt: Instant?, val platformLogisticsStatus: String = logisticsStatus,
@@ -152,18 +153,18 @@ data class RefundDto(
     val reason: String, val previousStatus: String, val status: String, val createdAt: Instant, val updatedAt: Instant,
     val businessAppliedAt: Instant? = null,
 )
-data class ShippingRequest(@field:NotBlank val trackingNo: String, val testOrder: Boolean = false)
+data class ShippingRequest(@field:NotBlank val trackingNo: String, @field:NotBlank val deliveryId: String)
 
 /**
- * 管理端履约动作只接收业务状态、运单号和测试单标记。
- * logisticsCompany 仅用于明确拒绝旧调用方伪造承运商；承运商由微信按运单识别。
+ * 管理端履约动作只接收业务状态、微信官方运力 ID 和运单号。
  */
 data class AdminOrderStatusUpdate(
     @field:Pattern(regexp = "^(preparing|shipped|completed|cancelled|refunding|refunded)$") val status: String,
     @field:Size(max = 128) val trackingNo: String = "",
-    val isTestOrder: Boolean = false,
-    @get:JsonProperty("logistics_company") val logisticsCompany: String? = null,
+    @field:Size(max = 64) val deliveryId: String = "",
 )
+
+data class DeliveryCompanyDto(val deliveryId: String, val deliveryName: String, val common: Boolean = false)
 
 data class InvoiceApplyDto(val orderNo: String, val invoiceApplyId: String, val status: String, val message: String)
 

@@ -201,7 +201,7 @@ class SecurityConfiguration(
         .cors { it.configurationSource(corsConfigurationSource()) }
         .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
         .authorizeHttpRequests {
-            it.requestMatchers("/health", "/actuator/health/**", "/uploads/**").permitAll()
+            it.requestMatchers("/health", "/actuator/health/**", "/uploads/**", "/showcase/**").permitAll()
             it.requestMatchers("/api/auth/wechat").permitAll()
             it.requestMatchers(
                 HttpMethod.POST,

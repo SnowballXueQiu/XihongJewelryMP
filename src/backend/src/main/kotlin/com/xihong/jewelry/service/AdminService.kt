@@ -173,8 +173,10 @@ class AdminService(
     @Transactional(readOnly = true)
     fun getOrder(id: Long): OrderDto = orderDto(orders.findById(id).orElseThrow { notFound("订单不存在") })
 
+    fun listDeliveryCompanies(forceRefresh: Boolean = false): List<DeliveryCompanyDto> =
+        platformCall { platform.deliveryCompanies(forceRefresh) }
+
     fun updateOrderStatus(id: Long, value: AdminOrderStatusUpdate, principal: AdminPrincipal): OrderDto {
-        require(value.logisticsCompany.isNullOrBlank()) { "不接受物流公司字段，承运商由微信按运单号识别" }
         val order = orders.findById(id).orElseThrow { notFound("订单不存在") }
         val current = domain.authoritativeStatus(order)
         val saved = when (value.status) {
@@ -186,10 +188,11 @@ class AdminService(
             }
             "shipped" -> {
                 require(current in setOf("paid", "preparing")) { "只有待发货订单可以提交微信发货信息" }
-                if (order.fulfillmentType == "delivery" && !value.isTestOrder) {
+                if (order.fulfillmentType == "delivery") {
                     require(value.trackingNo.isNotBlank()) { "请填写运单号" }
+                    require(value.deliveryId.isNotBlank()) { "请选择微信官方物流公司" }
                 }
-                platformCall { platform.uploadShipping(order, value.trackingNo.trim(), value.isTestOrder) }
+                platformCall { platform.uploadShipping(order, value.trackingNo.trim(), value.deliveryId.trim()) }
             }
             "completed" -> {
                 val synced = platformCall { orderWorkflow.reconcileWechatOrder(order.id!!) }
@@ -517,7 +520,6 @@ class AdminService(
         val reminder = audits.findFirstByActionAndEntityAndEntityIdOrderByCreatedAtDesc("confirm_receive_reminder", "order", order.id.toString())?.createdAt
         return domain.order(order).copy(
             platformConfirmReceiveRemindedAt = reminder,
-            platformSpecialOrderType = if (order.testOrder) 2 else 0,
         )
     }
 

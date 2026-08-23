@@ -73,6 +73,9 @@ class AdminController(private val service: AdminService) {
     @GetMapping("/orders/{id}")
     fun order(@PathVariable id: Long) = service.getOrder(id)
 
+    @GetMapping("/delivery-companies")
+    fun deliveryCompanies(@RequestParam(defaultValue = "false") refresh: Boolean) = service.listDeliveryCompanies(refresh)
+
     @PutMapping("/orders/{id}/status")
     fun updateOrderStatus(
         @PathVariable id: Long,

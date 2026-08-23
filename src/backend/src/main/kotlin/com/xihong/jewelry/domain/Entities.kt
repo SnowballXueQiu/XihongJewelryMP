@@ -75,6 +75,7 @@ class ProductEntity(
     @Column(name = "ar_auto_sync") var arAutoSync: Int = 9,
     var status: String = "active",
     @Column(name = "cover_url") var coverUrl: String = "",
+    @Column(name = "video_url") var videoUrl: String = "",
     @Column(name = "gallery_urls", columnDefinition = "text") var galleryUrls: String = "[]",
     @Column(name = "sort_order") var sortOrder: Int = 0,
     @Column(name = "created_at", nullable = false) var createdAt: Instant = Instant.now(),

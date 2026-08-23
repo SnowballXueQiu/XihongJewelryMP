@@ -3,6 +3,7 @@ package com.xihong.jewelry.service
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.xihong.jewelry.config.AppProperties
+import com.xihong.jewelry.controller.DeliveryCompanyDto
 import com.xihong.jewelry.domain.OrderEntity
 import com.xihong.jewelry.domain.PaymentIntentEntity
 import com.xihong.jewelry.repository.*
@@ -38,6 +39,8 @@ class WechatPlatformService(
     private val transactions = TransactionTemplate(transactionManager).apply {
         propagationBehavior = TransactionDefinition.PROPAGATION_REQUIRES_NEW
     }
+    private val deliveryCompanyLock = Any()
+    @Volatile private var deliveryCompanyCache: DeliveryCompanyCache? = null
 
     fun login(code: String): String {
         if (properties.wechat.appId.isBlank() || properties.wechat.appSecret.isBlank()) {
@@ -85,14 +88,18 @@ class WechatPlatformService(
     }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    fun uploadShipping(order: OrderEntity, trackingNo: String, testOrder: Boolean): OrderEntity {
+    fun uploadShipping(order: OrderEntity, trackingNo: String, deliveryId: String): OrderEntity {
         val orderId = order.id ?: throw IllegalArgumentException("订单不存在")
         val normalizedTrackingNo = trackingNo.trim()
-        val plan = prepareShipping(orderId, normalizedTrackingNo, testOrder)
+        val carrier = if (order.fulfillmentType == "delivery") {
+            val normalizedDeliveryId = deliveryId.trim()
+            require(normalizedDeliveryId.isNotBlank()) { "请选择微信官方物流公司" }
+            deliveryCompanies().firstOrNull { it.deliveryId == normalizedDeliveryId }
+                ?: throw IllegalArgumentException("物流公司不在微信官方运力列表中，请刷新后重新选择")
+        } else null
+        val plan = prepareShipping(orderId, normalizedTrackingNo, carrier)
         if (plan is ShippingPlan.Local) return plan.order
         plan as ShippingPlan.Remote
-
-        if (plan.testOrder) return uploadTestShipping(plan)
 
         val trace = if (plan.logisticsType == 1) resolveTrace(plan) else null
         val itemDesc = plan.items.joinToString("、") { "${it.name}×${it.quantity}" }.take(120)
@@ -116,13 +123,15 @@ class WechatPlatformService(
      * deliberately a short transaction: a slow API call must never hold a database lock needed by
      * payment/refund callbacks.
      */
-    private fun prepareShipping(orderId: Long, trackingNo: String, testOrder: Boolean): ShippingPlan = inTransaction {
+    private fun prepareShipping(orderId: Long, trackingNo: String, carrier: DeliveryCompanyDto?): ShippingPlan = inTransaction {
         val order = orders.lockById(orderId) ?: throw IllegalArgumentException("订单不存在")
         if (order.status !in setOf("paid", "preparing")) throw IllegalArgumentException("只有待发货订单可以提交运单")
         if (properties.pay.mock || order.totalCents == 0) {
             val now = Instant.now()
             order.trackingNo = trackingNo
-            order.testOrder = testOrder
+            order.wechatDeliveryId = carrier?.deliveryId.orEmpty()
+            order.wechatDeliveryName = carrier?.deliveryName.orEmpty()
+            order.testOrder = false
             order.platformOrderState = 2
             order.platformOrderStateUpdatedAt = now
             order.platformShippingUploadedAt = now
@@ -148,37 +157,12 @@ class WechatPlatformService(
             openid = openid,
             receiverPhone = order.receiverPhone,
             trackingNo = trackingNo,
-            testOrder = testOrder,
             logisticsType = logisticsType,
             waybillToken = order.waybillToken,
-            deliveryId = order.wechatDeliveryId,
-            deliveryName = order.wechatDeliveryName,
+            deliveryId = carrier?.deliveryId.orEmpty(),
+            deliveryName = carrier?.deliveryName.orEmpty(),
             items = orderItems.findAllByOrderIdOrderByIdAsc(order.id!!).map { ShippingItem(it.productName, it.quantity) },
         )
-    }
-
-    private fun uploadTestShipping(plan: ShippingPlan.Remote): OrderEntity {
-        try {
-            reportTestOrder(plan.payment)
-        } catch (error: RuntimeException) {
-            recordShippingError(plan.orderId, error)
-            throw error
-        }
-        inTransaction {
-            val order = orders.lockById(plan.orderId) ?: throw IllegalArgumentException("订单不存在")
-            order.testOrder = true
-            order.trackingNo = plan.trackingNo
-            order.platformShippingError = ""
-            order.updatedAt = Instant.now()
-            orders.save(order)
-        }
-        return try {
-            val observation = queryOfficialOrder(plan.payment)
-            persistOfficialObservation(plan, observation, shippingAccepted = observation.state in ACCEPTED_SHIPPING_STATES)
-        } catch (error: RuntimeException) {
-            recordShippingError(plan.orderId, error)
-            throw error
-        }
     }
 
     @Transactional
@@ -213,6 +197,31 @@ class WechatPlatformService(
         val managed = tokens.post("/wxa/sec/order/is_trade_managed", mapOf("appid" to properties.wechat.appId))
         val confirmation = tokens.post("/wxa/sec/order/is_trade_management_confirmation_completed", mapOf("appid" to properties.wechat.appId))
         return PlatformStatus(managed.path("is_trade_managed").asBoolean(false), confirmation.path("completed").asBoolean(false))
+    }
+
+    /**
+     * 微信官方运力表数量较大，服务端缓存 6 小时；刷新失败时优先返回上一份官方快照。
+     */
+    fun deliveryCompanies(forceRefresh: Boolean = false): List<DeliveryCompanyDto> {
+        val now = Instant.now()
+        deliveryCompanyCache?.takeIf { !forceRefresh && it.expiresAt.isAfter(now) }?.let { return it.items }
+        synchronized(deliveryCompanyLock) {
+            val current = deliveryCompanyCache
+            if (!forceRefresh && current != null && current.expiresAt.isAfter(now)) return current.items
+            return try {
+                val data = tokens.post("/cgi-bin/express/delivery/open_msg/get_delivery_list", emptyMap<String, Any>())
+                val items = data.path("delivery_list").mapNotNull { item ->
+                    val id = item.path("delivery_id").asText().trim()
+                    val name = item.path("delivery_name").asText().trim()
+                    if (id.isBlank() || name.isBlank()) null else DeliveryCompanyDto(id, name, isCommonCarrier(id, name))
+                }.distinctBy { it.deliveryId }.sortedWith(compareByDescending<DeliveryCompanyDto> { it.common }.thenBy { it.deliveryName })
+                if (items.isEmpty()) throw WechatPlatformException("微信未返回物流公司列表")
+                deliveryCompanyCache = DeliveryCompanyCache(items, now.plus(Duration.ofHours(6)))
+                items
+            } catch (error: RuntimeException) {
+                current?.items ?: throw error
+            }
+        }
     }
 
     fun setOrderDetailPath(path: String) {
@@ -251,11 +260,6 @@ class WechatPlatformService(
     private fun orderKey(payment: PaymentIntentEntity): Map<String, Any> = if (payment.transactionId.isNotBlank()) mapOf("order_number_type" to 2, "transaction_id" to payment.transactionId)
         else mapOf("order_number_type" to 1, "mchid" to properties.pay.merchantId, "out_trade_no" to payment.outTradeNo)
 
-    private fun reportTestOrder(payment: PaymentIntentEntity) {
-        val orderId = payment.transactionId.ifBlank { payment.outTradeNo }
-        tokens.post("/wxa/sec/order/opspecialorder", mapOf("order_id" to orderId, "type" to 2))
-    }
-
     private fun resolveTrace(plan: ShippingPlan.Remote): TraceIdentity {
         var token = plan.waybillToken
         if (token.isBlank()) {
@@ -270,7 +274,11 @@ class WechatPlatformService(
             persistWaybillToken(plan.orderId, plan.trackingNo, token)
         }
         if (plan.deliveryId.isNotBlank()) {
-            return TraceIdentity(token, plan.deliveryId, plan.deliveryName)
+            val selected = TraceIdentity(token, plan.deliveryId, plan.deliveryName)
+            // The administrator selected this id from WeChat's own delivery list. Persist it
+            // before upload_shipping_info so a timeout cannot lose the exact carrier identity.
+            persistTraceIdentity(plan.orderId, plan.trackingNo, selected)
+            return selected
         }
         val trace = try {
             queryTraceIdentity(token, plan.openid)
@@ -299,7 +307,7 @@ class WechatPlatformService(
             "trans_id" to plan.payment.transactionId,
             "order_detail_path" to "pages/order-detail/index?orderNo=${plan.orderNo}",
         )
-        // 让微信按运单号识别承运商。不得猜测或回退到固定快递，否则会把非顺丰订单错误上报为顺丰。
+        payload["delivery_id"] = plan.deliveryId
         val followed = tokens.post("/cgi-bin/express/delivery/open_msg/follow_waybill", payload)
         return followed.path("waybill_token").asText().takeIf(String::isNotBlank)
             ?: throw WechatPlatformException("微信物流助手未返回 waybill_token")
@@ -409,7 +417,9 @@ class WechatPlatformService(
         val order = orders.lockById(plan.orderId) ?: throw IllegalArgumentException("订单不存在")
         val now = Instant.now()
         order.trackingNo = plan.trackingNo
-        order.testOrder = plan.testOrder
+        order.wechatDeliveryId = plan.deliveryId
+        order.wechatDeliveryName = plan.deliveryName
+        order.testOrder = false
         order.platformShippingUploadedAt = now
         if (order.platformOrderState !in TERMINAL_PLATFORM_STATES) {
             order.platformOrderState = 2
@@ -438,7 +448,9 @@ class WechatPlatformService(
         }
         if (shippingAccepted) {
             order.trackingNo = plan.trackingNo
-            order.testOrder = plan.testOrder
+            order.wechatDeliveryId = plan.deliveryId
+            order.wechatDeliveryName = plan.deliveryName
+            order.testOrder = false
             order.platformShippingUploadedAt = order.platformShippingUploadedAt ?: now
             order.platformShippingError = ""
             order.shippedAt = order.shippedAt ?: now
@@ -471,7 +483,12 @@ class WechatPlatformService(
     }
 
     private fun maskPhone(value: String): String = if (value.length >= 7) "${value.take(3)}****${value.takeLast(4)}" else value
+    private fun isCommonCarrier(id: String, name: String): Boolean {
+        val normalizedId = id.trim().uppercase()
+        return normalizedId in COMMON_CARRIER_IDS || COMMON_CARRIER_NAME_KEYWORDS.any(name::contains)
+    }
     data class PlatformStatus(val managed: Boolean, val confirmed: Boolean)
+    private data class DeliveryCompanyCache(val items: List<DeliveryCompanyDto>, val expiresAt: Instant)
     private data class TraceIdentity(val token: String, val deliveryId: String, val deliveryName: String)
 
     private sealed interface ShippingPlan {
@@ -483,7 +500,6 @@ class WechatPlatformService(
             val openid: String,
             val receiverPhone: String,
             val trackingNo: String,
-            val testOrder: Boolean,
             val logisticsType: Int,
             val waybillToken: String,
             val deliveryId: String,
@@ -506,5 +522,12 @@ class WechatPlatformService(
         val ACCEPTED_SHIPPING_STATES = setOf(2, 3, 4)
         val TERMINAL_PLATFORM_STATES = setOf(3, 4, 5)
         val TERMINAL_LOCAL_STATES = setOf("received", "completed", "refunding", "refunded", "cancelled")
+        val COMMON_CARRIER_IDS = setOf(
+            "SF", "ZTO", "YTO", "STO", "YUNDA", "JTSD", "JD", "EMS", "DBL", "KY", "CAINIAO",
+        )
+        val COMMON_CARRIER_NAME_KEYWORDS = listOf(
+            "顺丰", "中通", "圆通", "申通", "韵达", "极兔", "京东物流", "中国邮政", "邮政快递",
+            "德邦", "菜鸟", "跨越速运",
+        )
     }
 }

@@ -29,6 +29,7 @@ export interface Product {
   ar_auto_sync: number
   status?: 'draft' | 'active' | 'inactive'
   cover_url?: string
+  video_url?: string
   gallery_urls?: string[]
   sort_order?: number
 }
@@ -117,7 +118,6 @@ export interface Order {
   platform_order_state_updated_at?: string | null
   platform_shipping_error: string
   platform_confirm_receive_reminded_at?: string | null
-  platform_special_order_type: number
   platform_order_state_label?: string
   logistics_status?: string
   logistics_description?: string

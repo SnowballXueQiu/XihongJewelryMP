@@ -26,6 +26,7 @@ interface CategoryRepository : JpaRepository<CategoryEntity, Long> {
     fun findBySlug(slug: String): CategoryEntity?
 }
 interface ProductRepository : JpaRepository<ProductEntity, Long> {
+    fun findFirstByName(name: String): ProductEntity?
     fun findAllByStatusOrderBySortOrderAscIdAsc(status: String): List<ProductEntity>
     fun findAllByOrderBySortOrderAscCreatedAtDesc(): List<ProductEntity>
     fun existsByCategorySlug(categorySlug: String): Boolean
